@@ -144,4 +144,48 @@ function W3T_MakeOwnCharacter(character : r_CoopCharacter)
     ids = inv.AddAnItem('Starting Gloves', 1, true, true);
     if(ids.Size() > 0) { W3T_Log("CHARACTER member gloves equipped: " + w.EquipItemInGivenSlot(ids[0], EES_Gloves, false)); }
     inv.AddMoney(777);
+    W3T_MakeOwnCharacterPart2(w, inv);
+}
+
+// Mutations, stash and horse gear, Gwent cards, worn gear.
+function W3T_MakeOwnCharacterPart2(w : W3PlayerWitcher, inv : CInventoryComponent)
+{
+    var pam : W3PlayerAbilityManager;
+    var horses : W3HorseManager;
+    var stash : CInventoryComponent;
+    var ids : array<SItemUniqueId>;
+    var id, moved : SItemUniqueId;
+    var i : int;
+    var before : float;
+    var cardGone : bool;
+    pam = (W3PlayerAbilityManager)w.abilityManager;
+    pam.MutationSystemEnable(true);
+    pam.DEBUG_DevelopAndEquipMutation(EPMT_Mutation1);
+    W3T_Log("CHARACTER member mutation equipped: " + (int)pam.GetEquippedMutationType() + ", researched " + pam.GetResearchedMutationsCount());
+    horses = w.GetHorseManager();
+    stash = horses.GetInventoryComponent();
+    stash.AddAnItem('Long Steel Sword', 1, true, true);
+    ids = inv.GetItemsByName('Horse Saddle 1');
+    if(ids.Size() > 0)
+    {
+        moved = horses.MoveItemToHorse(ids[0], 1);
+        W3T_Log("CHARACTER member saddle on the horse: " + stash.IsIdValid(horses.EquipItem(moved)));
+    }
+    W3T_Log("CHARACTER member stash holds " + stash.GetAllItemsQuantity() + " items");
+    inv.GetAllItems(ids);
+    for(i = 0; i < ids.Size() && !cardGone; i += 1)
+    {
+        if(inv.ItemHasTag(ids[i], 'GwintCard') && !inv.ItemHasTag(ids[i], 'Quest'))
+        {
+            W3T_Log("CHARACTER member gives away Gwent card " + NameToString(inv.GetItemName(ids[i])));
+            inv.RemoveItem(ids[i], 1);
+            cardGone = true;
+        }
+    }
+    if(w.GetItemEquippedOnSlot(EES_SteelSword, id))
+    {
+        before = inv.GetItemDurability(id);
+        for(i = 0; i < 20; i += 1) { inv.ReduceItemDurability(id, true); }
+        W3T_Log("CHARACTER member worn steel sword " + NameToString(inv.GetItemName(id)) + ": durability " + before + " -> " + inv.GetItemDurability(id));
+    }
 }

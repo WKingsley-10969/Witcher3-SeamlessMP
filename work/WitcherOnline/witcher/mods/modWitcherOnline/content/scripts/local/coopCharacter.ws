@@ -6,7 +6,9 @@
 // the character starts as a copy of the host's Geralt and is this player's own from then on.
 //
 // World items stay with the world: quest items, notice-board notes and the game's hidden items
-// are neither recorded nor removed. Not covered yet: mutations, the stash, horse gear.
+// are neither recorded nor removed. Also the character's: Gwent cards (the decks stay the
+// world's, the game keeps them natively), the stash and the horse's gear (one inventory, the horse
+// manager's), and Blood and Wine mutations.
 //
 // Record, one line per entry, fields separated by ';':
 //   coop-character;1
@@ -17,6 +19,9 @@
 //   recipe;<name>      schematic;<name>
 //   reward;<name>      a reward whose XP this player had (coopLoot.ws)
 //   item;<name>;<quantity>;<durability or -1>;<equipment slot or -1>;<enchantment>;<runes, comma>;<rune slots>;<autogen abilities, comma>;<charges or -1>
+//   stash;...          as item, in the stash / horse inventory; the slot is a horse slot
+//   mutations;<system enabled 0|1>;<equipped EPlayerMutationType>
+//   mutation;<EPlayerMutationType>;<red>;<blue>;<green>;<skill points>;<overall progress>
 import function WO_CharacterStore(text : string) : bool;
 import function WO_CharacterLoad() : string;
 import function WO_ToName(text : string) : name;
@@ -125,13 +130,12 @@ class r_CoopCharacter
     public function Personal(inv : CInventoryComponent, id : SItemUniqueId) : bool
     {
         var category : name;
+        if(!CoopSafeField(NameToString(inv.GetItemName(id))) || inv.GetItemName(id) == 'Crowns') { return false; }   // the money line
+        if(inv.ItemHasTag(id, 'GwintCard')) { return !inv.ItemHasTag(id, 'Quest'); }   // the collection, hidden in the inventory
         if(inv.ItemHasTag(id, 'Quest') || inv.ItemHasTag(id, 'NoticeBoardNote') || inv.ItemHasTag(id, theGame.params.TAG_DONT_SHOW)
             || inv.ItemHasTag(id, 'NoDrop') || inv.ItemHasTag(id, theGame.params.TAG_DONT_SHOW_ONLY_IN_PLAYERS)) { return false; }
-        if(inv.GetItemName(id) == 'Crowns') { return false; }   // the money line
         category = inv.GetItemCategory(id);
-        if(category == 'hair' || category == 'head' || category == 'fist' || category == 'work' || category == 'horse_bag'
-            || category == 'horse_saddle' || category == 'horse_blinder' || category == 'horse_trophy') { return false; }
-        return CoopSafeField(NameToString(inv.GetItemName(id)));
+        return category != 'hair' && category != 'head' && category != 'fist' && category != 'work';
     }
 
     public function Capture() : string
@@ -167,6 +171,7 @@ class r_CoopCharacter
         for(i = 0; i < rewards.Size(); i += 1) { if(CoopSafeField(rewards[i])) { text += "|reward;" + rewards[i]; } }
         recipes = w.GetCraftingSchematicsNames();
         for(i = 0; i < recipes.Size(); i += 1) { if(CoopSafeField(NameToString(recipes[i]))) { text += "|schematic;" + NameToString(recipes[i]); } }
+        text += CaptureMutations(pam) + CaptureStash(w);
         for(slot = 0; slot <= (int)EES_SkillMutagen4; slot += 1)
         {
             if(CharacterSlot(slot) && w.GetItemEquippedOnSlot((EEquipmentSlots)slot, id))
@@ -182,6 +187,45 @@ class r_CoopCharacter
             slot = -1;
             for(j = 0; j < equippedIds.Size(); j += 1) { if(equippedIds[j] == ids[i]) { slot = equippedSlots[j]; } }
             text += "|" + ItemLine(inv, ids[i], slot);
+        }
+        return text;
+    }
+
+    private function CaptureMutations(pam : W3PlayerAbilityManager) : string
+    {
+        var mutations : array<SMutation>;
+        var text : string;
+        var i : int;
+        text = "|mutations;" + CoopBit(pam.IsMutationSystemEnabled()) + ";" + (int)pam.GetEquippedMutationType();
+        mutations = pam.GetMutations();
+        for(i = 0; i < mutations.Size(); i += 1)
+        {
+            if(mutations[i].progress.overallProgress < 0 && mutations[i].progress.redUsed + mutations[i].progress.blueUsed + mutations[i].progress.greenUsed
+                + mutations[i].progress.skillpointsUsed == 0) { continue; }
+            text += "|mutation;" + (int)mutations[i].type + ";" + mutations[i].progress.redUsed + ";" + mutations[i].progress.blueUsed + ";"
+                + mutations[i].progress.greenUsed + ";" + mutations[i].progress.skillpointsUsed + ";" + mutations[i].progress.overallProgress;
+        }
+        return text;
+    }
+
+    // The stash and the horse's gear: the horse manager's inventory.
+    private function CaptureStash(w : W3PlayerWitcher) : string
+    {
+        var horses : W3HorseManager;
+        var inv : CInventoryComponent;
+        var ids : array<SItemUniqueId>;
+        var text : string;
+        var i, slot : int;
+        horses = w.GetHorseManager();
+        if(!horses || !horses.GetInventoryComponent()) { return ""; }
+        inv = horses.GetInventoryComponent();
+        inv.GetAllItems(ids);
+        for(i = 0; i < ids.Size(); i += 1)
+        {
+            if(!Personal(inv, ids[i])) { continue; }
+            slot = -1;
+            if(horses.IsItemEquipped(ids[i])) { slot = (int)horses.GetHorseSlotForItem(ids[i]); }
+            text += "|stash" + StrAfterFirst(ItemLine(inv, ids[i], slot), "item");
         }
         return text;
     }
@@ -229,7 +273,9 @@ class r_CoopCharacter
         var id : SItemUniqueId;
         var i, j, lvl, xp, spFree, spUsed, money, slot : int;
         var skillTypes, skillLevels, skillSlots : array<int>;
-        var itemLines, rewards : array<string>;
+        var itemLines, stashLines, mutationLines, rewards : array<string>;
+        var horses : W3HorseManager;
+        var stash : CInventoryComponent;
         lines = CoopSplit(text, "|");
         if(lines.Size() < 4 || lines[0] != "coop-character;1") { return false; }
         lvl = -1;
@@ -246,6 +292,8 @@ class r_CoopCharacter
                 skillSlots.PushBack(StringToInt(f[3], -1));
             }
             else if(f[0] == "item" && f.Size() == 10) { itemLines.PushBack(lines[i]); }
+            else if(f[0] == "stash" && f.Size() == 10) { stashLines.PushBack(lines[i]); }
+            else if((f[0] == "mutation" && f.Size() == 7) || (f[0] == "mutations" && f.Size() == 3)) { mutationLines.PushBack(lines[i]); }
             else if(f[0] == "reward" && f.Size() == 2) { rewards.PushBack(f[1]); }
         }
         if(lvl < 1 || lvl > 100 || xp < 0 || spFree < 0 || spUsed < 0 || money < 0) { return false; }
@@ -254,7 +302,16 @@ class r_CoopCharacter
         pam = (W3PlayerAbilityManager)w.abilityManager;
         problems = 0;
 
-        // 1. the host's things off: equipped gear, personal items, money, skills
+        // 1. the host's things off: horse gear and stash (unequipped horse gear goes to the pack),
+        //    equipped gear, personal items, money, skills
+        horses = w.GetHorseManager();
+        if(horses) { stash = horses.GetInventoryComponent(); }
+        if(stash)
+        {
+            for(slot = (int)EES_HorseBlinders; slot <= (int)EES_HorseTrophy; slot += 1) { horses.UnequipItem((EEquipmentSlots)slot); }
+            stash.GetAllItems(ids);
+            for(i = 0; i < ids.Size(); i += 1) { if(Personal(stash, ids[i])) { stash.RemoveItem(ids[i], stash.GetItemQuantity(ids[i])); } }
+        }
         for(slot = 0; slot <= (int)EES_SkillMutagen4; slot += 1)
         {
             if(CharacterSlot(slot) && w.GetItemEquippedOnSlot((EEquipmentSlots)slot, id) && Personal(inv, id)) { w.UnequipItemFromSlot((EEquipmentSlots)slot); }
@@ -263,6 +320,8 @@ class r_CoopCharacter
         for(i = 0; i < ids.Size(); i += 1) { if(Personal(inv, ids[i])) { inv.RemoveItem(ids[i], inv.GetItemQuantity(ids[i])); } }
         if(inv.GetMoney() > 0) { inv.RemoveMoney(inv.GetMoney()); }
         w.ResetCharacterDev();
+        // mutations before skills: they unlock skill slots
+        pam.CoopSetMutations(mutationLines);
 
         // 2. level and XP, then skill points: all of them free, so learning spends them as the game does
         w.levelManager.CoopSetLevel(lvl, xp);
@@ -284,18 +343,21 @@ class r_CoopCharacter
         w.CoopSetRecipes(lines);
         theGame.r_getMultiplayerClient().getCoopLoot().RestoreRewards(rewards);
         if(money > 0) { inv.AddMoney(money); }
-        for(i = 0; i < itemLines.Size(); i += 1) { RestoreItem(w, inv, CoopSplit(itemLines[i], ";")); }
+        for(i = 0; i < itemLines.Size(); i += 1) { RestoreItem(w, inv, CoopSplit(itemLines[i], ";"), NULL); }
+        if(stash) { for(i = 0; i < stashLines.Size(); i += 1) { RestoreItem(w, stash, CoopSplit(stashLines[i], ";"), horses); } }
 
         restores += 1;
         lastRestoreItems = itemLines.Size();
         lastRestoreSkills = skillTypes.Size();
-        Record("RESTORED level " + lvl + ", " + skillTypes.Size() + " skills, " + itemLines.Size() + " items, " + money + " crowns, " + problems + " problems");
+        Record("RESTORED level " + lvl + ", " + skillTypes.Size() + " skills, " + itemLines.Size() + " items, " + stashLines.Size() + " in the stash, "
+            + Max(0, mutationLines.Size() - 1) + " mutations, " + money + " crowns, " + problems + " problems");
         if(problems == 0) { theGame.GetGuiManager().ShowNotification("Your own co-op character is back."); }
         else { theGame.GetGuiManager().ShowNotification("Your own co-op character is back (" + problems + " details could not be restored)."); }
         return true;
     }
 
-    private function RestoreItem(w : W3PlayerWitcher, inv : CInventoryComponent, f : array<string>)
+    // An item into the pack (horses NULL) or the stash.
+    private function RestoreItem(w : W3PlayerWitcher, inv : CInventoryComponent, f : array<string>, horses : W3HorseManager)
     {
         var ids, runeIds : array<SItemUniqueId>;
         var id : SItemUniqueId;
@@ -351,7 +413,8 @@ class r_CoopCharacter
             enchantment = WO_ToName(f[5]);
             if(!inv.EnchantItem(id, enchantment, getEnchamtmentStatName(enchantment))) { problems += 1; Record("ENCHANT_FAILED " + f[5] + " on " + f[1]); }
         }
-        if(slot >= 0 && !w.EquipItemInGivenSlot(id, (EEquipmentSlots)slot, false)) { problems += 1; Record("EQUIP_FAILED " + f[1] + " -> " + slot); }
+        if(slot >= 0 && horses && !inv.IsIdValid(horses.EquipItem(id))) { problems += 1; Record("HORSE_EQUIP_FAILED " + f[1] + " -> " + slot); }
+        else if(slot >= 0 && !horses && !w.EquipItemInGivenSlot(id, (EEquipmentSlots)slot, false)) { problems += 1; Record("EQUIP_FAILED " + f[1] + " -> " + slot); }
     }
 
     // Lines of a record that the other does not have (both directions), for tests. Stacks of an
@@ -481,4 +544,42 @@ public function CoopSetRecipes(lines : array<string>)
         if(f[0] == "recipe") { AddAlchemyRecipe(WO_ToName(f[1]), true, true); }
         else if(f[0] == "schematic") { AddCraftingSchematic(WO_ToName(f[1]), true, true); }
     }
+}
+
+function CoopBit(value : bool) : string
+{
+    if(value) { return "1"; }
+    return "0";
+}
+
+// Mutations as recorded ("mutations;..." and "mutation;..." lines): research progress, the
+// system's state and the equipped mutation. Without lines (an older record) they are left alone.
+@addMethod(W3PlayerAbilityManager)
+public function CoopSetMutations(lines : array<string>)
+{
+    var f : array<string>;
+    var i, k : int;
+    var equipped : EPlayerMutationType;
+    if(lines.Size() == 0) { return; }
+    ResetMutationsDev();
+    equipped = EPMT_None;
+    for(i = 0; i < lines.Size(); i += 1)
+    {
+        f = CoopSplit(lines[i], ";");
+        if(f[0] == "mutations")
+        {
+            MutationSystemEnable(f[1] == "1");
+            equipped = (EPlayerMutationType)StringToInt(f[2], 0);
+            continue;
+        }
+        k = GetMutationIndex((EPlayerMutationType)StringToInt(f[1], 0));
+        if(k < 0) { continue; }
+        mutations[k].progress.redUsed = StringToInt(f[2], 0);
+        mutations[k].progress.blueUsed = StringToInt(f[3], 0);
+        mutations[k].progress.greenUsed = StringToInt(f[4], 0);
+        mutations[k].progress.skillpointsUsed = StringToInt(f[5], 0);
+        mutations[k].progress.overallProgress = StringToInt(f[6], -1);
+        if(mutations[k].progress.overallProgress >= 100) { OnMutationFullyResearched(mutations[k].type); }
+    }
+    if(equipped != EPMT_None) { SetEquippedMutation(equipped); }
 }
