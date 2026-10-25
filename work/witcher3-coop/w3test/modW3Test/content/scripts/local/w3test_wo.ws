@@ -69,6 +69,10 @@ function W3T_ScenarioCheck(bot : W3T_Bot) : bool
     {
         return W3T_SeamlessEffects(bot);
     }
+    if(scenario == "seamless_removals")
+    {
+        return W3T_SeamlessRemovals(bot);
+    }
     if(scenario == "seamless_dialogue")
     {
         return W3T_SeamlessDialogue(bot);

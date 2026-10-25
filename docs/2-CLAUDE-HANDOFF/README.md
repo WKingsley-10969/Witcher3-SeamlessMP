@@ -4,7 +4,11 @@ Handoff written 24 October 2026. This file describes the local workspace at hand
 
 ## Live development status — read this first
 
+**25 October 2026 — parallel Codex branch: server verified; game verification pending.** Claude is still active in the original checkout. This separate worktree/branch `codex/campaign-fact-removals` starts from `dd7cae0`; it must not be staged into the shared test game or merged over Claude's work while that work is active. Owned changes: campaign server/protocol tests, `seamlessCampaign.ws`/`seamlessEffects.ws`, a dedicated removal bot, and this branch's notes. Implement explicit absent fact state (distinct from existing zero), durable dedupe/conflicts, snapshot capture and guarded engine application. Test-only targets for removals; mh306 removal has not been vetted. Server/UDP verification used separate build/state paths and ephemeral ports: 255 existing pure + 54 removal + 448 UDP assertions passed, and 5/5 deliberately broken server variants were caught. Game compilation and two-client proof remain pending integration. The older bullets below predate Claude's later journal: read the entries at the end for NPC ownership, quest sharing, save/load replay and shared merchant conversations.
+
 The owner requests that this document stay updated throughout implementation, not only at the end of a session.
+
+### Historical status snapshot (superseded by the journal below)
 
 - **Last verified milestone:** guest-captured FactsSet changes replicate through the campaign ledger to the host (test facts only), plus versioned dialogue/voting, capture, effects and baseline regressions — all passing with two real clients in runs `20261024-202202` to `20261024-202641`. Limits in the last journal entries.
 - **Latest continuation:** Claude Code (24 October 2026) fixed the listener join race and a Windows campaign-file replace failure; see the last journal entry.
@@ -337,3 +341,14 @@ Limits: replay re-applies every transaction one per poll (~0.1 s each), so a lon
   - The vendored projects' original `.git` folders moved to `work/upstream-git/<name>.git` (with `core.worktree`), so `git --git-dir=work/upstream-git/WitcherOnline.git status` still diffs against upstream.
   - `client/asio` is a submodule.
   - `run-isolated-test.py` does not stage: run `stage-test-game.py` first.
+
+
+**25 October 2026 — Codex parallel feature branch, ready for draft PR.** The owner confirmed Claude is active and requested separate work; then requested a PR for each new feature. Branch `codex/campaign-fact-removals` is based on `dd7cae0`. No changes were made to the original checkout or its game processes/staging/package. Implemented an explicit `fact ... absent` ledger value, shared SET/removal conflict key, capability gating for active players and historical replay, snapshot removal submission/commit ACK, guarded removal application, a test-only target allowlist and a dedicated `seamless_removals` bot. The dispatcher adds one scenario case; preserve Claude's newer cases during integration.
+
+Verification actually run: `Test-Seamless.ps1` passed **255 existing pure + 54 new removal + 448 UDP assertions**. Expected STORAGE_ERROR logging comes from the deliberate held-file regression. `Test-FactRemovalMutations.ps1` caught **5/5** mutants (reject removal, skip active capability, skip replay capability, persist absence as zero, bypass removal receipt lookup). All test subprocesses were owned and stopped by these suites. No game process or game-slot lease was started here. Logs/builds remain ignored in this checkout. The new WitcherScript adapter and bot are **implemented but unverified in game**. No removal-specific save/load game test ran; real quest removals remain forbidden, including mh306.
+
+Next: review/merge the feature PR with Claude's current changes, build the merged server, stage once the shared test installation is idle, then run `work/run-isolated-test.py seamless_removals --duration 180` and the effects/replicate/reload/dialogue regressions. Details and plain-language description: `docs/4-FACT-REMOVAL/README.md`. Do not run the guarded game runner in this branch's checkout: it has no isolated test-game installation. Keep the ZIP unchanged until merged game verification passes.
+
+Branch rebased onto `8c920f9` before publication, preserving Claude's additional conversation/combat regression notes. That base update changed documentation only; the tested source is unchanged.
+
+**Publication:** draft [PR #2](https://github.com/WKingsley-10969/Witcher3-SeamlessMP/pull/2) is open against main; implementation commit `a60304d`. Not merged. Owner preference going forward: create a separate feature branch and pull request for each new feature. Draft status reflects pending game verification, not a failed server test. This checkout has no active test processes or game leases.
