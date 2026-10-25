@@ -182,6 +182,7 @@ function ShowProgressDialog( messageId : int, title : string, message : string, 
         W3T_Log("DIALOG the co-op lobby is left open");
         return;
     }
+    if(W3T_GetEnv("W3T_SCENARIO") == "party_menu" && WO_IsPartyPrompt(messageId)) { theGame.W3T_AnswerPartyPrompt(messageId); return; }
 
     if(type == UDB_Ok || type == UDB_OkCancel)
     {
