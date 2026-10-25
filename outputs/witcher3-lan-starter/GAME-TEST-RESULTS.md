@@ -1,4 +1,4 @@
-# Verification — game integration, 2026-10-24
+# Verification — game integration, 2026-10-25
 
 ## Real game checks
 
@@ -14,8 +14,14 @@ Two actual Witcher 3 clients on one PC, separate copied saves/settings, direct l
 | facts_sync | PASS | Scripted facts set before/after joining reach the member |
 | dialog_sync | PASS | Script-driven tracking, skips and delayed dialogue-choice synchronization |
 | npc_own | PASS | Party nearby-NPC sharing: the second PC walks up to Ciri, takes her over (she reacts on its own AI), the host shows a stand-in mirroring her, and she returns to the host when the second PC walks off |
+| quest_share | PASS | Party quest progress both ways: the second PC takes three real notices; the host, which never touches a board, gets the facts and its own quest graphs start the same two quests; an objective update arrives; a host change reaches the second PC; nothing echoes |
+| talk_share | PASS | Talk together: the second PC talks to the Novigrad general-store trader; the host 14 m away joins the same scene (13 identical lines), its click reaches the second PC as a suggestion, both answers play on the host, the shop opened on the host is closed, Farewell ends the conversation on both |
 
-**Nearby NPCs (`npc_own`, run `20261024-221254`, the exact payload in this ZIP).** On one Novigrad street with 19 shared NPCs: Ciri was shown exactly once on both screens in 64/64 one-second samples; no stand-in slid or ran in place; the one running-in-place second on each screen was the real Ciri starting to move on her own AI. While the second PC owned her, the host's stand-in stayed within 0.30 m median (0.40 m max) of her; while the host owned her, within 0.04 m median. A quest teleport by her own script right after the hand-back shows as a jump on both screens (the 10 m maximum). A previous run with the same payload failed only because the test bot could not walk away from her (a wall); ownership correctly stayed with the PC standing next to her. Not covered: two physical PCs, other regions, crowds over 24 NPCs, conversations with a shared NPC.
+**This payload (2026-10-25).** Runs on the exact scripts, native helpers and server in this ZIP: `talk_share` `20261025-100444` PASS, `quest_share` `20261025-101314` PASS, `npc_own` `20261025-101452` PASS, `member_combat` `20261025-101817` PASS (an earlier run on the same payload failed because only two of the three sword swings connected), `shared_enemy` `20261025-102022` PASS (two earlier runs on the same payload failed: after a hit the host's drowner keeps losing about 1.5 % health a second for an unknown reason, already seen before this payload, and the test reads its health 2 s after each hit with ±0.02 tolerance). The server now relays up to 12 message channels per player instead of 4; before, a fifth channel was silently dropped.
+
+**Smoother stand-ins.** Measured while NPCs walk: frames where a stand-in barely moves fell from 13 % to under 4 % (the same as a real NPC), and frame-to-frame jerkiness by about 40 %, though it is still above a real NPC's.
+
+**Nearby NPCs (`npc_own`, run `20261024-221254`, an earlier payload).** On one Novigrad street with 19 shared NPCs: Ciri was shown exactly once on both screens in 64/64 one-second samples; no stand-in slid or ran in place; the one running-in-place second on each screen was the real Ciri starting to move on her own AI. While the second PC owned her, the host's stand-in stayed within 0.30 m median (0.40 m max) of her; while the host owned her, within 0.04 m median. A quest teleport by her own script right after the hand-back shows as a jump on both screens (the 10 m maximum). A previous run with the same payload failed only because the test bot could not walk away from her (a wall); ownership correctly stayed with the PC standing next to her. Not covered: two physical PCs, other regions, crowds over 24 NPCs, conversations with a shared NPC.
 
 The earlier seven scenarios are not seven complete quests. They do not establish every quest graph, cutscene, choice, expansion or a completed campaign. The first presence run used 640×360; later runs used enlarged windows, with member combat and story tests starting at 960×540.
 
