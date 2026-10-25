@@ -85,6 +85,18 @@ function New-W3LanProfileStartInfo {
         }
         @{PlayerName=$PlayerName; ProfileOnly=$true} | ConvertTo-Json | Set-Content -LiteralPath $initialized -Encoding utf8
     }
+    # Custom Player Characters' key bindings (its add_to_input.settings.txt, extracted into the game
+    # folder with the mod) in this co-op profile's input.settings, once: the profile's settings are a
+    # copy made when it was created, so bindings added to the normal settings later never reach it.
+    $cpcBindings = Join-Path $root 'add_to_input.settings.txt'
+    $profileInput = Join-Path $w3 'input.settings'
+    if ((Test-Path -LiteralPath (Join-Path $root 'mods\modCustomPlayerCharacters') -PathType Container) -and (Test-Path -LiteralPath $cpcBindings -PathType Leaf)) {
+        if (-not (Test-Path -LiteralPath $profileInput -PathType Leaf)) {
+            Write-Warning 'This co-op profile has no input.settings yet: Custom Player Characters key bindings are added on the next launch.'
+        } elseif (-not (Select-String -LiteralPath $profileInput -SimpleMatch 'Action=NRUse' -Quiet)) {
+            [IO.File]::AppendAllText($profileInput, [Environment]::NewLine + [IO.File]::ReadAllText($cpcBindings))
+        }
+    }
     $info = [Diagnostics.ProcessStartInfo]::new()
     $info.FileName = $exe
     $info.WorkingDirectory = Split-Path -Parent $exe

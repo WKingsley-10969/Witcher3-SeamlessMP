@@ -191,6 +191,15 @@ function W3T_ScenarioCheck(bot : W3T_Bot) : bool
         return W3T_Lobby(bot, client, players[0], scenario == "lobby_new");
     }
 
+    if(scenario == "cpc_character")
+    {
+        if(players.Size() < 1)
+        {
+            return false;
+        }
+        return W3T_CpcCharacter(bot, client, players[0]);
+    }
+
     if(scenario == "character_safety")
     {
         if(players.Size() < 1)

@@ -617,12 +617,35 @@ namespace wo_native
 			DebugLog("campaign: bootstrap field " + name + " available=" + (value.empty() ? "no" : "yes"));
 		ReturnString(frame, result, value);
 	}
+
+	// Custom Player Characters (nikich340, installed by the player) in this game folder: its mod and
+	// DLC folders next to the running witcher3.exe (<game>\bin\x64_dx12).
+	static bool CustomPlayerCharactersInstalled()
+	{
+		char exe[MAX_PATH]{};
+		const DWORD length = GetModuleFileNameA(nullptr, exe, MAX_PATH);
+		if (length == 0 || length >= MAX_PATH) return false;
+		std::string root(exe, length);
+		for (int up = 0; up < 3; ++up)
+		{
+			const size_t cut = root.rfind('\\');
+			if (cut == std::string::npos) return false;
+			root.resize(cut);
+		}
+		const auto isFolder = [](const std::string &path) {
+			const DWORD attributes = GetFileAttributesA(path.c_str());
+			return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+		};
+		return isFolder(root + "\\mods\\modCustomPlayerCharacters") && isFolder(root + "\\dlc\\dlcCustomPlayerCharacters");
+	}
+
 	// Co-op session settings from the launcher (Play-LAN.ps1): W3LAN_SESSION_ROLE host|join,
 	// W3LAN_SESSION_SAVE the host's save this player loads (a save file's base name),
-	// W3LAN_SESSION_HOST the host's player name, and WO_USERNAME this player's ("player").
+	// W3LAN_SESSION_HOST the host's player name, and WO_USERNAME this player's ("player"); cpc: "1" with Custom Player Characters installed.
 	// Anything malformed reads as empty.
 	static std::string SessionSetting(const std::string &key)
 	{
+		if (key == "cpc") return CustomPlayerCharactersInstalled() ? "1" : "";
 		const char *variable = key == "role" ? "W3LAN_SESSION_ROLE" : key == "save" ? "W3LAN_SESSION_SAVE" : key == "host" ? "W3LAN_SESSION_HOST" : key == "player" ? "WO_USERNAME" : nullptr;
 		if (!variable) return "";
 		char value[128]{};

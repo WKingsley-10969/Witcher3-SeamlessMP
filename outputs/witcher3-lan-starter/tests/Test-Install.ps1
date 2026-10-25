@@ -38,7 +38,7 @@ function Manifest([string]$Package, [string]$Version) {
 }
 function New-Package([string]$Name, [string]$Version) {
     $root = Join-Path $fixture $Name
-    foreach ($relative in @('bin/x64_dx12/dinput8.dll','bin/x64_dx12/w3test.asi','bin/x64_dx12/WitcherNativeBridge.asi','bin/x64_dx12/WitcherOnlineClient.asi','bin/config/r4game/user_config_matrix/pc/modWitcherOnline.xml','mods/modWitcherOnline/content/scripts/one.ws','mods/modWitcherOnlineCompat/content/scripts/compat.ws','dlc/dlcWitcherOnline/content/test.txt')) {
+    foreach ($relative in @('bin/x64_dx12/dinput8.dll','bin/x64_dx12/w3test.asi','bin/x64_dx12/WitcherNativeBridge.asi','bin/x64_dx12/WitcherOnlineClient.asi','bin/config/r4game/user_config_matrix/pc/modWitcherOnline.xml','mods/modWitcherOnline/content/scripts/one.ws','mods/modWitcherOnlineCompat/content/scripts/compat.ws','mods/modWitcherOnlineCompatCPC/content/scripts/cpc.ws','dlc/dlcWitcherOnline/content/test.txt')) {
         Put (Join-Path $root ('mod/' + $relative)) ($Version + ':' + $relative)
     }
     Manifest $root $Version
@@ -67,7 +67,7 @@ try {
     }
     Check 'install replaces only payload files and writes reversible ownership' {
         $r = Install $game $v1
-        Assert ($r.Action -eq 'Install' -and $r.ChangedFiles -eq 10) 'Wrong install result'
+        Assert ($r.Action -eq 'Install' -and $r.ChangedFiles -eq 11) 'Wrong install result'
         Assert ((Hash (Join-Path $game 'bin/x64_dx12/witcher3.exe')) -ceq $exeHash) 'Game executable changed'
         Assert ((Get-Content -LiteralPath (Join-Path $game 'mods/anotherMod/keep.ws') -Raw) -ceq 'unrelated mod') 'Unrelated mod changed'
         Assert (-not (Test-Path -LiteralPath (Join-Path $game '.w3lan-test-copy.json'))) 'Installer pretended the original was a test copy'
@@ -328,6 +328,23 @@ else { Install-W3LanMod -GameDir $GameDir -PackageDir $PackageDir }
             Assert ((Snapshot $removeGame) -ceq $before) 'Uninstall recovery did not restore installed files'
             [void](Remove-Mod $removeGame)
         } finally { if (-not $child.HasExited) { $child.Kill(); [void]$child.WaitForExit(5000) }; $child.Dispose() }
+    }
+    Check 'Custom Player Characters keeps the stand-in out, and it comes back once removed' {
+        $cpcGame = New-Game 'cpcgame'
+        $standIn = Join-Path $cpcGame 'mods/modWitcherOnlineCompatCPC/content/scripts/cpc.ws'
+        $cpcFiles = @('mods/modCustomPlayerCharacters/content/scripts/cpc.ws','dlc/dlcCustomPlayerCharacters/content/blob0.bundle')
+        foreach ($relative in $cpcFiles) { Put (Join-Path $cpcGame $relative) 'installed by the player' }
+        [void](Install $cpcGame $v1)
+        Assert (-not (Test-Path -LiteralPath $standIn)) 'Stand-in installed next to Custom Player Characters'
+        Assert (Test-Path -LiteralPath (Join-Path $cpcGame 'mods/modWitcherOnlineCompat/content/scripts/compat.ws')) 'Other stand-ins left out'
+        Remove-Item -LiteralPath (Join-Path $cpcGame 'mods/modCustomPlayerCharacters'), (Join-Path $cpcGame 'dlc/dlcCustomPlayerCharacters') -Recurse
+        [void](Install $cpcGame $v2)
+        Assert (Test-Path -LiteralPath $standIn) 'Stand-in missing without Custom Player Characters'
+        foreach ($relative in $cpcFiles) { Put (Join-Path $cpcGame $relative) 'installed by the player' }
+        [void](Install $cpcGame $v1)
+        Assert (-not (Test-Path -LiteralPath $standIn)) 'Stand-in kept after Custom Player Characters was installed'
+        [void](Remove-Mod $cpcGame)
+        foreach ($relative in $cpcFiles) { Assert (Test-Path -LiteralPath (Join-Path $cpcGame $relative)) "Removing the mod touched $relative" }
     }
     Write-Output "INSTALL_FIXTURE_PASS: $script:checks checks. Fixture-only game bytes; no installed game launched or modified."
     Write-Output "Evidence: $fixture"

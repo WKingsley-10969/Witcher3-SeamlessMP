@@ -3216,5 +3216,7 @@ function OnQuestObjectiveEvent(journalQuest : CJournalQuest, journalObjective : 
 function CoopFactShared(id : string) : bool
 {
     return id != "game_is_loaded" && StrFindFirst(id, "tutorial") != 0 && StrFindFirst(id, "Tutorial") != 0
-        && id != "RemasterSkillResetAndRefund" && StrFindFirst(id, "coop_rw_") != 0;
+        && id != "RemasterSkillResetAndRefund" && StrFindFirst(id, "coop_rw_") != 0
+        // Custom Player Characters: each player's own character, appearance and creator
+        && StrFindFirst(id, "nr_") != 0 && StrFindFirst(id, "item_use_nr_") != 0;
 }

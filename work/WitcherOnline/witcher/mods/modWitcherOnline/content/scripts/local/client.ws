@@ -6493,10 +6493,10 @@ statemachine class r_MultiplayerClient
 
         list += "half ";
 
-        // cpc items
+        // cpc items (Custom Player Characters keeps only as many as the player added)
         for(i = 0; i < 9; i+=1)
         {
-            if(appearanceItems[curType][i] != "")
+            if(i < appearanceItems[curType].Size() && appearanceItems[curType][i] != "")
             {
                 list += appearanceItems[curType][i];
             }
@@ -6513,7 +6513,7 @@ statemachine class r_MultiplayerClient
         }
         else
         {
-            if(appearanceItems[curType][9] != "")
+            if(appearanceItems[curType].Size() > 9 && appearanceItems[curType][9] != "")
             {
                 list += appearanceItems[curType][9];
             }

@@ -24,6 +24,22 @@ try {
         }
         default { throw 'Choose 1, 2 or 3.' }
     }
+    # Custom Player Characters (optional, installed by the player from Nexus Mods)
+    if ($choice -ne '2' -and (Test-Path -LiteralPath $gameFolder)) {
+        Import-Module (Join-Path $PSScriptRoot 'W3ModInstall.psm1') -Force
+        if (Test-W3CpcInstalled $gameFolder) {
+            Write-Host 'Custom Player Characters found: co-op players can create their own character (its stand-in is left out).'
+            if (-not (Test-Path -LiteralPath (Join-Path $gameFolder 'mods/mod0000_CPC_RemasterFix'))) {
+                Write-Warning 'The CPC Remaster Compatibility Fix (mods\mod0000_CPC_RemasterFix) is missing: CPC 3.1.2 needs it on this game version. https://www.nexusmods.com/witcher3/mods/13735'
+            }
+            if (Test-Path -LiteralPath (Join-Path $gameFolder 'mods/modSharedImports')) {
+                Write-Warning 'mods\modSharedImports (Community Patch - Shared Imports) must be removed for the CPC Remaster fix.'
+            }
+        } else {
+            Write-Host 'Custom Player Characters not installed: everyone plays Geralt. For the character creator install it and its Remaster fix from Nexus Mods, then run this again:'
+            Write-Host '  https://www.nexusmods.com/witcher3/mods/5940  and  https://www.nexusmods.com/witcher3/mods/13735'
+        }
+    }
 } catch {
     if ($_.Exception.Message -notlike 'File changed outside this installer:*') { throw }
     Write-Host $_.Exception.Message

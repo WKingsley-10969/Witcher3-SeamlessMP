@@ -27,11 +27,20 @@ try{
     [void](New-W3LanProfileStartInfo -GameDir $game -PlayerName HostWitcher -Address 127.0.0.1 -SeedDirectory $seed)
     if((Get-Content -LiteralPath $copied -Raw).Trim() -ne 'co-op-progress'){throw 'Existing co-op save overwritten'}
     if((Get-FileHash -LiteralPath (Join-Path $seed 'gamesaves\test.sav') -Algorithm SHA256).Hash -ne $seedHash){throw 'Seed save changed'}
+    # Custom Player Characters' key bindings are added to the profile's input.settings, once
+    [void][IO.Directory]::CreateDirectory((Join-Path $game 'mods\modCustomPlayerCharacters'))
+    "[Exploration]`r`nIK_E=(Action=NRUse)"|Set-Content -LiteralPath (Join-Path $game 'add_to_input.settings.txt')
+    $profileInput=Join-Path $profile 'The Witcher 3\input.settings'
+    "[Exploration]`r`nIK_W=(Action=MoveForward)"|Set-Content -LiteralPath $profileInput
+    [void](New-W3LanProfileStartInfo -GameDir $game -PlayerName HostWitcher -Address 127.0.0.1 -SeedDirectory $seed)
+    [void](New-W3LanProfileStartInfo -GameDir $game -PlayerName HostWitcher -Address 127.0.0.1 -SeedDirectory $seed)
+    $inputText=Get-Content -LiteralPath $profileInput -Raw
+    if(([regex]::Matches($inputText,'Action=NRUse')).Count -ne 1 -or $inputText -notmatch 'Action=MoveForward'){throw 'CPC key bindings not added exactly once to the profile input.settings'}
     'changed-hook'|Set-Content -LiteralPath (Join-Path $game 'bin\x64_dx12\w3test.asi')
     $rejected=$false
     try{[void](New-W3LanProfileStartInfo -GameDir $game -PlayerName HostWitcher -Address 127.0.0.1 -SeedDirectory $seed)}catch{$rejected=$true}
     if(-not $rejected){throw 'Altered isolation hook accepted'}
-    Write-Output 'PROFILE_FIXTURE_PASS: no bot flags; correct endpoint; seed unchanged; profile progress preserved; altered hook rejected'
+    Write-Output 'PROFILE_FIXTURE_PASS: no bot flags; correct endpoint; seed unchanged; profile progress preserved; CPC bindings added once; altered hook rejected'
 }finally{
     $env:W3T_SCENARIO=$oldScenario
 }
