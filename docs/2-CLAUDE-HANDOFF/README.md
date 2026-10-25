@@ -574,3 +574,12 @@ Branch rebased onto `8c920f9` before publication, preserving Claude's additional
   - Regressions on this branch, all **PASS**: `player_character` (`20261025-194756`), `lobby_save` (`-195005`), `lobby_new` (`-195118`), `session_join` (`-195504`), `loot_share` (`-195639`).
   - The log file is rewritten at each game start: copy it before starting the game again.
 
+**25 October 2026 — Claude Code: the host's lobby opens by itself; back from the main menu.** Branch `fix/lobby-rejoin` (stacked on `fix/host-save-character`). From the owner's first two-PC session: the host's "Co-op lobby" menu entry did nothing, and a second PC back in the main menu could not get into the co-op game again without restarting it.
+
+- **The host's popup** (`coopLobby.ws`): the lobby popup now opens by itself in the main menu for the host too, as it did for joining players, so hosting does not depend on the menu entry. Its text says how to close it (to use New Game or Load) and reopen it.
+- **The menu entry** is now created like the game's own leaf entries (Continue, Options: an empty child list); created without one, the menu seems to treat it as an empty sub-menu and never calls `OnItemActivated`. Not verifiable by the bots (they cannot click the menu): to be checked by the owner.
+- **Coming back:** a returning player gets the host's **newest** save (it was the save the host started with, for two minutes).
+- **Test:** `lobby_rejoin` (new): the second PC joins through the lobby, goes back to the main menu (`RequestEndGame`, as Quit to main menu), and must come back by itself: downloaded and loaded again, in the party, beside the host. Run `20261025-195925`: **PASS** (fetches=2, loads=2, placements=2, 1.5 m apart).
+- Regressions with the host's popup opening by itself, all **PASS**: `lobby_save` (`20261025-200209`), `session_join` (`-200322`), `lobby_new` (`-200456`).
+- **Not reproduced:** the owner's failed return. The bots come back within a minute and pass; the cause on two real PCs is still unknown. The session, lobby and character now log to `WitcherOnline_<name>.log` (`fix/host-save-character`), which will show it.
+

@@ -66,6 +66,7 @@ A separate full copy remains optional for development:
 - The host's lobby lists the players waiting. **OK** starts with the host's newest co-op save: the host's game loads it, and everyone waiting downloads it if needed and loads it too. To start fresh instead, close the popup and choose **New Game**: everyone waiting starts the same new game.
 - A joining player waits in the lobby until the host starts. **OK** stops waiting, to play on your own.
 - If the host's lobby does not answer within 8 s, a joining player's game loads the save the launcher downloaded, as in step 3.
+- **Back to the main menu** (or after leaving the game world): the Co-op lobby opens again by itself, downloads the host's newest save and brings you back into the host's game and party. No need to restart the game.
 
 **Your own character (new).** The host's save brings the world: quests, choices and places. A joining player then plays their own Geralt, with their own level, XP, skills, mutations, money, recipes, gear, stash, horse gear and Gwent cards.
 - The first time you join a host, your character starts as a copy of the host's Geralt; from then on it is yours.
