@@ -193,6 +193,7 @@ function W3T_ScenarioCheck(bot : W3T_Bot) : bool
 
     if(scenario == "cpc_character")
     {
+        W3T_MuteCpcTutorials();   // before the other player shows up too: a popup would pause this game
         if(players.Size() < 1)
         {
             return false;
