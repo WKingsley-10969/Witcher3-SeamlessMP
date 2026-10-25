@@ -185,16 +185,12 @@ function W3T_MakeOwnCharacterPart2(w : W3PlayerWitcher, inv : CInventoryComponen
     }
     if(w.GetItemEquippedOnSlot(EES_SteelSword, id))
     {
+        // the owner's settings (copied into the bot's sandbox) have Accessibility > Disable item
+        // durability on, under which the game ignores durability changes; off for this game only
+        W3T_Log("CHARACTER member item durability disabled in settings: " + theGame.GetInGameConfigWrapper().GetVarValue('Accessibility', 'DisableDurabilityItem') + "; turning it off");
+        theGame.GetInGameConfigWrapper().SetVarValue('Accessibility', 'DisableDurabilityItem', "false");
         before = inv.GetItemDurability(id);
-        W3T_Log("CHARACTER member steel sword " + NameToString(inv.GetItemName(id)) + ": has durability " + inv.HasItemDurability(id) + ", max " + inv.GetItemMaxDurability(id)
-            + ", indestructible " + inv.ItemHasAbility(id, 'MA_Indestructible') + "/" + CalculateAttributeValue(inv.GetItemAttributeValue(id, 'indestructible'))
-            + ", toughness " + CalculateAttributeValue(inv.GetItemAttributeValue(id, 'toughness')) + ", reduce returns " + inv.ReduceItemDurability(id, true));
         for(i = 0; i < 20; i += 1) { inv.ReduceItemDurability(id, true); }
-        W3T_Log("CHARACTER member worn steel sword: durability " + before + " -> " + inv.GetItemDurability(id));
-        if(inv.GetItemDurability(id) >= before)
-        {
-            inv.SetItemDurabilityScript(id, 60);
-            W3T_Log("CHARACTER member steel sword set to 60 directly: durability " + inv.GetItemDurability(id));
-        }
+        W3T_Log("CHARACTER member worn steel sword " + NameToString(inv.GetItemName(id)) + ": durability " + before + " -> " + inv.GetItemDurability(id));
     }
 }
