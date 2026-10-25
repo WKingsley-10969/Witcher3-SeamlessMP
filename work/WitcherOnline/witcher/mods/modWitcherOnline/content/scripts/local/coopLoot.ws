@@ -143,7 +143,7 @@ class r_CoopLoot
 
     // ------------------------------------------------------------ containers
 
-    public function OnContainerTaken(container : W3Container, itemName : name, quantity : int, questItem : bool)
+    public function OnContainerTaken(container : W3Container, itemName : name, quantity : int, questItem : bool, emptied : bool)
     {
         var text, itemText : string;
         var pos : Vector;
@@ -155,7 +155,7 @@ class r_CoopLoot
         lootCounter += 1;
         pos = container.GetWorldPosition();
         lootEvents.PushBack(epoch + "-" + lootCounter + " " + FloatToStringPrec(pos.X, 2) + " " + FloatToStringPrec(pos.Y, 2) + " " + FloatToStringPrec(pos.Z, 2)
-            + " " + quantity + " " + CoopEncode(itemText) + " " + (int)container.IsEmpty());
+            + " " + quantity + " " + CoopEncode(itemText) + " " + CoopBit(emptied));
         if(lootEvents.Size() > 6) { lootEvents.Erase(0); }
         text = "coop lt " + lootEvents.Size();
         for(i = 0; i < lootEvents.Size(); i += 1) { text += " " + lootEvents[i]; }
@@ -344,13 +344,30 @@ function OnGiveReward(target : CEntity, rewardName : name, rewrd : SReward)
 function OnItemTaken(itemId : SItemUniqueId, quantity : int)
 {
     var itemName : name;
-    var questItem : bool;
+    var questItem, emptied : bool;
+    var ids : array<SItemUniqueId>;
+    var i : int;
+    // called while the item is still in the container: empty is what remains after this take,
+    // as IsEmpty counts it (no-drop and hidden items do not count)
     if(inv)
     {
         itemName = inv.GetItemName(itemId);
         questItem = inv.ItemHasTag(itemId, 'Quest');
+        emptied = true;
+        inv.GetAllItems(ids);
+        for(i = 0; i < ids.Size() && emptied; i += 1)
+        {
+            if(ids[i] == itemId) { emptied = quantity >= inv.GetItemQuantity(itemId); }
+            else { emptied = inv.ItemHasTag(ids[i], 'NoDrop') || inv.ItemHasTag(ids[i], theGame.params.TAG_DONT_SHOW); }
+        }
     }
     wrappedMethod(itemId, quantity);
-    if(IsNameValid(itemName)) { theGame.r_getMultiplayerClient().getCoopLoot().OnContainerTaken(this, itemName, quantity, questItem); }
+    if(IsNameValid(itemName)) { theGame.r_getMultiplayerClient().getCoopLoot().OnContainerTaken(this, itemName, quantity, questItem, emptied); }
     return true;
+}
+
+function CoopBit(value : bool) : string
+{
+    if(value) { return "1"; }
+    return "0";
 }

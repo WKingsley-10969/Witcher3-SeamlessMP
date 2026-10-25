@@ -4,8 +4,8 @@
 //    The second PC must get the reward's XP for its own level, and no crowns.
 // 2. The second PC's own game then gives it the same reward (its quest ran too): crowns, but no
 //    XP a second time.
-// 3. The host empties the nearest container with loot. The same container on the second PC must
-//    be empty too.
+// 3. The host empties the nearest container with loot. The same container on the second PC, given
+//    an extra item first (its own roll), must be empty too.
 function W3T_LootShare(bot : W3T_Bot, client : r_MultiplayerClient, other : r_RemotePlayer) : bool
 {
     var loot : r_CoopLoot;
@@ -73,6 +73,10 @@ function W3T_LootShare(bot : W3T_Bot, client : r_MultiplayerClient, other : r_Re
     {
         W3T_Log(label + " own reward: " + (xp - bot.scenarioCount) + " XP, " + (crowns - (int)bot.scenarioValue) + " crowns");
         if(xp != bot.scenarioCount || crowns <= (int)bot.scenarioValue || loot.rewardsXpSkipped != 1) { bot.scenarioStep = -1; return false; }
+        container = W3T_LootContainer();
+        if(!container) { W3T_Log(label + " FAIL no container with loot within 60 m"); bot.scenarioStep = -1; return false; }
+        container.GetInventory().AddAnItem('Dwarven spirit', 1);
+        W3T_Log(label + " container at " + W3T_VecStr(container.GetWorldPosition()) + " has " + container.GetInventory().GetAllItemsQuantity() + " items here");
         bot.scenarioStep = 3;
     }
     if(bot.scenarioStep == 3 && loot.lootApplied >= 1 && loot.lastLootEmptied) { bot.scenarioStep = 4; }
