@@ -296,6 +296,12 @@ class r_CoopEnemies
     private var leaderListsMyHurts : bool;
     private var delayedHurts : array<r_CoopHurt>;
 
+    // corpses of shared enemies, the newest last, for corpse loot (coopLoot.ws): "<leader epoch>.<netId>", the
+    // same on the leader's game and on members', and the dead NPC in this world
+    private var corpseKeys : array<string>;
+    private var corpseNpcs : array<CNewNPC>;
+    private var corpseTimes : array<float>;
+
     // journal entries (quests, objectives) whose status changed this session, latest status per tag
     private var journalTags : array<name>;
     private var journalStatus : array<int>;
@@ -613,6 +619,7 @@ class r_CoopEnemies
             if(e.deadAt < 0 && !e.npc.IsAlive())
             {
                 e.deadAt = now;
+                RememberCorpse(e.npc, epoch, e.netId);
             }
             if((e.deadAt >= 0 && now - e.deadAt > 4.0) || (e.deadAt < 0 && now - e.lastSeenAt > 3.0))
             {
@@ -2191,6 +2198,7 @@ class r_CoopEnemies
         applyingHostState = true;
         p.npc.Kill('W3Coop', true);
         applyingHostState = false;
+        RememberCorpse(p.npc, leaderEpoch, p.netId);
     }
 
     // a puppet the leader no longer reports: spawned ones go away, local twins get their own AI back
@@ -2956,6 +2964,55 @@ class r_CoopEnemies
     public function JournalRecorded(tag : name) : bool
     {
         return journalTags.Contains(tag);
+    }
+
+    // ---------------------------------------------------------------- corpses
+
+    private function RememberCorpse(npc : CNewNPC, ofEpoch : int, netId : int)
+    {
+        if(!npc || ofEpoch == 0 || corpseNpcs.Contains(npc))
+        {
+            return;
+        }
+        corpseKeys.PushBack(ofEpoch + "." + netId);
+        corpseNpcs.PushBack(npc);
+        corpseTimes.PushBack(theGame.GetEngineTimeAsSeconds());
+        if(corpseKeys.Size() > 48)
+        {
+            corpseKeys.Erase(0);
+            corpseNpcs.Erase(0);
+            corpseTimes.Erase(0);
+        }
+    }
+
+    public function CorpseCount() : int { return corpseKeys.Size(); }
+    public function CorpseKeyAt(i : int) : string { return corpseKeys[i]; }
+    public function CorpseNpcAt(i : int) : CNewNPC { return corpseNpcs[i]; }
+    public function CorpseDiedAt(i : int) : float { return corpseTimes[i]; }
+
+    // The key of a shared enemy's corpse in this world, "" for any other actor.
+    public function CorpseKeyOf(actor : CActor) : string
+    {
+        var i : int;
+        for(i = corpseNpcs.Size() - 1; i >= 0; i -= 1)
+        {
+            if(corpseNpcs[i] && (CActor)corpseNpcs[i] == actor)
+            {
+                return corpseKeys[i];
+            }
+        }
+        return "";
+    }
+
+    public function CorpseOfKey(key : string) : CNewNPC
+    {
+        var i : int;
+        i = corpseKeys.FindFirst(key);
+        if(i < 0)
+        {
+            return NULL;
+        }
+        return corpseNpcs[i];
     }
 
     // ---------------------------------------------------------------- diagnostics

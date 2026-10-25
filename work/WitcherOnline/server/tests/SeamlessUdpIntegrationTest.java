@@ -74,7 +74,30 @@ public final class SeamlessUdpIntegrationTest {
         } finally { if (server.isAlive()) stop(server); }
         dialogueInstances(java, classes, root, port);
         factRemovals(java, classes, root, port);
+        coopChannels(java, classes, root, port);
         System.out.println("SeamlessUdpIntegrationTest passed: " + assertions + " assertions (loss/duplicate/reorder/auth/crash/replay)");
+    }
+    // A party leader's game keeps one co-op state per channel, 14 of them by now: every one must reach
+    // the other player (the server dropped channels past 12 without a word).
+    private static void coopChannels(String java, String classes, Path root, int port) throws Exception {
+        Path state = Files.createTempDirectory(root, "udp-channels-"); Process server = start(java, classes, state, port, "channels.log");
+        try (Peer leader = new Peer(port, "Leader", H); Peer member = new Peer(port, "Member", G)) {
+            ready(leader, server);
+            member.rawSend("COOP\tMember\thit\t1");
+            Set<String> wanted = new TreeSet<>(), seen = new TreeSet<>();
+            for (String channel : "en hurt jr fx np nq cv dn tr ss lt lc rw xx".split(" ")) {
+                wanted.add(channel);
+                leader.rawSend("COOP\tLeader\t" + channel + "\tstate-" + channel);
+            }
+            long until = System.nanoTime() + 3_000_000_000L;
+            while (System.nanoTime() < until && !seen.equals(wanted)) {
+                try {
+                    List<String> fields = Arrays.asList(member.receive().split("\t", -1));
+                    if (fields.size() > 4 && fields.get(0).equals("COOP") && fields.get(2).equals("Leader")) { eq("state-" + fields.get(3), fields.get(4)); seen.add(fields.get(3)); }
+                } catch (SocketTimeoutException ignored) {}
+            }
+            eq(wanted, seen);
+        } finally { if (server.isAlive()) stop(server); }
     }
     private static void factRemovals(String java, String classes, Path root, int port) throws Exception {
         Path state = Files.createTempDirectory(root, "udp-removal-"); Process server = start(java, classes, state, port, "removal-first.log");
