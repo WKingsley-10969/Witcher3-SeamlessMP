@@ -32,6 +32,7 @@ for key in list(manifest['files']):
         del manifest['files'][key]
 sources = [(work / 'baseline-package', Path('.')),
            (work / 'WitcherOnline/witcher/mods/modWitcherOnline/content/scripts', Path('mods/modWitcherOnline/content/scripts')),
+           (work / 'WitcherOnline/witcher/bin/config', Path('bin/config')),  # the mod's settings menu
            (work / 'witcher3-coop/w3test/modW3Test', Path('mods/modW3Test'))]
 single = [(work / 'witcher3-coop/w3test/build/w3test.asi', Path('bin/x64_dx12/w3test.asi'))]
 bridge = work / 'WitcherNativeBridge/build/Release/WitcherNativeBridge.asi'
