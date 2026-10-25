@@ -238,7 +238,8 @@ function W3T_FlightLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
         pos = thePlayer.GetWorldPosition() + VecFromHeading(thePlayer.GetHeading()) * 8.0;
         pos.Z += 10;
         bot.scenarioEntity = theGame.CreateEntity(template, pos, thePlayer.GetWorldRotation(), true, false, false, PM_DontPersist);
-        if(!(CNewNPC)bot.scenarioEntity) { W3T_Log("FLIGHT leader FAIL no monster"); bot.scenarioStep = -1; return false; }
+        monster = (CNewNPC)bot.scenarioEntity;
+        if(!monster) { W3T_Log("FLIGHT leader FAIL no monster"); bot.scenarioStep = -1; return false; }
         W3T_Log("FLIGHT leader spawned " + W3T_FlightMonster() + " 10 m up at " + W3T_VecStr(pos));
         bot.scenarioStep = 1;
         bot.scenarioTime = now;
