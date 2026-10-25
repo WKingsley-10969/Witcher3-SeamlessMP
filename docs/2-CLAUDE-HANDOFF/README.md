@@ -492,10 +492,18 @@ Branch rebased onto `8c920f9` before publication, preserving Claude's additional
   - Only joining players have own characters; the host's Geralt is the save's.
   - Not tested on two physical PCs.
 
+**25 October 2026 — Claude Code: Watch / Skip prompt for shared conversations.** Branch `feature/watch-prompt` (stacked on `feature/shared-cutscenes`). The owner asked whether there would be an option to watch, and chose "Ask" as the default.
+
+- Before, joining a party member's conversation or quest scene was automatic. Now an offer (`cv open`) that passes the range and busy checks opens a Yes/No popup: "BotB is talking to Merchant. Watch the conversation? Skip to keep playing; the outcome still reaches you." (a quest scene: "... is in a story scene"). The game's message popup is used (`ShowUserDialogAdv`, id 47311 `COOP_WATCH_DIALOG`); the answer comes back through a `CR4GuiManager.UserDialogCallback` wrapper (`anno.ws`). Watch joins as before (`JoinTalk` / `JoinAuto`, from the stored offer, so a late answer still works: picks are matched by choice text). Skip records `OFFER_SKIPPED` and nothing else happens. If the conversation ends before an answer, the popup closes by itself (`OFFER_GONE`).
+- Setting `MPGhosts_JoinScenes` in the mod's settings menu: 0 Ask (default), 1 Always (the old behaviour), 2 Never. The settings XML is now tracked at `work/WitcherOnline/witcher/bin/config/r4game/user_config_matrix/pc/modWitcherOnline.xml` and overlaid by `stage-test-game.py` and `build-lan-package.py`. Console: `coopwatch ask` / `always` / `never`. The new option's labels are not localized yet (they show their text keys).
+- NPC sync: `FindForScene` (find a conversation's NPC without holding it, for the prompt's name) split out of `HoldForScene`.
+- The popup pauses the answering player's own game while it is open (like any menu); network messages are still processed, which is how an unanswered prompt closes itself.
+- Test `watch_skip` (new): the second PC talks to the trader twice; the host's bot answers Skip to the first prompt and leaves the second open. Run `20261025-112730` failed on a test bug (the second PC pressed Talk before choosing the trader). Run `20261025-113241`: **PASS**: Skip kept the host out of the conversation and where it stood; the second prompt closed itself when the conversation ended (`OFFER_GONE`); the host never joined.
+- With Ask as default, the bots' dialog hook answers Yes, so talk_share and scene_share cover the Watch path: `talk_share` (`20261025-113545`) **PASS**, `scene_share` (`20261025-113822`) **PASS**.
+
 **25 October 2026 — Claude Code: player name labels hidden in scenes.** Branch `fix/name-labels` (from `main`).
 
 - **Before:** other players' name and status labels stayed on screen during conversations and cutscenes, over the subtitles. The players' figures were already hidden there.
 - **Cause:** the labels' render loop (`MP_Render` in `sharedutils/oneliners`) does not run while a scene plays, so the labels stayed as last drawn. An earlier attempt hid them in that loop, so it never took effect. The test showed the hide condition true while the labels were still on screen.
 - **Now:** the game's HUD ticks its one-liners module every frame, scenes included. A wrapper on `CR4HudModuleOneliners.OnTick` hides the labels while a dialogue or cutscene plays, unless the "show players in cutscenes" option is on. The render loop hides them too.
 - **Test:** `scene_share` now fails if a label is on screen during a scene. Passed (run `20261025-172957`): 83 scene checks on the host and 70 on the second PC, with no label shown.
-
