@@ -332,6 +332,7 @@ statemachine class W3T_Bot
     public var surveySeen : array<string>;     // monster_survey: "monster|kind|value" logged
     public var surveyLabels : array<string>;   // ... the second PC: monsters whose copy appeared
     public var surveyStartZ : array<float>;    // ... and the height it appeared at
+    public var surveyCopies : array<CEntity>;  // ... and those copies
     public var scenarioActAt : float;    // when it last moved
     public var scenarioSeenAt : float;   // when it last saw an enemy
     public var scenarioFarSince : float; // since when its target has been out of reach

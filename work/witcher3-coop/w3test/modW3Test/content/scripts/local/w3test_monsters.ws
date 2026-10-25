@@ -115,8 +115,9 @@ function W3T_SurveyMember(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
     var coop : r_CoopEnemies;
     var list : array<string>;
     var puppet : CNewNPC;
+    var entities : array<CGameplayEntity>;
     var pos : Vector;
-    var i, k : int;
+    var i, j, k : int;
     var now : float;
     coop = client.getCoopEnemies();
     list = W3T_SurveyList();
@@ -134,11 +135,18 @@ function W3T_SurveyMember(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
         if(!puppet) { continue; }
         for(k = 0; k < list.Size(); k += 1)
         {
-            if(StrFindFirst(puppet.GetReadableName(), list[k] + ".w2ent") >= 0)
+            // the template's whole file name (noonwraith_lvl1 ends in wraith_lvl1 too)
+            if(StrEndsWith(puppet.GetReadableName(), StrMid("a\b", 1, 1) + list[k] + ".w2ent"))
             {
-                if(!bot.scenarioEntities.Contains(puppet))
+                if(!bot.surveyCopies.Contains(puppet))
                 {
-                    bot.scenarioEntities.PushBack(puppet);
+                    bot.surveyCopies.PushBack(puppet);
+                    // what is around as it comes: only what appears afterwards is its own (as on the leader)
+                    FindGameplayEntitiesInSphere(entities, thePlayer.GetWorldPosition(), 40, 200);
+                    for(j = 0; j < entities.Size(); j += 1)
+                    {
+                        if(entities[j] != puppet && !bot.scenarioEntities.Contains(entities[j])) { bot.scenarioEntities.PushBack(entities[j]); }
+                    }
                     // its starting height: the leader's spawn height is not known here
                     bot.surveyLabels.PushBack(list[k]);
                     pos = puppet.GetWorldPosition();
