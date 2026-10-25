@@ -17,7 +17,7 @@ This does not complete independent quests, shared rewards or the dialogue voting
 
 ## Integration for Claude
 
-Branch: `codex/campaign-fact-removals`, based on `dd7cae0`. This work lives in a separate managed checkout. No files, game processes, staging directories or packages in the active original checkout were changed by this branch.
+Draft [PR #2](https://github.com/WKingsley-10969/Witcher3-SeamlessMP/pull/2). Branch: `codex/campaign-fact-removals`, originally based on `dd7cae0` and rebased onto the documentation update `8c920f9`. This work lives in a separate managed checkout. No files, game processes, staging directories or packages in the active original checkout were changed by this branch.
 
 Review/cherry-pick this branch once compatible with your current work. The only bot dispatcher edit adds `seamless_removals`; preserve your newer dispatcher cases. The new bot is in `w3test_removals.ws`. Reconcile any overlapping adapter/server edits; do not copy entire old files over newer work.
 
