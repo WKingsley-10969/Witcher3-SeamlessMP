@@ -8,9 +8,9 @@
 // the abyss), death is unchanged. Nothing is written into saves: the blow is capped where the
 // game lowers health, not with the game's saved immortality flags.
 //
-// "coop dn state downSeq x y z target targetSeq": state up|down; downSeq counts this player's
-// knock-downs; target/targetSeq: the party member this player last revived and that member's
-// downSeq at the time ("-" 0: nobody).
+// "coop dn state downSeq x y z target targetSeq kneel": state up|down; downSeq counts this
+// player's knock-downs; target/targetSeq: the party member this player last revived and that
+// member's downSeq at the time ("-" 0: nobody); kneel 1 while kneeling to revive someone.
 class r_CoopRevive
 {
     private var events : array<string>;
@@ -33,6 +33,7 @@ class r_CoopRevive
     private var peerNames : array<string>;
     private var peerDown : array<bool>;
     private var peerSeq : array<int>;
+    private var peerKneel : array<bool>;
 
     // reviving a party member: holding Interact beside them
     private var holdTarget : string;
@@ -48,6 +49,7 @@ class r_CoopRevive
     public var respawns : int;
     public var realDeaths : int;
     public var peerDowns : int;
+    public var peerKneelEnds : int;
 
     public function TakeEvents() : array<string>
     {
@@ -175,17 +177,20 @@ class r_CoopRevive
 
     private function SendState()
     {
-        var st : string;
+        var st, kneelFlag : string;
         st = "up";
         if(downed) { st = "down"; }
-        WO_Send("coop dn " + st + " " + downSeq + " " + CoopNpcVec3(thePlayer.GetWorldPosition()) + " " + CoopEncode(reviveTarget) + " " + reviveTargetSeq);
+        kneelFlag = "0";
+        if(kneeling) { kneelFlag = "1"; }
+        WO_Send("coop dn " + st + " " + downSeq + " " + CoopNpcVec3(thePlayer.GetWorldPosition()) + " " + CoopEncode(reviveTarget) + " " + reviveTargetSeq + " " + kneelFlag);
     }
 
     public function OnMessage()
     {
         var sender, target : string;
-        var count, k, seq : int;
-        var down : bool;
+        var count, k, seq, i : int;
+        var down, kneel : bool;
+        var near : array<r_RemotePlayer>;
         sender = WO_Str(-1);
         count = StringToInt(WO_Str(-3), 0);
         if(WO_Str(0) != "dn" || count < 8 || sender == theGame.r_getMultiplayerClient().getUsername()) { return; }
@@ -193,14 +198,25 @@ class r_CoopRevive
         down = WO_Str(1) == "down";
         seq = StringToInt(WO_Str(2), 0);
         target = CoopDecode(WO_Str(6));
+        kneel = count >= 9 && WO_Str(8) == "1";
         k = PeerIndex(sender);
         if(k < 0)
         {
             peerNames.PushBack(sender);
             peerDown.PushBack(false);
             peerSeq.PushBack(0);
+            peerKneel.PushBack(false);
             k = peerNames.Size() - 1;
         }
+        if(peerKneel[k] && !kneel)
+        {
+            // their figure here stands up when they do, not after the whole kneel sequence
+            near = theGame.r_getMultiplayerClient().getPlayers();
+            for(i = 0; i < near.Size(); i += 1) { if(near[i] && near[i].username == sender) { near[i].EndKneel(); } }
+            peerKneelEnds += 1;
+            Record("PEER_KNEEL_END " + sender);
+        }
+        peerKneel[k] = kneel;
         if(down && !peerDown[k])
         {
             peerDowns += 1;
@@ -370,6 +386,7 @@ class r_CoopRevive
         rot.Yaw = VecHeading(targetPos - thePlayer.GetWorldPosition());
         thePlayer.TeleportWithRotation(thePlayer.GetWorldPosition(), rot);
         kneeling = thePlayer.PlayerStartAction(PEA_ExamineGround);
+        if(kneeling) { SendState(); }
     }
 
     private function StopKneel()
@@ -377,6 +394,7 @@ class r_CoopRevive
         if(!kneeling) { return; }
         kneeling = false;
         thePlayer.PlayerStopAction(PEA_ExamineGround);
+        SendState();   // the other screens stand this player's figure up now
     }
 
     public function IsKneeling() : bool { return kneeling; }

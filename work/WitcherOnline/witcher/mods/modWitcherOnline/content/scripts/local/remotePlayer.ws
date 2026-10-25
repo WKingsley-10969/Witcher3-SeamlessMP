@@ -551,6 +551,21 @@ statemachine class r_RemotePlayer
         lastAnim = request.anim;
     }
 
+    // This player stopped kneeling beside a downed party member (coopRevive.ws): stand up now
+    // instead of finishing the whole examine-ground sequence the player-action sync queued.
+    public function EndKneel()
+    {
+        var req : r_AnimRequest;
+        if(lastAnim != 'work_kneeling_start' && lastAnim != 'work_kneeling_loop') { return; }
+        animQueue.Clear();
+        req.anim = 'work_kneeling_end';
+        req.duration = 3.0;
+        req.fadeIn = 0.2;
+        req.fadeOut = 0;
+        req.type = 'emote';
+        playAnimNow(req);
+    }
+
     private function stopAllAnims()
     {
         animQueue.Clear();

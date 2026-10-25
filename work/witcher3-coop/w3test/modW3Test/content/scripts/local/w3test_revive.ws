@@ -106,9 +106,9 @@ function W3T_PartyRevive(bot : W3T_Bot, client : r_MultiplayerClient, other : r_
     W3T_Log(label + " step=" + bot.scenarioStep + " apart=" + FloatToStringPrec(apart, 1) + " alive=" + thePlayer.IsAlive() + " otherAlive=" + other.isAlive
         + " downed=" + revive.IsDowned() + " state=" + thePlayer.GetCurrentStateName() + " health=" + FloatToStringPrec(thePlayer.GetStat(BCS_Vitality), 0)
         + " downs=" + revive.downs + " peerDowns=" + revive.peerDowns + " given=" + revive.revivesGiven + " received=" + revive.revivesReceived
-        + " respawns=" + revive.respawns + " realDeaths=" + revive.realDeaths + " kneeling=" + revive.IsKneeling() + " examining=" + (thePlayer.GetPlayerAction() == PEA_ExamineGround));
+        + " respawns=" + revive.respawns + " realDeaths=" + revive.realDeaths + " kneeling=" + revive.IsKneeling() + " peerKneelEnds=" + revive.peerKneelEnds + " examining=" + (thePlayer.GetPlayerAction() == PEA_ExamineGround));
     if(!host && revive.IsKneeling()) { bot.scenarioVec.W = 1; }   // the reviver knelt at some point
-    if(host) { return bot.scenarioStep == 5 && apart >= 1.0 && apart < 8 && revive.realDeaths == 0 && thePlayer.IsAlive(); }
+    if(host) { return bot.scenarioStep == 5 && apart >= 1.0 && apart < 8 && revive.realDeaths == 0 && thePlayer.IsAlive() && revive.peerKneelEnds >= 1; }
     return bot.scenarioStep == 6 && revive.revivesGiven == 1 && revive.realDeaths == 0 && bot.scenarioVec.W == 1;
 }
 
