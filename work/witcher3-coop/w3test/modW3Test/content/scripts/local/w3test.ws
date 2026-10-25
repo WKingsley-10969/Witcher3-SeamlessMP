@@ -142,11 +142,12 @@ function OnConfigUI()
     if(W3T_Active())
     {
         W3T_Log("MENU open " + NameToString(GetMenuName()));
-        // talk_share: the shop pauses the game, and with it the bot that would close it; the
-        // second PC (which asked to trade) closes it here. The host's is the feature's to close.
-        if(W3T_GetEnv("W3T_SCENARIO") == "talk_share" && W3T_GetEnv("W3T_ROLE") != "mover" && GetMenuName() == 'CommonMenu')
+        // talk_share / scene_share: the shop pauses the game, and with it the bot that would close
+        // it; the starter (which asked to trade) closes it here. The joiner's is the feature's to close.
+        if(GetMenuName() == 'CommonMenu' && ((W3T_GetEnv("W3T_SCENARIO") == "talk_share" && W3T_GetEnv("W3T_ROLE") != "mover")
+            || (W3T_GetEnv("W3T_SCENARIO") == "scene_share" && W3T_GetEnv("W3T_ROLE") == "mover")))
         {
-            W3T_Log("MENU shop -> close (talk_share starter)");
+            W3T_Log("MENU shop -> close (starter)");
             if(theGame.GetGuiManager().GetLastOpenedCommonMenuName() == 'None') { theGame.GetGuiManager().SetLastOpenedCommonMenuName(GetMenuName()); }
             CloseMenu();
         }
@@ -275,6 +276,7 @@ statemachine class W3T_Bot
     public var scenarioEntity : CEntity;
     public var scenarioEntities : array<CEntity>;
     public var scenarioStep : int;       // a fighting bot's moves
+    public var scenarioText : string;    // last text a probe logged, to log only changes
     public var scFirstInstance : string;
     public var scSecondInstance : string;
     public var scFirstReceipt : int;

@@ -69,6 +69,10 @@ function W3T_ScenarioCheck(bot : W3T_Bot) : bool
     {
         return W3T_SeamlessEffects(bot);
     }
+    if(scenario == "seamless_removals")
+    {
+        return W3T_SeamlessRemovals(bot);
+    }
     if(scenario == "seamless_dialogue")
     {
         return W3T_SeamlessDialogue(bot);
@@ -132,6 +136,25 @@ function W3T_ScenarioCheck(bot : W3T_Bot) : bool
             return false;
         }
         return W3T_TalkShare(bot, client, players[0]);
+    }
+
+    if(scenario == "ciri_follow")
+    {
+        return W3T_CiriFollow(bot, client);
+    }
+
+    if(scenario == "scene_probe")
+    {
+        return W3T_SceneProbe(bot, client);
+    }
+
+    if(scenario == "scene_share")
+    {
+        if(ghosts < 1)
+        {
+            return false;
+        }
+        return W3T_SceneShare(bot, client, players[0]);
     }
 
     if(scenario == "talk_probe")

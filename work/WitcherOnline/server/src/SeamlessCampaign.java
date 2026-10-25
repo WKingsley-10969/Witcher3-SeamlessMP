@@ -102,6 +102,10 @@ public final class SeamlessCampaign implements AutoCloseable {
         if (isHost && (!username.equalsIgnoreCase(host) || !constantEquals(args.get(1), hostToken))) return reply(id, Long.toString(seq), "HOST_AUTH_FAILED");
         if (!isHost && username.equalsIgnoreCase(host)) return reply(id, Long.toString(seq), "HOST_AUTH_FAILED");
         Set<String> capabilities = parseCapabilities(args.get(2));
+        // History is replayed from cursor zero after a game load. Even if a removed
+        // fact was subsequently set, an old adapter must never read absent as zero.
+        if (!capabilities.contains("fact_remove") && hasFactRemoval(state))
+            return reply(id, Long.toString(seq), "CAPABILITY_REQUIRED", "fact_remove");
         Active existing = active.get(id);
         long now = clock.getAsLong();
         if (existing != null && !existing.endpoint.equals(endpoint) && now - existing.seen < LEASE_MS)
@@ -384,6 +388,8 @@ public final class SeamlessCampaign implements AutoCloseable {
         if (!EFFECT_KINDS.contains(member.kind)) return list("UNSUPPORTED_EFFECT");
         if (member.kind.equals("fact")) {
             if (!factValue(member.value) || (!member.expected.equals("-") && !factValue(member.expected))) return list("BAD_EFFECT_VALUE");
+            if (member.value.equals("absent"))
+                for (Active player : active.values()) if (!player.capabilities.contains("fact_remove")) return list("CAPABILITY_REQUIRED", "fact_remove");
         }
         if (member.kind.equals("journal")) {
             long value = parseLong(member.value, -1); if (value < 0 || value > 4) return list("BAD_EFFECT_VALUE");
@@ -393,9 +399,19 @@ public final class SeamlessCampaign implements AutoCloseable {
         for (Active player : active.values()) if (!player.capabilities.contains(member.kind)) return list("CAPABILITY_REQUIRED", member.kind);
         return null;
     }
-    // A fact value is `value` (permanent) or `value@validFor` with a positive engine duration,
-    // as captured from FactsSet. Expected values compare the whole stored string.
+    // Scan retained history, not just latest values: save/load replay includes old removals.
+    private static boolean hasFactRemoval(State state) {
+        for (Event event : state.events) {
+            if (!event.type.equals("TRANSACTION")) continue;
+            for (int i = 5; i + 3 < event.payload.size(); i += 4)
+                if (event.payload.get(i + 1).equals("fact") && event.payload.get(i + 3).equals("absent")) return true;
+        }
+        return false;
+    }
+    // An explicit absent tombstone, a permanent integer, or integer@positiveDuration.
+    // Expected values compare the whole stored string; absent is distinct from zero.
     private static boolean factValue(String text) {
+        if (text.equals("absent")) return true;
         int at = text.indexOf('@');
         try {
             Integer.parseInt(at < 0 ? text : text.substring(0, at));
@@ -450,7 +466,7 @@ public final class SeamlessCampaign implements AutoCloseable {
     private static List<String> list(String... strings) { return new ArrayList<>(Arrays.asList(strings)); }
     private static Set<String> parseCapabilities(String value) {
         Set<String> out = new HashSet<>(); if (value.isEmpty() || "-".equals(value)) return out;
-        for (String kind : value.split(",", -1)) { require(EFFECT_KINDS.contains(kind)); out.add(kind); } return out;
+        for (String kind : value.split(",", -1)) { require(EFFECT_KINDS.contains(kind) || kind.equals("fact_remove")); out.add(kind); } return out;
     }
     private static List<String> choices(String value) {
         List<String> out = Arrays.asList(value.split(",", -1)); require(out.size() >= 2 && out.size() <= 8 && new HashSet<>(out).size() == out.size());
