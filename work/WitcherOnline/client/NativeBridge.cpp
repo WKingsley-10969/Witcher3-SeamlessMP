@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <deque>
 #include <fstream>
+#include <iterator>
 #include <list>
 #include <mutex>
 #include <string>
@@ -850,6 +851,64 @@ namespace wo_native
 		ReturnString(frame, result, value);
 	}
 
+	// Per-player characters (coopCharacter.ws): a joining player's own character in the host's game,
+	// one file per host in the co-op profile, "The Witcher 3\coop-characters\<host>.txt". Scripts
+	// join lines with '|' (no newline escape); the file keeps one record per line.
+	static std::string CharacterFile()
+	{
+		const std::string host = SessionSetting("host");
+		const std::string saves = SaveFolder();
+		if (host.empty() || saves.empty()) return "";
+		const std::string folder = saves.substr(0, saves.rfind('\\')) + "\\coop-characters";
+		CreateDirectoryA(folder.c_str(), nullptr);
+		return folder + "\\" + host + ".txt";
+	}
+
+	static void WO_CharacterStore(void *, void *frame, void *result)
+	{
+		WNB_String text{};
+		WNB_ReadStringParameter(frame, &text);
+		std::string body = NarrowPayload(text);
+		const std::string file = CharacterFile();
+		bool stored = false;
+		if (!file.empty() && !body.empty() && body.size() < 4u * 1024u * 1024u)
+		{
+			std::replace(body.begin(), body.end(), '|', '\n');
+			const std::string partial = file + ".tmp";
+			{
+				std::ofstream out(partial, std::ios::binary | std::ios::trunc);
+				out.write(body.data(), static_cast<std::streamsize>(body.size()));
+				stored = static_cast<bool>(out);
+			}
+			// replace the old record only with a complete new one
+			stored = stored && MoveFileExA(partial.c_str(), file.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+		}
+		WNB_ReturnBool(frame, result, stored);
+	}
+
+	// The stored character, lines joined by '|'; "" when there is none.
+	static void WO_CharacterLoad(void *, void *frame, void *result)
+	{
+		std::string body;
+		const std::string file = CharacterFile();
+		if (!file.empty())
+		{
+			std::ifstream in(file, std::ios::binary);
+			if (in) body.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+		}
+		body.erase(std::remove(body.begin(), body.end(), '\r'), body.end());
+		std::replace(body.begin(), body.end(), '\n', '|');
+		ReturnString(frame, result, body);
+	}
+
+	// A game name (item, recipe, ability) from text: scripts cannot convert a string to a name.
+	static void WO_ToName(void *, void *frame, void *result)
+	{
+		WNB_String text{};
+		WNB_ReadStringParameter(frame, &text);
+		ReturnName(frame, result, NarrowPayload(text));
+	}
+
 	static void WO_SCInstance(void *, void *frame, void *result)
 	{
 		static const std::string nonce = [] {
@@ -1095,6 +1154,7 @@ namespace wo_native
 		    {"WO_SessionConfig", &WO_SessionConfig},
 		    {"WO_LobbyRequest", &WO_LobbyRequest}, {"WO_LobbyResult", &WO_LobbyResult},
 		    {"WO_LobbyFetchSave", &WO_LobbyFetchSave}, {"WO_LobbyFetchState", &WO_LobbyFetchState},
+		    {"WO_CharacterStore", &WO_CharacterStore}, {"WO_CharacterLoad", &WO_CharacterLoad}, {"WO_ToName", &WO_ToName},
 		    {"WO_SCInstance", &WO_SCInstance},
 		    {"WO_SCResetFacts", &WO_SCResetFacts}, {"WO_SCWatchFact", &WO_SCWatchFact},
 		    {"WO_SCReadFactChange", &WO_SCReadFactChange}, {"WO_SCAckFactChange", &WO_SCAckFactChange},
