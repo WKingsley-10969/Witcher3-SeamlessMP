@@ -236,6 +236,7 @@ class r_CoopLoot
         var f : array<string>;
         var entities : array<CGameplayEntity>;
         var pos : Vector;
+        var container : W3Container;
         var i : int;
         var d, best : float;
         f = CoopSplit(lootEvent, " ");
@@ -245,8 +246,9 @@ class r_CoopLoot
         best = -1;
         for(i = 0; i < entities.Size(); i += 1)
         {
-            if(!(W3Container)entities[i]) { continue; }
-            d = VecDistance(entities[i].GetWorldPosition(), pos);
+            container = (W3Container)entities[i];
+            if(!container) { continue; }
+            d = VecDistance(container.GetWorldPosition(), pos);
             if(best < 0 || d < best) { best = d; }
         }
         if(best < 0) { return "no container within 30 m of " + VecToString(pos); }
