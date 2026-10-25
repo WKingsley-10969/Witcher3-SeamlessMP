@@ -20,6 +20,7 @@ try{
     $info=New-W3LanProfileStartInfo -GameDir $game -PlayerName HostWitcher -Address 127.0.0.1 -SeedDirectory $seed
     if($info.EnvironmentVariables['W3T_SCENARIO']){throw 'Bot flag leaked'}
     if($info.EnvironmentVariables['WO_SERVER_IP'] -ne '127.0.0.1'){throw 'Wrong host endpoint'}
+    if($info.Arguments){throw "The game is started with forced options ($($info.Arguments)): the player's graphics settings would not apply"}
     $profile=$info.EnvironmentVariables['W3LAN_DOCUMENTS']
     $copied=Join-Path $profile 'The Witcher 3\gamesaves\test.sav'
     if((Get-FileHash -LiteralPath $copied -Algorithm SHA256).Hash -ne $seedHash){throw 'Seed copy differs'}
@@ -40,9 +41,34 @@ try{
     $rejected=$false
     try{[void](New-W3LanProfileStartInfo -GameDir $game -PlayerName HostWitcher -Address 127.0.0.1 -SeedDirectory $seed)}catch{$rejected=$true}
     if(-not $rejected){throw 'Altered isolation hook accepted'}
-    Write-Output 'PROFILE_FIXTURE_PASS: no bot flags; correct endpoint; seed unchanged; profile progress preserved; CPC bindings added once; altered hook rejected'
+    Import-Module (Join-Path $root 'W3Lan.psm1') -Force
+    $remembered=Join-Path $fixture 'player.json'
+    $empty=Get-W3LanPlayerSettings -Path $remembered
+    if($empty['JoinName'] -or $empty['HostAddress']){throw 'Settings without a file are not empty'}
+    Set-W3LanPlayerSettings -Path $remembered -Values @{HostName='HostWitcher';JoinName='GuestWitcher';HostAddress='192.168.1.20'}
+    $back=Get-W3LanPlayerSettings -Path $remembered
+    if($back['JoinName'] -cne 'GuestWitcher' -or $back['HostAddress'] -cne '192.168.1.20' -or $back['HostName'] -cne 'HostWitcher'){throw 'Remembered name/address not read back'}
+    'not json'|Set-Content -LiteralPath $remembered
+    if((Get-W3LanPlayerSettings -Path $remembered 3>$null)['JoinName']){throw 'A broken settings file was not ignored'}
+    Write-Output 'PROFILE_FIXTURE_PASS: no bot flags; correct endpoint; no forced game options; seed unchanged; profile progress preserved; CPC bindings added once; altered hook rejected; name and address remembered'
 }finally{
     $env:W3T_SCENARIO=$oldScenario
 }
 
 
+
+# The prompts: Enter keeps the remembered answer; a name the game refuses is asked for again.
+Import-Module (Join-Path $root 'W3Lan.psm1') -Force
+$global:W3LanTestAnswers=[Collections.Generic.Queue[string]]::new()
+function global:Read-Host([string]$Prompt){$global:W3LanTestAnswers.Dequeue()}
+try{
+    $global:W3LanTestAnswers.Enqueue('')
+    if((Read-W3LanValue -Prompt 'Name' -Default 'GuestWitcher' -Check {param($v) Assert-W3LanName $v}) -cne 'GuestWitcher'){throw 'Enter did not keep the remembered name'}
+    foreach($answer in @('a b','x','NewName')){$global:W3LanTestAnswers.Enqueue($answer)}
+    if((Read-W3LanValue -Prompt 'Name' -Default '' -Check {param($v) Assert-W3LanName $v} 3>$null) -cne 'NewName'){throw 'Refused names were accepted'}
+    if($global:W3LanTestAnswers.Count){throw 'Unused answers left'}
+    Write-Output 'PROMPT_PASS: Enter keeps the remembered answer; refused names are asked again'
+}finally{
+    Remove-Item function:global:Read-Host
+    Remove-Variable W3LanTestAnswers -Scope Global
+}
