@@ -204,6 +204,7 @@ function OnAfterLoadingScreenGameStart()
     theGame.r_getMultiplayerClient().setInGame(true);
     theGame.r_getMultiplayerClient().getCoopSession().OnGameStarted();
     theGame.r_getMultiplayerClient().getCoopLobby().OnGameStarted();
+    theGame.r_getMultiplayerClient().getCoopCharacter().OnGameStarted();
     theGame.r_getMultiplayerClient().setSpawnTime(theGame.GetEngineTimeAsSeconds());
     theGame.r_getMultiplayerClient().setEmote(-1);
 

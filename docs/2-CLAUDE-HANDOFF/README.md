@@ -466,3 +466,28 @@ Branch rebased onto `8c920f9` before publication, preserving Claude's additional
   - The **Co-op lobby** main-menu entry is not covered by the bots, which open the lobby directly.
   - In `lobby_new` both games start the prologue; joining the party then depends on the session's auto-party, which this test does not check.
   - Not tested on two physical PCs.
+
+**25 October 2026 — Claude Code: per-player characters.** Branch `feature/player-characters` (from `main`).
+
+- **Before:** a joining player's game loads the host's save, and a Witcher 3 save holds both the world and Geralt. So the second PC played the host's Geralt: the host's level, skills, gear and money. What it earned was replaced by the host's Geralt again at the next session.
+- **Now:** the host's save still brings the world (quests, choices, places), and the second PC then gets its own character back.
+- **Game** (`coopCharacter.ws`, new; joining players only):
+  - every 20 s it records the character: level and total XP, skill points, learned skills with their levels and skill slots, money, alchemy recipes, crafting schematics, and every item of the character with quantity, durability, equipment slot, enchantment, runes, rune slots, item-level (`autogen`) abilities and bomb/oil charges;
+  - 5 s after a load, it replaces the loaded (host's) Geralt with that record: unequips and removes the host's items, resets skills (`ResetCharacterDev`), sets level and XP, gives back all skill points and learns the skills again (so they cost points as in the game), sets the recorded free/used points, equips skills, recipes, money and items;
+  - the first time with a host there is no record: the character starts as a copy of the host's Geralt and is the player's own from then on;
+  - a record it cannot read is kept, not overwritten; that session plays the host's Geralt.
+- **What belongs to the world, not the character:** items tagged quest or notice-board note, the game's hidden items (body parts, hair, fists, scabbards, recipe and schematic items, Gwent cards) and horse gear. These are neither recorded nor removed.
+- **Level down and up without the level-up flow:** `W3LevelManager.CoopSetLevel` (added) moves the level and adds or removes the level-up abilities (`Lvl2`...), the way the game's own Blood and Wine standalone start shrinks a level.
+- **Restore details found in testing:**
+  - Items from finished quests have lost their quest tag in the save, but a re-added item gets it back from its definition. A restored item drops it again, otherwise it would count as a world item.
+  - Bombs and oils are single items with charges; the game's `AddAnItem` forces their quantity to 1. They are added with the recorded quantity (`CInventoryComponent.CoopAddItem`), and their charges set.
+  - An enchantment fills the rune slots and lists itself as their runes: an enchanted item records only the enchantment.
+- **Native** (`NativeBridge.cpp`): `WO_CharacterStore` / `WO_CharacterLoad` keep the record in `The Witcher 3\coop-characters\<host>.txt` in the player's co-op profile, replaced only by a complete new file. `WO_ToName` turns record text into game names (scripts cannot).
+- **Tests:** game test `player_character` (new), passed (run `20261025-170728`). The second PC started fresh as a copy of the host's level-31 Geralt. It went to level 29, learned three skills (one in a skill slot), and added a sword with a rune, an enchanted sword, equipped gloves and 777 crowns. It stored the character and loaded the host's save again. After the reload the restored character matched the stored one line for line: 671 items, 3 skills, 4696 crowns, no problems. The world's 32 quest items were unchanged, and the host's character was never touched.
+  Regressions passed with this branch: `session_join` (`20261025-171006`), `lobby_save` (`20261025-171141`), `party_revive` (`20261025-171253`).
+- **Limits:**
+  - Not covered yet: Blood and Wine mutations (the host's stay), the stash, horse gear and the Gwent collection.
+  - Durability is recorded and restored, but the test could not wear an item down, so restoring a worn item is not verified.
+  - Loot is per player. A container the second PC emptied is full again in the host's next save, and quest items the second PC picked up are the world's (the host's save decides).
+  - Only joining players have own characters; the host's Geralt is the save's.
+  - Not tested on two physical PCs.
