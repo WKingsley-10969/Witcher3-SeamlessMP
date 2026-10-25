@@ -491,3 +491,12 @@ Branch rebased onto `8c920f9` before publication, preserving Claude's additional
   - Loot is per player. A container the second PC emptied is full again in the host's next save, and quest items the second PC picked up are the world's (the host's save decides).
   - Only joining players have own characters; the host's Geralt is the save's.
   - Not tested on two physical PCs.
+
+**25 October 2026 — Claude Code: leaving the party sticks on LAN.** Branch `fix/leave-party` (from `main`).
+
+- **Before:** the co-op session joined a joining player to the host's party every 5 s while they were not in it. "Leave party" in the party menu was therefore undone within 5 s.
+- **Now** (`coopSession.ws`):
+  - A leave the player asks for (`r_MultiplayerClient.leaveParty`, wrapped: the party menu, the old item menu, the `leave` console command) stops the automatic joining, with a notification on how to join again.
+  - Any join the player asks for (interact with the host → Join party) turns automatic joining back on. The session's own join calls do not count as the player's.
+- **Test:** `party_leave` (new), passed (run `20261025-172746`). The second PC was joined by the session, left the party itself, and stayed out for 15 s with no join attempt. It then joined by itself, and automatic joining was on again.
+
