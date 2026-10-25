@@ -329,6 +329,9 @@ statemachine class W3T_Bot
     public var qpKeys : array<string>;          // quest_share: the notices the second PC takes
     public var qpFacts : array<string>;         // ... and the quest fact each one starts
     public var qpApplied : int;                 // ... applies counted once settled, to catch echo loops
+    public var surveySeen : array<string>;     // monster_survey: "monster|kind|value" logged
+    public var surveyLabels : array<string>;   // ... the second PC: monsters whose copy appeared
+    public var surveyStartZ : array<float>;    // ... and the height it appeared at
     public var scenarioActAt : float;    // when it last moved
     public var scenarioSeenAt : float;   // when it last saw an enemy
     public var scenarioFarSince : float; // since when its target has been out of reach
