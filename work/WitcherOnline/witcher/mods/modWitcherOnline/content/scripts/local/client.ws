@@ -252,6 +252,7 @@ statemachine class r_MultiplayerClient
     private var coopEnemies : r_CoopEnemies;
     private var coopNpcs : r_CoopNpcs;
     private var coopTalk : r_CoopTalk;
+    private var coopRevive : r_CoopRevive;
     private var coopTravel : r_CoopTravel;
     private var seamlessCampaign : r_SeamlessCampaign;
 
@@ -292,6 +293,15 @@ statemachine class r_MultiplayerClient
             coopTalk = new r_CoopTalk in this;
         }
         return coopTalk;
+    }
+
+    public function getCoopRevive() : r_CoopRevive
+    {
+        if(!coopRevive)
+        {
+            coopRevive = new r_CoopRevive in this;
+        }
+        return coopRevive;
     }
 
     public function getCoopNpcs() : r_CoopNpcs
@@ -5793,6 +5803,7 @@ statemachine class r_MultiplayerClient
                     client.getCoopEnemies().OnMessage();
                     client.getCoopNpcs().OnMessage();
                     client.getCoopTalk().OnMessage();
+                    client.getCoopRevive().OnMessage();
                     client.getCoopTravel().OnMessage();
                     client.getSeamlessCampaign().OnMessage();
                     break;
@@ -6024,7 +6035,7 @@ statemachine class r_MultiplayerClient
         }
         list += " ";
         
-        list += thePlayer.IsAlive();
+        list += thePlayer.IsAlive() && !getCoopRevive().IsDowned();
         list += " ";
 
         list += theGame.r_getMultiplayerClient().getEmote();
@@ -7755,6 +7766,7 @@ state WO_Tick in r_MultiplayerClient
             parent.getCoopEnemies().Tick();
             parent.getCoopNpcs().Tick();
             parent.getCoopTalk().Tick();
+            parent.getCoopRevive().Tick();
             parent.getCoopTravel().Tick();
             parent.getSeamlessCampaign().Tick();
 

@@ -44,6 +44,19 @@ for source, relative in sources:
     assert source.is_dir()
     pairs += [(p, relative / p.relative_to(source)) for p in source.rglob('*') if p.is_file() and p.name not in excluded]
 pairs += single  # native builds override the baseline payload, never the other way around
+# Files an earlier deploy placed that the current sources no longer have (another branch's
+# scripts) would still be compiled: restore the original or remove them, if unchanged since.
+current = {relative.as_posix() for _, relative in pairs}
+for key in [k for k in manifest['files'] if k not in current]:
+    target = game / key
+    assert target.resolve().is_relative_to(game.resolve())
+    if target.exists():
+        assert hashlib.sha256(target.read_bytes()).hexdigest() == manifest['files'][key], f'{key} changed since it was deployed'
+        backup = testing / 'deploy-backup' / key
+        if backup.exists(): shutil.copy2(backup, target)
+        else: target.unlink()
+        print(f'REMOVED stale {key}')
+    del manifest['files'][key]
 for source, relative in pairs:
     target = game / relative
     assert target.resolve().is_relative_to(game.resolve())

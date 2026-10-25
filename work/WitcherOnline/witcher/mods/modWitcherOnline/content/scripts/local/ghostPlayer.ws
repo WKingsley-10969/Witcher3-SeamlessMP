@@ -32,6 +32,11 @@ statemachine class MPDRPlayer extends CNewNPC
 
 		if( actionName == "Interact" )
 		{
+			// a downed party member: holding Interact revives them (coopRevive.ws)
+			if( theGame.r_getMultiplayerClient().getCoopRevive().IsDownedFigure((CActor)this) )
+			{
+				return true;
+			}
 			theGame.r_getMultiplayerClient().createMenu(((CActor)this));
 		}
 	}
