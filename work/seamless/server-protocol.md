@@ -45,6 +45,30 @@ Session transport is bound to the exact endpoint separately from legacy name/ses
 
 ## Polling and replay
 
+### Non-consuming transport resume
+
+An updated adapter with an outstanding request can send
+`RESUME worldEpoch role proof capabilityCsv` using that request's session and sequence.
+This authenticates transport recovery without consuming a sequence or replacing the
+durable cached reply. The result is `RESUMED epoch latestEventId lastCommittedRequestSeq`.
+The sequence in the response envelope only correlates this handshake; it is not a
+new receipt. After RESUMED, retransmit the original request unchanged. A committed
+request returns its original result; an uncommitted next request can execute once.
+Repeated RESUME does not append ledger events or acquire/renew a scope.
+
+RESUME requires an existing session and the same role/name, host proof when applicable,
+matching epoch, supported removal history and the existing 15-second endpoint lease.
+Its authentication/capability failures do not consume sequences. A changed endpoint
+waits for expiry. An unknown session gets HELLO_REQUIRED. An adapter should stop on
+an inconsistent server sequence rather than renumber an uncertain mutation.
+
+The script retains its applied cursor during a network outage, gates new campaign
+actions while draining missed events, and treats all dialogue up to the resume floor
+as history. A cached pre-outage STATE cannot lower that floor. Scene/choice bindings
+are abandoned; rejoining never grants permission to execute a historical graph or
+implicitly reopen a conversation. Expiry removes listener membership from future
+vote quorums. See [recovery implementation and QA](../../docs/5-REJOIN-RECOVERY/README.md).
+
 Every operation below begins with `worldEpoch` in its argument list:
 
 | Operation | Remaining arguments | Result |
