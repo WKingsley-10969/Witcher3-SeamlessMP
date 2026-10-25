@@ -147,16 +147,15 @@ function W3T_MakeOwnCharacter(character : r_CoopCharacter)
     W3T_MakeOwnCharacterPart2(w, inv);
 }
 
-// Mutations, stash and horse gear, Gwent cards, worn gear.
+// Mutations, stash and horse gear, Gwent cards.
 function W3T_MakeOwnCharacterPart2(w : W3PlayerWitcher, inv : CInventoryComponent)
 {
     var pam : W3PlayerAbilityManager;
     var horses : W3HorseManager;
     var stash : CInventoryComponent;
     var ids : array<SItemUniqueId>;
-    var id, moved : SItemUniqueId;
+    var moved : SItemUniqueId;
     var i : int;
-    var before : float;
     var cardGone : bool;
     pam = (W3PlayerAbilityManager)w.abilityManager;
     pam.MutationSystemEnable(true);
@@ -182,15 +181,5 @@ function W3T_MakeOwnCharacterPart2(w : W3PlayerWitcher, inv : CInventoryComponen
             inv.RemoveItem(ids[i], 1);
             cardGone = true;
         }
-    }
-    if(w.GetItemEquippedOnSlot(EES_SteelSword, id))
-    {
-        // the owner's settings (copied into the bot's sandbox) have Accessibility > Disable item
-        // durability on, under which the game ignores durability changes; off for this game only
-        W3T_Log("CHARACTER member item durability disabled in settings: " + theGame.GetInGameConfigWrapper().GetVarValue('Accessibility', 'DisableDurabilityItem') + "; turning it off");
-        theGame.GetInGameConfigWrapper().SetVarValue('Accessibility', 'DisableDurabilityItem', "false");
-        before = inv.GetItemDurability(id);
-        for(i = 0; i < 20; i += 1) { inv.ReduceItemDurability(id, true); }
-        W3T_Log("CHARACTER member worn steel sword " + NameToString(inv.GetItemName(id)) + ": durability " + before + " -> " + inv.GetItemDurability(id));
     }
 }
