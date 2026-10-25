@@ -209,3 +209,110 @@ function W3T_SurveyNote(bot : W3T_Bot, side : string, label : string, kind : str
     bot.surveySeen.PushBack(key);
     W3T_Log("SURVEY " + side + " " + label + " " + kind + " " + value);
 }
+
+// monster_flight: a flying monster flies on the second PC too. The leader spawns W3T_MONSTER (a griffin unless
+// set) 10 m above the ground ahead of both players: it starts in flight. After 50 s the leader kills it.
+// The second PC's copy must fly too (its flying stance, over 3 m above the ground) and, once dead, fall to the
+// ground (under 1.5 m within 15 s).
+function W3T_FlightMonster() : string
+{
+    if(W3T_GetEnv("W3T_MONSTER") != "") { return W3T_GetEnv("W3T_MONSTER"); }
+    return "characters\npc_entities\monsters\gryphon_lvl1.w2ent";
+}
+
+function W3T_FlightLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
+{
+    var template : CEntityTemplate;
+    var monster : CNewNPC;
+    var pos : Vector;
+    var height : float;
+    var now : float;
+    now = bot.ElapsedS();
+    if(bot.scenarioStep < 0) { return false; }
+    if(bot.scenarioStep == 0)
+    {
+        if(client.getCoopEnemies().GetRole() != 1 || now < 25) { return false; }
+        template = (CEntityTemplate)LoadResource(W3T_FlightMonster(), true);
+        if(!template) { W3T_Log("FLIGHT leader FAIL no template " + W3T_FlightMonster()); bot.scenarioStep = -1; return false; }
+        thePlayer.SetImmortalityMode(AIM_Invulnerable, AIC_Cheat, true);
+        pos = thePlayer.GetWorldPosition() + VecFromHeading(thePlayer.GetHeading()) * 8.0;
+        pos.Z += 10;
+        bot.scenarioEntity = theGame.CreateEntity(template, pos, thePlayer.GetWorldRotation(), true, false, false, PM_DontPersist);
+        if(!(CNewNPC)bot.scenarioEntity) { W3T_Log("FLIGHT leader FAIL no monster"); bot.scenarioStep = -1; return false; }
+        W3T_Log("FLIGHT leader spawned " + W3T_FlightMonster() + " 10 m up at " + W3T_VecStr(pos));
+        bot.scenarioStep = 1;
+        bot.scenarioTime = now;
+        return false;
+    }
+    monster = (CNewNPC)bot.scenarioEntity;
+    if(!monster) { W3T_Log("FLIGHT leader FAIL the monster is gone"); bot.scenarioStep = -1; return false; }
+    height = monster.GetDistanceFromGround(50);
+    W3T_Log("FLIGHT leader step=" + bot.scenarioStep + " flying=" + monster.IsFlying() + " stance=" + (int)monster.GetCurrentStance()
+        + " height=" + FloatToStringPrec(height, 1) + " alive=" + monster.IsAlive() + " pos=" + W3T_VecStr(monster.GetWorldPosition()));
+    if(monster.IsFlying() && height > 3) { bot.scenarioFlag = true; }
+    if(bot.scenarioStep == 1 && now - bot.scenarioTime > 50)
+    {
+        if(!bot.scenarioFlag) { W3T_Log("FLIGHT leader FAIL its monster never flew: nothing to compare"); bot.scenarioStep = -1; return false; }
+        W3T_Log("FLIGHT leader kills it");
+        monster.Kill('W3T', true);
+        bot.scenarioStep = 2;
+        bot.scenarioTime = now;
+    }
+    return bot.scenarioStep == 2 && now - bot.scenarioTime > 20;
+}
+
+function W3T_FlightMember(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_RemotePlayer) : bool
+{
+    var coop : r_CoopEnemies;
+    var copy : CNewNPC;
+    var height : float;
+    var i : int;
+    var now : float;
+    coop = client.getCoopEnemies();
+    now = bot.ElapsedS();
+    if(!client.getInParty())
+    {
+        thePlayer.SetImmortalityMode(AIM_Invulnerable, AIC_Cheat, true);
+        client.joinParty(leader.username);
+        return false;
+    }
+    if(bot.scenarioStep < 0) { return false; }
+    for(i = 0; i < coop.PuppetCount(); i += 1)
+    {
+        if(coop.PuppetAt(i) && StrEndsWith(coop.PuppetAt(i).GetReadableName(), W3T_FlightMonster()))
+        {
+            bot.scenarioEntity = coop.PuppetAt(i);
+            bot.scenarioCount = i + 1;
+        }
+    }
+    copy = (CNewNPC)bot.scenarioEntity;
+    if(!copy) { return false; }
+    height = copy.GetDistanceFromGround(50);
+    i = bot.scenarioCount - 1;
+    W3T_Log("FLIGHT copy step=" + bot.scenarioStep + " flyingHere=" + (i < coop.PuppetCount() && coop.PuppetFlying(i)) + " stance=" + (int)copy.GetCurrentStance()
+        + " height=" + FloatToStringPrec(height, 1) + " alive=" + copy.IsAlive() + " flights=" + coop.puppetFlights + " pos=" + W3T_VecStr(copy.GetWorldPosition()));
+    if(bot.scenarioStep == 0 && copy.IsFlying() && height > 3)
+    {
+        W3T_Log("FLIGHT copy flies here too, " + FloatToStringPrec(height, 1) + " m up");
+        bot.scenarioStep = 1;
+    }
+    if(bot.scenarioStep == 1 && !copy.IsAlive())
+    {
+        bot.scenarioStep = 2;
+        bot.scenarioTime = now;
+    }
+    if(bot.scenarioStep == 2)
+    {
+        if(height < 1.5)
+        {
+            W3T_Log("FLIGHT copy lies on the ground after its death");
+            bot.scenarioStep = 3;
+        }
+        else if(now - bot.scenarioTime > 15)
+        {
+            W3T_Log("FLIGHT copy FAIL still " + FloatToStringPrec(height, 1) + " m up 15 s after its death");
+            bot.scenarioStep = -1;
+        }
+    }
+    return bot.scenarioStep == 3;
+}
