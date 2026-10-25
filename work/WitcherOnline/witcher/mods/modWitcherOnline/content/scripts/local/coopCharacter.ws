@@ -1,9 +1,16 @@
 // Per-player characters: a joining player keeps their own Geralt in the host's game. The host's
 // save brings the world (quests, choices, places); after it loads, this player's own level, XP,
 // skill points, skills and their slots, money, recipes and items replace the host's. The
-// character is recorded every 20 s to "The Witcher 3\coop-characters\<host>.txt" in this
-// player's co-op profile (WO_CharacterStore). The first time with a host there is no record yet:
-// the character starts as a copy of the host's Geralt and is this player's own from then on.
+// character is recorded every 20 s (and when the pause menu opens) to
+// "The Witcher 3\coop-characters\<host>.txt" in this player's co-op profile (WO_CharacterStore).
+// The first time with a host there is no record yet: the character starts as a copy of the host's
+// Geralt and is this player's own from then on.
+//
+// Only in the host's world (r_CoopSession.InHostWorld: after loading the host's save or starting
+// the host's new game), never in a game of this player's own, nor in the prologue's Kaer Morhen
+// dream. The record is restored once per load of the host's world, not after every loading screen.
+// Before a restore replaces the character the record is backed up (coop-characters\backups), and a
+// record without any equipped weapon or armour is not applied over an armed character.
 //
 // World items stay with the world: quest items, notice-board notes and the game's hidden items
 // are neither recorded nor removed. Also the character's: Gwent cards (the decks stay the
@@ -25,6 +32,7 @@
 import function WO_CharacterStore(text : string) : bool;
 import function WO_CharacterLoad() : string;
 import function WO_ToName(text : string) : name;
+import function WO_CharacterBackup() : bool;
 
 class r_CoopCharacter
 {
@@ -33,9 +41,12 @@ class r_CoopCharacter
     private var lastStore : float;
     private var ready : bool;       // restored (or started fresh) since the last load: recording
     private var broken : bool;      // the stored record could not be read: never overwrite it
+    private var restoredSerial : int;   // the load of the host's world (r_CoopSession.HostLoadSerial) restored for
 
     public var restores : int;
     public var freshStarts : int;
+    public var skippedRecords : int;  // records not applied: no weapon or armour while this character has some
+    public var backups : int;
     public var stores : int;
     public var problems : int;      // entries a restore could not apply
     public var lastRestoreItems : int;
@@ -56,6 +67,7 @@ class r_CoopCharacter
     {
         events.PushBack(FloatToStringPrec(theGame.GetEngineTimeAsSeconds(), 2) + " " + text);
         if(events.Size() > 100) { events.Erase(0); }
+        WO_Log("character " + text);
     }
 
     private function Session() : r_CoopSession { return theGame.r_getMultiplayerClient().getCoopSession(); }
@@ -65,29 +77,68 @@ class r_CoopCharacter
 
     public function OnGameStarted()
     {
-        ready = false;
         loadedAt = theGame.GetEngineTimeAsSeconds();
+    }
+
+    // Recording and restoring happen only here: in the host's world, as the witcher (not Ciri),
+    // after the prologue's Kaer Morhen dream (its own gear; the game hands out the real gear after).
+    private function Active() : bool
+    {
+        return Session().IsJoining() && Session().InHostWorld() && GetWitcherPlayer() && !broken && FactsQuerySum("q001_nightmare_ended") > 0;
     }
 
     public function Tick()
     {
         var now : float;
-        if(!Session().IsJoining() || !GetWitcherPlayer() || broken) { return; }
+        if(!Active()) { return; }
         now = theGame.GetEngineTimeAsSeconds();
-        // after the game's own start-up work on the loaded character (skill refund timers, 1.5 s)
+        // a new load of the host's world: restore once, after the game's own start-up work on the
+        // loaded character (skill refund timers, 1.5 s). Other loading screens keep the character.
+        if(restoredSerial != Session().HostLoadSerial()) { ready = false; }
+        if(now - loadedAt < 5.0) { return; }
         if(!ready)
         {
-            if(now - loadedAt < 5.0 || theGame.IsDialogOrCutscenePlaying() || thePlayer.IsInNonGameplayCutscene()) { return; }
+            if(theGame.IsDialogOrCutscenePlaying() || thePlayer.IsInNonGameplayCutscene()) { return; }
+            restoredSerial = Session().HostLoadSerial();
             Begin();
             return;
         }
         if(now - lastStore >= 20.0 && !theGame.IsDialogOrCutscenePlaying()) { Store(); }
     }
 
+    // The pause menu opened (also on the way to quitting): record what this player has now.
+    public function OnPauseMenu()
+    {
+        if(Active() && ready && theGame.GetEngineTimeAsSeconds() - loadedAt >= 5.0) { Store(); }
+    }
+
     private function Begin()
     {
         var text : string;
         text = WO_CharacterLoad();
+        if(text != "" && Session().HostSaveName() == "")
+        {
+            // the host's new game: a new playthrough, so a new character (the old one is backed up)
+            if(WO_CharacterBackup()) { backups += 1; }
+            freshStarts += 1;
+            Record("FRESH new game with " + Session().HostName() + ": a new character (the previous record is backed up)");
+            theGame.GetGuiManager().ShowNotification("New game with " + Session().HostName() + ": your co-op character starts fresh.");
+            ready = true;
+            Store();
+            return;
+        }
+        if(text != "" && !RecordArmed(text) && Armed())
+        {
+            // a record without any weapon or armour (made in the wrong world): never strip this character for it
+            if(WO_CharacterBackup()) { backups += 1; }
+            skippedRecords += 1;
+            Record("SKIPPED the record has no equipped weapon or armour: keeping the current character (record backed up)");
+            theGame.GetGuiManager().ShowNotification("Your stored co-op character had no weapons or armour: kept your current gear instead.");
+            ready = true;
+            Store();
+            return;
+        }
+        if(text != "" && WO_CharacterBackup()) { backups += 1; }
         if(text == "")
         {
             freshStarts += 1;
@@ -103,6 +154,30 @@ class r_CoopCharacter
         }
         ready = true;
         Store();
+    }
+
+    // Any weapon or armour equipped in the record ("item" lines with a sword or armour slot)?
+    private function RecordArmed(text : string) : bool
+    {
+        var lines, f : array<string>;
+        var i, slot : int;
+        lines = CoopSplit(text, "|");
+        for(i = 0; i < lines.Size(); i += 1)
+        {
+            f = CoopSplit(lines[i], ";");
+            if(f.Size() != 10 || f[0] != "item") { continue; }
+            slot = StringToInt(f[4], -1);
+            if(slot == (int)EES_SteelSword || slot == (int)EES_SilverSword || slot == (int)EES_Armor) { return true; }
+        }
+        return false;
+    }
+
+    private function Armed() : bool
+    {
+        var id : SItemUniqueId;
+        var w : W3PlayerWitcher;
+        w = GetWitcherPlayer();
+        return w.GetItemEquippedOnSlot(EES_SteelSword, id) || w.GetItemEquippedOnSlot(EES_SilverSword, id) || w.GetItemEquippedOnSlot(EES_Armor, id);
     }
 
     public function Store() : bool
@@ -578,4 +653,13 @@ public function CoopSetMutations(lines : array<string>)
         if(mutations[k].progress.overallProgress >= 100) { OnMutationFullyResearched(mutations[k].type); }
     }
     if(equipped != EPMT_None) { SetEquippedMutation(equipped); }
+}
+
+// The pause menu (not the main menu) opened: the character is recorded, so quitting loses nothing.
+@wrapMethod(CR4IngameMenu)
+function OnConfigUI()
+{
+    wrappedMethod();
+    if(!isMainMenu) { theGame.r_getMultiplayerClient().getCoopCharacter().OnPauseMenu(); }
+    return true;
 }

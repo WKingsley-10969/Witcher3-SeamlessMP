@@ -901,6 +901,48 @@ namespace wo_native
 		ReturnString(frame, result, body);
 	}
 
+	// Before a restore replaces the character: the stored record as it is now, in
+	// coop-characters\backups\<host>-<time>.txt; the newest 10 are kept.
+	static void WO_CharacterBackup(void *, void *frame, void *result)
+	{
+		const std::string file = CharacterFile();
+		bool copied = false;
+		if (!file.empty() && GetFileAttributesA(file.c_str()) != INVALID_FILE_ATTRIBUTES)
+		{
+			const std::string folder = file.substr(0, file.rfind('\\')) + "\\backups";
+			const std::string host = SessionSetting("host");
+			CreateDirectoryA(folder.c_str(), nullptr);
+			SYSTEMTIME now{};
+			GetLocalTime(&now);
+			char stamp[32]{};
+			sprintf_s(stamp, sizeof(stamp), "%04u%02u%02u-%02u%02u%02u", now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond);
+			copied = CopyFileA(file.c_str(), (folder + "\\" + host + "-" + stamp + ".txt").c_str(), FALSE) != 0;
+			// the names sort by time: drop all but the newest 10
+			std::vector<std::string> names;
+			WIN32_FIND_DATAA found{};
+			HANDLE search = FindFirstFileA((folder + "\\" + host + "-*.txt").c_str(), &found);
+			if (search != INVALID_HANDLE_VALUE)
+			{
+				do { names.push_back(found.cFileName); } while (FindNextFileA(search, &found));
+				FindClose(search);
+			}
+			std::sort(names.begin(), names.end());
+			for (size_t i = 0; i + 10 < names.size(); ++i) DeleteFileA((folder + "\\" + names[i]).c_str());
+		}
+		WNB_ReturnBool(frame, result, copied);
+	}
+
+	// A line for the player's log (WitcherOnline_<name>.log): what the co-op scripts did.
+	static void WO_Log(void *, void *frame, void *result)
+	{
+		WNB_String text{};
+		WNB_ReadStringParameter(frame, &text);
+		std::string line = NarrowPayload(text);
+		if (line.size() > 2000) line.resize(2000);
+		if (!line.empty()) DebugLog("coop " + line);
+		WNB_ReturnBool(frame, result, !line.empty());
+	}
+
 	// A game name (item, recipe, ability) from text: scripts cannot convert a string to a name.
 	static void WO_ToName(void *, void *frame, void *result)
 	{
@@ -1155,6 +1197,7 @@ namespace wo_native
 		    {"WO_LobbyRequest", &WO_LobbyRequest}, {"WO_LobbyResult", &WO_LobbyResult},
 		    {"WO_LobbyFetchSave", &WO_LobbyFetchSave}, {"WO_LobbyFetchState", &WO_LobbyFetchState},
 		    {"WO_CharacterStore", &WO_CharacterStore}, {"WO_CharacterLoad", &WO_CharacterLoad}, {"WO_ToName", &WO_ToName},
+		    {"WO_CharacterBackup", &WO_CharacterBackup}, {"WO_Log", &WO_Log},
 		    {"WO_SCInstance", &WO_SCInstance},
 		    {"WO_SCResetFacts", &WO_SCResetFacts}, {"WO_SCWatchFact", &WO_SCWatchFact},
 		    {"WO_SCReadFactChange", &WO_SCReadFactChange}, {"WO_SCAckFactChange", &WO_SCAckFactChange},

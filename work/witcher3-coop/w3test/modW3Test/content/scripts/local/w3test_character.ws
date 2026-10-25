@@ -183,3 +183,63 @@ function W3T_MakeOwnCharacterPart2(w : W3PlayerWitcher, inv : CInventoryComponen
         }
     }
 }
+
+// character_safety: the second PC is launched for BotA's session, with a character record for BotA
+// that has no gear (as one made outside the host's world).
+// 1. It loads a save of its own (not through the session): its character must be left alone, no
+//    restore and no recording, gear on.
+// 2. It then loads BotA's save through the session: in the host's world now, the gearless record
+//    must not be applied over its armed character (skipped, backed up), and recording starts.
+function W3T_CharacterSafety(bot : W3T_Bot, client : r_MultiplayerClient, other : r_RemotePlayer) : bool
+{
+    var character : r_CoopCharacter;
+    var session : r_CoopSession;
+    var host : bool;
+    var label : string;
+    var events : array<string>;
+    var i : int;
+    var id : SItemUniqueId;
+    var armed : bool;
+    host = W3T_GetEnv("W3T_ROLE") == "mover";
+    label = "SAFETY member";
+    if(host) { label = "SAFETY host"; }
+    character = client.getCoopCharacter();
+    session = client.getCoopSession();
+    events = character.TakeEvents();
+    for(i = 0; i < events.Size(); i += 1) { W3T_Log(label + " " + events[i]); }
+    events = session.TakeEvents();
+    for(i = 0; i < events.Size(); i += 1) { W3T_Log(label + " session " + events[i]); }
+    armed = GetWitcherPlayer().GetItemEquippedOnSlot(EES_SteelSword, id);
+    W3T_Log(label + " phase=" + character.testPhase + " hostWorld=" + session.InHostWorld() + " ready=" + character.IsReady() + " restores=" + character.restores
+        + " fresh=" + character.freshStarts + " skipped=" + character.skippedRecords + " backups=" + character.backups + " stores=" + character.stores
+        + " steelSword=" + armed + " inParty=" + client.getInParty());
+    if(host) { return character.stores == 0 && character.restores == 0 && client.getCoopEnemies().GetRole() == 1 && bot.ElapsedS() > 60; }
+    if(character.testPhase == 0 && client.getInParty() && bot.ElapsedS() > 40)
+    {
+        if(session.InHostWorld() || character.restores != 0 || character.freshStarts != 0 || character.stores != 0 || character.skippedRecords != 0 || !armed)
+        {
+            W3T_Log(label + " FAIL its own save was treated as the host's world");
+            character.testPhase = -1;
+            return false;
+        }
+        W3T_Log(label + " own save: character untouched; loading " + W3T_GetEnv("W3T_HOST_SAVE") + " through the session");
+        character.testPhase = 1;
+        if(!session.LoadSave(W3T_GetEnv("W3T_HOST_SAVE")))
+        {
+            W3T_Log(label + " FAIL the host's save was not found");
+            character.testPhase = -1;
+        }
+        return false;
+    }
+    if(character.testPhase == 1 && character.IsReady())
+    {
+        if(session.InHostWorld() && character.skippedRecords == 1 && character.backups >= 1 && character.restores == 0 && character.stores >= 1 && armed) { character.testPhase = 2; }
+        else
+        {
+            W3T_Log(label + " FAIL the gearless record was applied, or not skipped");
+            character.testPhase = -1;
+        }
+    }
+    return character.testPhase == 2;
+}
+

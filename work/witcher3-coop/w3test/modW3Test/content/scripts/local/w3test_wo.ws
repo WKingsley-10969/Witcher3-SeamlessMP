@@ -173,13 +173,22 @@ function W3T_ScenarioCheck(bot : W3T_Bot) : bool
         return W3T_SceneProbe(bot, client);
     }
 
-    if(scenario == "lobby_save" || scenario == "lobby_new")
+    if(scenario == "lobby_save" || scenario == "lobby_new" || scenario == "lobby_stale")
     {
         if(players.Size() < 1)
         {
             return W3T_Lobby(bot, client, NULL, scenario == "lobby_new");
         }
         return W3T_Lobby(bot, client, players[0], scenario == "lobby_new");
+    }
+
+    if(scenario == "character_safety")
+    {
+        if(players.Size() < 1)
+        {
+            return false;
+        }
+        return W3T_CharacterSafety(bot, client, players[0]);
     }
 
     if(scenario == "player_character")

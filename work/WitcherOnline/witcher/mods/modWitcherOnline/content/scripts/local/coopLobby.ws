@@ -60,6 +60,7 @@ statemachine class r_CoopLobby
     {
         events.PushBack(FloatToStringPrec(theGame.GetEngineTimeAsSeconds(), 2) + " " + text);
         if(events.Size() > 100) { events.Erase(0); }
+        WO_Log("lobby " + text);
     }
 
     private function Session() : r_CoopSession { return theGame.r_getMultiplayerClient().getCoopSession(); }
@@ -256,24 +257,20 @@ statemachine class r_CoopLobby
         LoadNamed(saveName);
     }
 
+    // Always the host's copy, downloaded over any save of this player's with the same name: autosave
+    // and quicksave names repeat, so a save of the same name here may be this player's own, older one.
     private function LoadNamed(saveName : string)
     {
-        var info : SSavegameInfo;
-        if(Session().FindSave(saveName, info))
-        {
-            loads += 1;
-            Record("LOAD " + saveName);
-            HideDialog();
-            Session().LoadSave(saveName);
-            return;
-        }
         if(WO_LobbyFetchSave(saveName))
         {
             fetches += 1;
             fetchName = saveName;
             Record("FETCH " + saveName);
             ShowDialog();   // the lobby popup stays up while downloading: its ticks watch the download
+            return;
         }
+        Record("FETCH_NOT_STARTED " + saveName);
+        ShowMessage("Could not download " + host + "'s save " + saveName + ". Go back to the main menu to try again.");
     }
 
     // The downloaded save, once the game's save list has it.
@@ -313,6 +310,7 @@ statemachine class r_CoopLobby
             ShowMessage(host + " started a new game, but the main menu was not found: start it yourself.");
             return;
         }
+        Session().ExpectHostWorld("");
         menu.CoopStartNewGame(newOptions);
     }
 

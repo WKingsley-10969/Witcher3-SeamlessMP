@@ -16,7 +16,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import WO, WORK  # noqa: E402
-from sandbox import make_sandbox  # noqa: E402
+from sandbox import make_sandbox, OWNER_W3_DOCS  # noqa: E402
 from gamelease import register_game  # noqa: E402
 from w3run import BITMAPINFOHEADER, EXE, arrange, capture_window, game_window, gdi32, user32, windows_of, wt  # noqa: E402
 
@@ -348,6 +348,7 @@ def main():
     results = []  # a session's (scenario, ok, why)
     go_at = time.time()
     t0 = time.time()
+    host_save = None
     try:
         for i in range(a.bots):
             docs = os.path.join(run_dir, "docs-" + bot_name(i))
@@ -355,6 +356,21 @@ def main():
             # lobby_new needs no save at all (the host starts a new game)
             no_save = a.scenario == "lobby_new" or (a.scenario.startswith("lobby_") and i > 0)
             save = make_sandbox(docs, None if no_save else a.save)
+            if i == 0:
+                host_save = save
+            if a.scenario == "lobby_stale" and i > 0 and host_save:
+                # the second PC already has an older save of its own under the host save's name (autosave
+                # and quicksave names repeat): it must still end up with the host's save
+                stale_saves = os.path.join(OWNER_W3_DOCS, "gamesaves")
+                other = sorted(f for f in os.listdir(stale_saves) if f.endswith(".sav") and f != host_save)[0]
+                shutil.copy2(os.path.join(stale_saves, other), os.path.join(docs, "The Witcher 3", "gamesaves", host_save))
+                print(f"[{time.time() - t0:6.1f}s] {bot_name(i)} has {other} as a stale {host_save}", flush=True)
+            if a.scenario == "character_safety" and i > 0:
+                # a character record for BotA without any gear, as one made outside the host's world
+                records = os.path.join(docs, "The Witcher 3", "coop-characters")
+                os.makedirs(records)
+                with open(os.path.join(records, bot_name(0) + ".txt"), "w", newline="\n") as record:
+                    record.write("coop-character;1\nlevel;1;0\nskillpoints;0;0\nmoney;0\n")
             print(f"[{time.time() - t0:6.1f}s] {bot_name(i)} sandbox with save {save}", flush=True)
             env = dict(os.environ, SteamAppId="292030", SteamGameId="292030", W3T_DOCUMENTS=docs,
                        WO_USERNAME=bot_name(i), WO_SERVER_IP="127.0.0.1",
@@ -373,7 +389,16 @@ def main():
                 if i == 0:
                     env.update(W3LAN_SESSION_ROLE="host")
                 else:
-                    env.update(W3LAN_SESSION_ROLE="join", W3LAN_SESSION_SAVE=a.save, W3LAN_SESSION_HOST=bot_name(0))
+                    # the save's full base name, as the launcher passes it (the game matches it exactly)
+                    session_save = os.path.splitext(os.path.basename(save))[0] if save else a.save
+                    env.update(W3LAN_SESSION_ROLE="join", W3LAN_SESSION_SAVE=session_save, W3LAN_SESSION_HOST=bot_name(0))
+            if a.scenario == "character_safety":
+                # the second PC is launched for BotA's session but loads its own save; later it loads BotA's
+                if i == 0:
+                    env.update(W3LAN_SESSION_ROLE="host")
+                else:
+                    env.update(W3LAN_SESSION_ROLE="join", W3LAN_SESSION_HOST=bot_name(0),
+                               W3T_HOST_SAVE=os.path.splitext(os.path.basename(host_save))[0])
             if a.campaign:
                 env.update(WO_SC_ENABLED="1", WO_SC_EFFECTS="1", WO_SC_ROLE="host" if i == 0 else "guest",
                            WO_SC_HOST_TOKEN=host_proof if i == 0 else "")
@@ -496,6 +521,13 @@ def main():
         ok, why = passed == len(session), f"{passed}/{len(session)} scenarios passed"
     else:
         ok, why = check(a.scenario, logs, a.bots)
+    if a.scenario == "lobby_stale" and ok:
+        # the stale file must have been replaced by the host's save
+        saves = [os.path.join(run_dir, "docs-" + bot_name(i), "The Witcher 3", "gamesaves", host_save) for i in (0, 1)]
+        same = all(os.path.exists(f) for f in saves) and open(saves[0], "rb").read() == open(saves[1], "rb").read()
+        print(f"STALE_CHECK the second PC's {host_save} is the host's: {same}")
+        if not same:
+            ok, why = False, "the second PC kept its stale save"
     print(f"RESULT: {'PASS' if ok else 'FAIL'} ({why})")
     return 0 if ok else 1
 
