@@ -134,6 +134,25 @@ function W3T_ScenarioCheck(bot : W3T_Bot) : bool
         return W3T_TalkShare(bot, client, players[0]);
     }
 
+    if(scenario == "travel_together")
+    {
+        // the players stand 150 m apart for a while: past the range their figures are shown at
+        if(players.Size() < 1)
+        {
+            return false;
+        }
+        return W3T_TravelTogether(bot, client, players[0]);
+    }
+
+    if(scenario == "travel_region")
+    {
+        if(players.Size() < 1)
+        {
+            return false;
+        }
+        return W3T_TravelRegion(bot, client, players[0]);
+    }
+
     if(scenario == "talk_probe")
     {
         if(ghosts < 1)

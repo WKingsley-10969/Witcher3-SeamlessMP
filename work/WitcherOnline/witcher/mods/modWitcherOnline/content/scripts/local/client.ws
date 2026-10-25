@@ -252,6 +252,7 @@ statemachine class r_MultiplayerClient
     private var coopEnemies : r_CoopEnemies;
     private var coopNpcs : r_CoopNpcs;
     private var coopTalk : r_CoopTalk;
+    private var coopTravel : r_CoopTravel;
     private var seamlessCampaign : r_SeamlessCampaign;
 
     public function getSeamlessCampaign() : r_SeamlessCampaign
@@ -273,6 +274,15 @@ statemachine class r_MultiplayerClient
             coopEnemies = new r_CoopEnemies in this;
         }
         return coopEnemies;
+    }
+
+    public function getCoopTravel() : r_CoopTravel
+    {
+        if(!coopTravel)
+        {
+            coopTravel = new r_CoopTravel in this;
+        }
+        return coopTravel;
     }
 
     public function getCoopTalk() : r_CoopTalk
@@ -5783,6 +5793,7 @@ statemachine class r_MultiplayerClient
                     client.getCoopEnemies().OnMessage();
                     client.getCoopNpcs().OnMessage();
                     client.getCoopTalk().OnMessage();
+                    client.getCoopTravel().OnMessage();
                     client.getSeamlessCampaign().OnMessage();
                     break;
 
@@ -7744,6 +7755,7 @@ state WO_Tick in r_MultiplayerClient
             parent.getCoopEnemies().Tick();
             parent.getCoopNpcs().Tick();
             parent.getCoopTalk().Tick();
+            parent.getCoopTravel().Tick();
             parent.getSeamlessCampaign().Tick();
 
             if(theGame.GetInGameConfigWrapper().GetVarValue('MPGhosts_Main', 'MPGhosts_HideGhosts'))
