@@ -243,6 +243,28 @@ function W3T_CharacterSafety(bot : W3T_Bot, client : r_MultiplayerClient, other 
     return character.testPhase == 2;
 }
 
+// Custom Player Characters shows its tutorials (first time, hotkeys, changelogs...) as fullscreen popups
+// that pause the game, and this bot with it, until a player closes them. It records each one shown as the
+// fact nr_quest_track_<type>, kept in the save: marked shown here on every report (a load resets them).
+function W3T_MuteCpcTutorials()
+{
+    var types : array<string>;
+    var i : int;
+    types.PushBack("FirstTime");
+    types.PushBack("Update_v3_0_4");
+    types.PushBack("Update_v3_1_2");
+    types.PushBack("HotkeysHelp");
+    types.PushBack("SexSetHelp");
+    types.PushBack("MissedExtraContent");
+    types.PushBack("SorceressLevel1");
+    types.PushBack("SorceressInteractionHints2");
+    types.PushBack("PolymorphismWarning");
+    for(i = 0; i < types.Size(); i += 1)
+    {
+        if(FactsQuerySum("nr_quest_track_" + types[i]) < 1) { FactsAdd("nr_quest_track_" + types[i], 1); }
+    }
+}
+
 // cpc_character (staged with W3T_CPC=1: Custom Player Characters and its Remaster fix installed):
 // 1. The second PC joins BotA for the first time: a new character, whose creator is due (skipped:
 //    a bot cannot use it). It switches to a witcheress through Custom Player Characters and stores
@@ -265,6 +287,7 @@ function W3T_CpcCharacter(bot : W3T_Bot, client : r_MultiplayerClient, other : r
     character = client.getCoopCharacter();
     session = client.getCoopSession();
     character.testNoCreator = true;
+    W3T_MuteCpcTutorials();
     pm = NR_GetPlayerManager();
     events = character.TakeEvents();
     for(i = 0; i < events.Size(); i += 1) { W3T_Log(label + " " + events[i]); }
