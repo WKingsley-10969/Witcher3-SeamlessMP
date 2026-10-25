@@ -205,6 +205,12 @@ function OnConfigUI()
         return true;
     }
 
+    if(WO_SessionConfig("save") != "")
+    {
+        W3T_Log("MENU the co-op session loads the host's save " + WO_SessionConfig("save"));
+        return true;
+    }
+
     wanted = W3T_GetEnv("W3T_SAVE");
     theGame.ListSavedGames(saves);
     W3T_Log("MENU main menu, saves=" + saves.Size() + " wanted='" + wanted + "'");

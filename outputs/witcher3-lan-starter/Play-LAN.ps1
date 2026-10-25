@@ -7,6 +7,8 @@ param(
     [string]$PlayerName,
     [ValidateRange(1,65535)][int]$Port = 40000,
     [string]$JavaPath,
+    # Join with this player's own save instead of the host's newest one
+    [switch]$NoSessionSave,
     [switch]$Plan
 )
 $ErrorActionPreference = 'Stop'
@@ -23,16 +25,37 @@ try {
         [pscustomobject]@{Mode=$Mode; Executable=$info.FileName; Address=$Address; Port=$Port; PlayerName=$PlayerName; Documents=$info.EnvironmentVariables['W3LAN_DOCUMENTS']; Launch=$false} | ConvertTo-Json
         exit 0
     }
+    $saves = Join-Path $info.EnvironmentVariables['W3LAN_DOCUMENTS'] 'The Witcher 3\gamesaves'
+    $joinsHostSave = $false
     if ($Mode -eq 'Host') {
-        $server = Start-W3LanServer -JarPath (Join-Path $PSScriptRoot 'server\WitcherServer.jar') -JavaPath $JavaPath -Port $Port
+        # Co-op session: joining players download this host's newest co-op save (TCP port Port+1)
+        $server = Start-W3LanServer -JarPath (Join-Path $PSScriptRoot 'server\WitcherServer.jar') -JavaPath $JavaPath -Port $Port -SaveDirectory $saves -HostName $PlayerName
+        $info.EnvironmentVariables['W3LAN_SESSION_ROLE'] = 'host'
         Write-Host 'Host server ready. The second PC uses the home-network address below:'
         Get-W3LanAddresses | Format-Table Adapter,Address | Out-Host
+        Write-Host "Joining players load your newest co-op save. Save before they join to share your latest progress."
     } else {
         $probe = Test-W3LanEndpoint -Address $Address -Port $Port
         if (-not $probe.Reachable) { throw "Host did not answer the UDP check: $($probe.Reply)." }
+        if (-not $NoSessionSave) {
+            try {
+                $session = Copy-W3LanSessionSave -Address $Address -Port ($Port + 1) -SaveDirectory $saves
+                if ($session.Save) {
+                    $info.EnvironmentVariables['W3LAN_SESSION_ROLE'] = 'join'
+                    $info.EnvironmentVariables['W3LAN_SESSION_SAVE'] = $session.Save
+                    $info.EnvironmentVariables['W3LAN_SESSION_HOST'] = $session.Host
+                    $joinsHostSave = $true
+                    Write-Host "Downloaded $($session.Host)'s save $($session.Save): the game loads it and joins their party."
+                } else {
+                    Write-Warning 'The host has no co-op save yet: load your own save and meet in game.'
+                }
+            } catch {
+                Write-Warning "Could not download the host's save ($($_.Exception.Message)): load your own save and meet in game."
+            }
+        }
     }
     Write-Host 'Launching Witcher 3 with the LAN mod and a separate co-op save/settings profile.'
-    Write-Host 'Load matching saves in the same region. In game, interact with the host character and join its party.'
+    if (-not $joinsHostSave) { Write-Host 'Load matching saves in the same region. In game, interact with the host character and join its party.' }
     $game = [Diagnostics.Process]::Start($info)
     $game.WaitForExit()
     if ($game.ExitCode -ne 0) { throw "Game exited with code $($game.ExitCode). Check the profile's native.log and game logs." }

@@ -86,6 +86,17 @@ public class WitcherServer
         loadBannedIps();
         loadWhitelistIps();
 
+        // Co-op session: joining players download the host's newest save (SaveShare)
+        String saveDir = option(args, "--save-dir");
+        if (saveDir != null)
+        {
+            String savePortText = option(args, "--save-port");
+            Integer savePort = savePortText == null ? Integer.valueOf(port + 1) : parsePort(savePortText);
+            if (savePort == null) throw new IllegalArgumentException("--save-port must be a port number");
+            SaveShare share = SaveShare.start(Paths.get(saveDir), savePort, option(args, "--host-name"));
+            System.out.println("Sharing co-op saves from " + saveDir + " on TCP port " + share.port());
+        }
+
         DatagramSocket socket = new DatagramSocket(port);
 
         boolean svgEnabled = readBoolean(serverProperties, "svgEnabled", false);

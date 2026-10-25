@@ -613,6 +613,35 @@ namespace wo_native
 			DebugLog("campaign: bootstrap field " + name + " available=" + (value.empty() ? "no" : "yes"));
 		ReturnString(frame, result, value);
 	}
+	// Co-op session settings from the launcher (Play-LAN.ps1): W3LAN_SESSION_ROLE host|join,
+	// W3LAN_SESSION_SAVE the host's save this player loads (a save file's base name),
+	// W3LAN_SESSION_HOST the host's player name. Anything malformed reads as empty.
+	static std::string SessionSetting(const std::string &key)
+	{
+		const char *variable = key == "role" ? "W3LAN_SESSION_ROLE" : key == "save" ? "W3LAN_SESSION_SAVE" : key == "host" ? "W3LAN_SESSION_HOST" : nullptr;
+		if (!variable) return "";
+		char value[128]{};
+		const DWORD length = GetEnvironmentVariableA(variable, value, sizeof(value));
+		if (length == 0 || length >= sizeof(value)) return "";
+		const std::string text(value, length);
+		if (key == "role") return text == "host" || text == "join" ? text : "";
+		const size_t maximum = key == "host" ? 16 : 120;
+		if (text.size() > maximum) return "";
+		for (char c : text)
+		{
+			const bool word = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
+			if (!word && !(key == "save" && (c == '-' || c == '.'))) return "";
+		}
+		return text;
+	}
+
+	static void WO_SessionConfig(void *, void *frame, void *result)
+	{
+		WNB_String key{};
+		WNB_ReadStringParameter(frame, &key);
+		ReturnString(frame, result, SessionSetting(NarrowPayload(key)));
+	}
+
 	static void WO_SCInstance(void *, void *frame, void *result)
 	{
 		static const std::string nonce = [] {
@@ -855,6 +884,7 @@ namespace wo_native
 		    {"WO_Send", &WO_Send}, {"WO_Poll", &WO_Poll}, {"WO_Tick", &WO_Tick}, {"WO_Str", &WO_Str}, {"WO_NameAt", &WO_NameAt},
 		    {"WO_FactsBaseline", &WO_FactsBaseline}, {"WO_FactsPage", &WO_FactsPage},
 		    {"WO_SCConfig", &WO_SCConfig},
+		    {"WO_SessionConfig", &WO_SessionConfig},
 		    {"WO_SCInstance", &WO_SCInstance},
 		    {"WO_SCResetFacts", &WO_SCResetFacts}, {"WO_SCWatchFact", &WO_SCWatchFact},
 		    {"WO_SCReadFactChange", &WO_SCReadFactChange}, {"WO_SCAckFactChange", &WO_SCAckFactChange},

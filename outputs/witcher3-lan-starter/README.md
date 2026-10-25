@@ -40,9 +40,23 @@ A separate full copy remains optional for development:
 
 ## Play over LAN
 
-1. Host: **Play Host LAN.cmd**, with a name such as `HostWitcher`. Keep the console open; it runs the UDP 40000 server alongside the game.
-2. Second PC: **Play Join LAN.cmd**, with a different name such as `GuestWitcher`. Enter the host's home-network IPv4 address shown in its console.
-3. Load matching saves in the same region and meet. Interact with the host character and choose **Join party** for shared enemies and quest updates. Different story branches are not a reliable starting point.
+1. **Host:** run **Play Host LAN.cmd** with a name such as `HostWitcher`.
+   - Keep the console open. It runs the server: UDP 40000 for the game, and TCP 40001, which shares your co-op saves with joining players.
+   - Load or start your game and **save**. Joining players get your newest co-op save.
+2. **Second PC:** run **Play Join LAN.cmd** with a different name such as `GuestWitcher`, and enter the host's home-network IPv4 address shown in its console.
+3. **The co-op session takes over.** The launcher downloads the host's newest co-op save, and the game then:
+   - loads that save from the main menu by itself;
+   - joins the host's party;
+   - steps in beside the host;
+   - follows the host's difficulty, also when the host changes it mid-session.
+
+   Both players then play the same game: the same story point, choices and place. Your own solo saves are untouched; the host's save goes into your co-op profile only.
+4. **If the host has no save yet, or the download fails,** the launcher says so and you play as before:
+   - load a save yourself;
+   - meet the host;
+   - interact with the host character and choose **Join party**.
+
+   To keep your own co-op save instead of the host's, start with `.\Play-LAN.ps1 -Mode Join -GameDir '<game folder>' -NoSessionSave`.
 
 **Nearby NPCs (new, experimental).** While in a party, the townsfolk, guards and characters such as Ciri within about 45 m of either player are shared. The host's game runs them, except that when the second PC walks up to one (within about 4 m and closer than the host), the second PC's game takes it over, so it reacts to that player at once; it goes back once they walk off. Whichever PC does not run an NPC shows a look-alike stand-in in its place that follows the other screen. You can't talk to a stand-in directly: walk up to it and the real NPC is handed to you first. Stand-ins walk and stand but do not play work animations, gestures or chatter. Stand-ins now move smoothly: they play slightly behind the other screen (about 0.15 s) instead of jumping between updates.
 

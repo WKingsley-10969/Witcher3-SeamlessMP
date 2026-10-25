@@ -91,7 +91,7 @@ function New-W3LanProfileStartInfo {
     $info.UseShellExecute = $false
     $info.Arguments = '-windowed -width 960 -height 540 -noraytracing'
     foreach ($key in @($info.EnvironmentVariables.Keys)) {
-        if ($key.StartsWith('W3T_', [StringComparison]::OrdinalIgnoreCase) -or $key.StartsWith('WO_SC_', [StringComparison]::OrdinalIgnoreCase)) { $info.EnvironmentVariables.Remove($key) }
+        if ($key.StartsWith('W3T_', [StringComparison]::OrdinalIgnoreCase) -or $key.StartsWith('WO_SC_', [StringComparison]::OrdinalIgnoreCase) -or $key.StartsWith('W3LAN_SESSION_', [StringComparison]::OrdinalIgnoreCase)) { $info.EnvironmentVariables.Remove($key) }
     }
     $info.EnvironmentVariables['W3LAN_DOCUMENTS'] = $documents
     $info.EnvironmentVariables['W3T_LOG'] = Join-Path $documents 'native.log'

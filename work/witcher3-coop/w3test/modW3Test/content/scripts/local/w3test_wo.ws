@@ -167,6 +167,15 @@ function W3T_ScenarioCheck(bot : W3T_Bot) : bool
         return W3T_SceneProbe(bot, client);
     }
 
+    if(scenario == "session_join")
+    {
+        if(players.Size() < 1)
+        {
+            return false;
+        }
+        return W3T_SessionJoin(bot, client, players[0]);
+    }
+
     if(scenario == "party_revive")
     {
         if(players.Size() < 1)
