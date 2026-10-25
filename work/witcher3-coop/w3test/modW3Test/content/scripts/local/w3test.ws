@@ -183,6 +183,21 @@ function ShowProgressDialog( messageId : int, title : string, message : string, 
         return;
     }
     if(W3T_GetEnv("W3T_SCENARIO") == "party_menu" && WO_IsPartyPrompt(messageId)) { theGame.W3T_AnswerPartyPrompt(messageId); return; }
+    // watch_skip: the host answers Skip to the first Watch / Skip prompt and leaves the second open
+    if(W3T_GetEnv("W3T_SCENARIO") == "watch_skip" && messageId == COOP_WATCH_DIALOG())
+    {
+        if(theGame.r_getMultiplayerClient().getCoopTalk().offersShown <= 1)
+        {
+            UserDialogCallback(messageId, UMA_No);
+            HideUserDialog(messageId);
+            W3T_Log("DIALOG answered No (skip)");
+        }
+        else
+        {
+            W3T_Log("DIALOG left unanswered");
+        }
+        return;
+    }
 
     if(type == UDB_Ok || type == UDB_OkCancel)
     {

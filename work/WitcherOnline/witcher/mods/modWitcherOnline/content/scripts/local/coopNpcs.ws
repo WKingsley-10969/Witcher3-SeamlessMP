@@ -314,10 +314,9 @@ class r_CoopNpcs
         return "";
     }
 
-    // A party member started a conversation with an NPC: find this world's copy (a unique
-    // voicetag, else the same template and appearance nearest the given spot), show it as itself
-    // in place of any stand-in and keep sync off it until ReleaseScene. NULL when there is none.
-    public function HoldForScene(voice : string, tpl : string, app : string, pos : Vector) : CNewNPC
+    // This world's copy of a party member's conversation NPC: a unique voicetag, else the same
+    // template and appearance nearest the given spot. NULL when there is none.
+    public function FindForScene(voice : string, tpl : string, app : string, pos : Vector) : CNewNPC
     {
         var actors : array<CGameplayEntity>;
         var npc, best : CNewNPC;
@@ -354,6 +353,17 @@ class r_CoopNpcs
                 }
             }
         }
+        return best;
+    }
+
+    // A party member started a conversation with an NPC: find this world's copy, show it as itself
+    // in place of any stand-in and keep sync off it until ReleaseScene. NULL when there is none.
+    public function HoldForScene(voice : string, tpl : string, app : string, pos : Vector) : CNewNPC
+    {
+        var best : CNewNPC;
+        var i : int;
+
+        best = FindForScene(voice, tpl, app, pos);
         if(!best) { return NULL; }
 
         sceneNpc = best;

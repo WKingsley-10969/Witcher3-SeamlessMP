@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserConfig>
+	<Group id="MPGhosts_Main" displayName="Mods.MPGhosts_name">
+		<PresetsArray>
+			<Preset id="0" displayName="MPGhosts_Disabled">
+				<Entry varId="MPGhosts_HideGhosts" value="false"/>
+				<Entry varId="MPGhosts_GhostEffect" value="false"/>
+				<Entry varId="MPGhosts_ShowSelf" value="false"/>
+				<Entry varId="MPGhosts_ShowInCutscene" value="false"/>
+				<Entry varId="MPGhosts_HideJoinNotis" value="false"/>
+				<Entry varId="MPGhosts_HidePartyHUD" value="false"/>
+				<Entry varId="MPGhosts_RenderDistance" value="0"/>
+				<Entry varId="MPGhosts_HorseAppearance" value="0"/>
+				<Entry varId="MPGhosts_AutoDeclineTrade" value="false"/>
+				<Entry varId="MPGhosts_AutoDeclineGwent" value="false"/>
+				<Entry varId="MPGhosts_LocalEnemiesOnly" value="false"/>
+				<Entry varId="MPGhosts_JoinScenes" value="0"/>
+			</Preset>
+		</PresetsArray>
+		<VisibleVars>
+			<Var id="MPGhosts_HideGhosts" displayName="MPGhosts_HideGhosts" displayType="TOGGLE"/>
+			<Var id="MPGhosts_ShowInCutscene" displayName="MPGhosts_ShowInCutscene" displayType="TOGGLE"/>
+			<Var id="MPGhosts_ShowSelf" displayName="MPGhosts_ShowSelf" displayType="TOGGLE"/>
+			<Var id="MPGhosts_GhostEffect" displayName="MPGhosts_GhostEffect" displayType="TOGGLE"/>
+			<Var id="MPGhosts_HideJoinNotis" displayName="MPGhosts_HideJoinNotis" displayType="TOGGLE"/>
+			<Var id="MPGhosts_HidePartyHUD" displayName="MPGhosts_HidePartyHUD" displayType="TOGGLE"/>
+			<Var id="MPGhosts_RenderDistance" displayName="MPGhosts_RenderDistance" displayType="SLIDER;0;5000;100"/>
+			<Var id="MPGhosts_HorseAppearance" displayName="MPGhosts_HorseAppearance" displayType="OPTIONS">
+				<OptionsArray>
+					<Option id="0" displayName="color_brown">
+						<Entry varId="MPGhosts_HorseAppearance" value="0"/>
+					</Option>
+					<Option id="1" displayName="color_white">
+						<Entry varId="MPGhosts_HorseAppearance" value="1"/>
+					</Option>
+					<Option id="2" displayName="color_black">
+						<Entry varId="MPGhosts_HorseAppearance" value="2"/>
+					</Option>
+					<Option id="3" displayName="color_wildhunt">
+						<Entry varId="MPGhosts_HorseAppearance" value="3"/>
+					</Option>
+					<Option id="4" displayName="color_devil">
+						<Entry varId="MPGhosts_HorseAppearance" value="4"/>
+					</Option>
+					<Option id="5" displayName="color_unicorn">
+						<Entry varId="MPGhosts_HorseAppearance" value="5"/>
+					</Option>
+				</OptionsArray>
+			</Var>
+			<Var id="MPGhosts_AutoDeclineTrade" displayName="MPGhosts_AutoDeclineTrade" displayType="TOGGLE"/>
+			<Var id="MPGhosts_AutoDeclineGwent" displayName="MPGhosts_AutoDeclineGwent" displayType="TOGGLE"/>
+			<Var id="MPGhosts_LocalEnemiesOnly" displayName="MPGhosts_LocalEnemiesOnly" displayType="TOGGLE"/>
+			<Var id="MPGhosts_JoinScenes" displayName="MPGhosts_JoinScenes" displayType="OPTIONS">
+				<OptionsArray>
+					<Option id="0" displayName="MPGhosts_JoinScenes_Ask">
+						<Entry varId="MPGhosts_JoinScenes" value="0"/>
+					</Option>
+					<Option id="1" displayName="MPGhosts_JoinScenes_Always">
+						<Entry varId="MPGhosts_JoinScenes" value="1"/>
+					</Option>
+					<Option id="2" displayName="MPGhosts_JoinScenes_Never">
+						<Entry varId="MPGhosts_JoinScenes" value="2"/>
+					</Option>
+				</OptionsArray>
+			</Var>
+		</VisibleVars>
+		
+	</Group>
+</UserConfig>
