@@ -421,7 +421,7 @@ class r_CoopLoot
     private function OnCorpses(sender : string, count : int)
     {
         var n, i, k, items, j : int;
-        var entry, key : string;
+        var corpseLoot, key : string;
         if(Coop().GetRole() != 2 || sender != theGame.r_getMultiplayerClient().getJoinedParty()) { return; }
         n = StringToInt(WO_Str(1), 0);
         k = 2;
@@ -431,13 +431,13 @@ class r_CoopLoot
             items = StringToInt(WO_Str(k + 1), 0);
             if(k + 2 + items * 2 > count) { return; }
             // the native side has turned the names' '*' back into spaces: encode them again
-            entry = key + " " + items;
-            for(j = 0; j < items; j += 1) { entry += " " + CoopEncode(WO_Str(k + 2 + j * 2)) + " " + WO_Str(k + 3 + j * 2); }
+            corpseLoot = key + " " + items;
+            for(j = 0; j < items; j += 1) { corpseLoot += " " + CoopEncode(WO_Str(k + 2 + j * 2)) + " " + WO_Str(k + 3 + j * 2); }
             k += 2 + items * 2;
-            if(corpseFilled.Contains(key) || corpseWaiting.Contains(entry)) { continue; }
-            if(!FillCorpse(entry))
+            if(corpseFilled.Contains(key) || corpseWaiting.Contains(corpseLoot)) { continue; }
+            if(!FillCorpse(corpseLoot))
             {
-                corpseWaiting.PushBack(entry);
+                corpseWaiting.PushBack(corpseLoot);
                 corpseWaitingSince.PushBack(theGame.GetEngineTimeAsSeconds());
             }
         }
@@ -445,7 +445,7 @@ class r_CoopLoot
 
     // Member: the leader's loot into this game's corpse of the same enemy, instead of its own roll. False
     // while that corpse is not here yet (the leader's game saw the death first) or has no remains yet.
-    private function FillCorpse(entry : string) : bool
+    private function FillCorpse(corpseLoot : string) : bool
     {
         var f : array<string>;
         var npc : CNewNPC;
@@ -456,7 +456,7 @@ class r_CoopLoot
         var tags : array<name>;
         var i, items : int;
         var died : float;
-        f = CoopSplit(entry, " ");
+        f = CoopSplit(corpseLoot, " ");
         if(f.Size() < 2) { return true; }
         items = StringToInt(f[1], 0);
         npc = Coop().CorpseOfKey(f[0]);
