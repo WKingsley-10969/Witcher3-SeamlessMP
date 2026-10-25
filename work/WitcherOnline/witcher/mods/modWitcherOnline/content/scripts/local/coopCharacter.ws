@@ -546,12 +546,6 @@ public function CoopSetRecipes(lines : array<string>)
     }
 }
 
-function CoopBit(value : bool) : string
-{
-    if(value) { return "1"; }
-    return "0";
-}
-
 // Mutations as recorded ("mutations;..." and "mutation;..." lines): research progress, the
 // system's state and the equipped mutation. Without lines (an older record) they are left alone.
 @addMethod(W3PlayerAbilityManager)
