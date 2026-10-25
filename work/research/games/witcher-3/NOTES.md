@@ -124,3 +124,10 @@ Update the October 18 directory/write-up to mention v0.2.0's claimed shared comb
 - https://github.com/Emillock/witcher3-coop/releases/tag/v0.2.0
 - https://github.com/Emillock/witcher3-coop/blob/main/docs/true-coop-design.md
 - https://www.thewitcher.com/us/en/news/52085/patch-5-01-for-the-witcher-3-wild-hunt-remastered-is-live
+
+
+## 25 October 2026 — parallel campaign fact-removal implementation
+
+Owner confirmed Claude is active; isolated branch `codex/campaign-fact-removals`, base `dd7cae0`. Observed source limitation: PumpSnapshot halted on exists=0 although a local removal primitive already existed. Added literal `absent` under the existing fact key, active and historical-replay capability gates, snapshot-to-ledger removal and echo-guarded application. Removals remain test-target-only; mh306 SET approval does not authorize its removal. Protocol and integration notes are in `work/seamless/server-protocol.md` and `docs/4-FACT-REMOVAL/README.md`.
+
+Verified without the game: 255 existing pure + 54 removal + 448 real UDP assertions; 5/5 mutation twins caught. The negative controls prove the tests reject zero/absence conflation, missing capability checks and broken restart receipt behavior. Unknown: WitcherScript compilation, real-client application, removal-specific game save/load and actual quest effects. The new bot awaits integration and isolated game testing; no shared active game setup was used. Owner requested a feature PR; publication is authorized, merging is left for review.

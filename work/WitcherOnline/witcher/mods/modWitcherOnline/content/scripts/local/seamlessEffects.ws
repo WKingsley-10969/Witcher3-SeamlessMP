@@ -178,7 +178,7 @@ function SC_ApplyFactSet(target : string, value : int, validFor : int) : bool
 
 function SC_ApplyFactRemoval(target : string) : bool
 {
-    if(!SC_IsFactTargetAllowed(target))
+    if(!SC_IsFactRemovalAllowed(target))
     {
         return false;
     }
@@ -187,6 +187,13 @@ function SC_ApplyFactRemoval(target : string) : bool
         FactsRemove(target);
     }
     return !FactsDoesExist(target);
+}
+
+// Vetted SET support does not establish that removing a real quest's flag is safe.
+// Keep removal restricted to test targets until each real quest transition is proved.
+function SC_IsFactRemovalAllowed(target : string) : bool
+{
+    return SC_IsFactTargetAllowed(target) && StrBeginsWith(target, "sc_test_");
 }
 
 function SC_ApplyJournalAbsolute(target : string, status : int) : bool
