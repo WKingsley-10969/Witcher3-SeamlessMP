@@ -115,6 +115,7 @@ function W3T_SurveyMember(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
     var coop : r_CoopEnemies;
     var list : array<string>;
     var puppet : CNewNPC;
+    var pos : Vector;
     var i, k : int;
     var now : float;
     coop = client.getCoopEnemies();
@@ -140,7 +141,8 @@ function W3T_SurveyMember(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
                     bot.scenarioEntities.PushBack(puppet);
                     // its starting height: the leader's spawn height is not known here
                     bot.surveyLabels.PushBack(list[k]);
-                    bot.surveyStartZ.PushBack(puppet.GetWorldPosition().Z);
+                    pos = puppet.GetWorldPosition();
+                    bot.surveyStartZ.PushBack(pos.Z);
                     W3T_Log("SURVEY copy " + list[k] + " appeared as '" + puppet.GetReadableName() + "' spawned=" + coop.PuppetSpawned(i));
                 }
                 W3T_SurveyObserve(bot, "copy", list[k], puppet, bot.surveyStartZ[bot.surveyLabels.FindFirst(list[k])]);
@@ -155,6 +157,7 @@ function W3T_SurveyObserve(bot : W3T_Bot, side : string, label : string, monster
 {
     var buffs : array<CBaseGameplayEffect>;
     var entities : array<CGameplayEntity>;
+    var pos : Vector;
     var i : int;
     var air : int;
     buffs = monster.GetBuffs();
@@ -165,7 +168,8 @@ function W3T_SurveyObserve(bot : W3T_Bot, side : string, label : string, monster
     W3T_SurveyNote(bot, side, label, "app", NameToString(monster.GetAppearance()));
     W3T_SurveyNote(bot, side, label, "stance", IntToString((int)monster.GetCurrentStance()));
     if(monster.IsFlying()) { W3T_SurveyNote(bot, side, label, "stance", "fly"); }
-    air = (int)(monster.GetWorldPosition().Z - startZ);
+    pos = monster.GetWorldPosition();
+    air = (int)(pos.Z - startZ);
     if(air > 1) { W3T_SurveyNote(bot, side, label, "air", IntToString(air)); }
     W3T_SurveyNote(bot, side, label, "mode", IntToString((int)monster.GetImmortalityMode()));
     if(!monster.GetGameplayVisibility()) { W3T_SurveyNote(bot, side, label, "mode", "hidden"); }
