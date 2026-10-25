@@ -6,6 +6,7 @@
 //
 // "coop ss diff level": the host's difficulty (EDifficultyMode as a number).
 import function WO_SessionConfig(key : string) : string;
+import function WO_Log(text : string) : bool;
 
 class r_CoopSession
 {
@@ -17,6 +18,10 @@ class r_CoopSession
     private var lastCheck : float;
     private var leftByChoice : bool;    // this player left the party: no joining again until they join themselves
     private var autoJoining : bool;     // the session's own join call is running
+    private var hostWorldNext : bool;   // the game being loaded is the host's (its save, or the host's new game)
+    private var inHostWorld : bool;     // playing the host's world since that load; off in the main menu and after loading another save
+    private var hostSave : string;      // the host's save this player last loaded
+    private var hostLoadSerial : int;   // counts loads of the host's world
 
     public var loadsRequested : int;
     public var joinAttempts : int;
@@ -37,6 +42,7 @@ class r_CoopSession
     {
         events.PushBack(FloatToStringPrec(theGame.GetEngineTimeAsSeconds(), 2) + " " + text);
         if(events.Size() > 100) { events.Erase(0); }
+        WO_Log("session " + text);
     }
 
     public function Role() : string { return WO_SessionConfig("role"); }
@@ -59,7 +65,8 @@ class r_CoopSession
         }
     }
 
-    // A save of this player's co-op saves, by base name.
+    // A save of this player's co-op saves, by its exact base name (not one that only contains it:
+    // AutoSave_1 must not find AutoSave_10).
     public function FindSave(wanted : string, out save : SSavegameInfo) : bool
     {
         var saves : array<SSavegameInfo>;
@@ -67,7 +74,7 @@ class r_CoopSession
         theGame.ListSavedGames(saves);
         for(i = 0; i < saves.Size(); i += 1)
         {
-            if(StrFindFirst(StrLower(saves[i].filename), StrLower(wanted)) >= 0)
+            if(CoopSaveNameIs(saves[i].filename, wanted))
             {
                 save = saves[i];
                 return true;
@@ -87,15 +94,59 @@ class r_CoopSession
         }
         loadsRequested += 1;
         Record("LOAD_HOST_SAVE " + save.filename + " of " + HostName());
+        ExpectHostWorld(wanted);
         theGame.LoadGameInit(save, false);
         return true;
     }
+
+    // ------------------------------------------------------------ the host's world
+
+    // The next game started is the host's world: its save, or the new game the host started.
+    public function ExpectHostWorld(saveName : string)
+    {
+        hostWorldNext = true;
+        hostSave = saveName;
+    }
+
+    // The player loaded a save from the game's own menus. The host's save (or, after dying, a save
+    // made while in the host's world) keeps the host's world; any other save is the player's own.
+    public function OnMenuLoad(save : SSavegameInfo, fromDeathScreen : bool)
+    {
+        if(!IsJoining()) { return; }
+        if((hostSave != "" && CoopSaveNameIs(save.filename, hostSave)) || (fromDeathScreen && inHostWorld))
+        {
+            ExpectHostWorld(hostSave);
+            return;
+        }
+        hostWorldNext = false;
+        if(inHostWorld) { Record("OWN_SAVE " + save.filename + ": not " + HostName() + "'s world, own character paused"); }
+        inHostWorld = false;
+    }
+
+    // Back in the main menu: no world until the next load.
+    public function OnMainMenu()
+    {
+        if(inHostWorld) { Record("MAIN_MENU left " + HostName() + "'s world"); }
+        inHostWorld = false;
+        hostWorldNext = false;
+    }
+
+    public function InHostWorld() : bool { return inHostWorld; }
+    public function HostSaveName() : string { return hostSave; }   // "" for the host's new game
+    public function HostLoadSerial() : int { return hostLoadSerial; }
 
     // A game was loaded: step in beside the host again once the party is together.
     public function OnGameStarted()
     {
         placed = false;
         lastDifficultySent = -1;
+        if(hostWorldNext)
+        {
+            hostWorldNext = false;
+            inHostWorld = true;
+            hostLoadSerial += 1;
+            Record("IN_HOST_WORLD " + HostName() + " (" + hostSave + ")");
+        }
     }
 
     // Step in beside the host again (the next time the host is in this region).
@@ -238,8 +289,33 @@ class r_CoopSession
 function OnConfigUI()
 {
     wrappedMethod();
+    theGame.r_getMultiplayerClient().getCoopSession().OnMainMenu();
     theGame.r_getMultiplayerClient().getCoopLobby().OnMainMenu();
     return true;
+}
+
+// A save loaded from the game's menus (Load Game, the death screen).
+@wrapMethod(CR4IngameMenu)
+function LoadSaveRequested(saveSlotRef : SSavegameInfo)
+{
+    theGame.r_getMultiplayerClient().getCoopSession().OnMenuLoad(saveSlotRef, (CR4DeathScreenMenu)m_parentMenu);
+    wrappedMethod(saveSlotRef);
+}
+
+// Is this save file name the save of that base name? The game lists base names; a name with a
+// folder or ".sav" counts too, but not one that only contains it (AutoSave_1 in AutoSave_10).
+function CoopSaveNameIs(filename : string, wanted : string) : bool
+{
+    var base, want, before : string;
+    want = StrLower(wanted);
+    base = StrLower(filename);
+    if(want == "") { return false; }
+    if(StrEndsWith(base, ".sav")) { base = StrLeft(base, StrLen(base) - 4); }
+    if(base == want) { return true; }
+    if(StrLen(base) <= StrLen(want) || !StrEndsWith(base, want)) { return false; }
+    before = StrMid(base, StrLen(base) - StrLen(want) - 1, 1);
+    // a folder separator before the name, not more of a name
+    return StrLen(StrReplaceAll("abcdefghijklmnopqrstuvwxyz0123456789_", before, "")) == 37;
 }
 
 @wrapMethod(r_MultiplayerClient)

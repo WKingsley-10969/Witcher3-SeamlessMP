@@ -552,3 +552,25 @@ Branch rebased onto `8c920f9` before publication, preserving Claude's additional
   - `New-W3LanProfileStartInfo` starts the game without options; the bot harness sizes its windows itself.
 - **Tests:** `Test-Profile.ps1` extended (no forced options; settings read back; a broken file ignored; Enter keeps the answer; refused names asked again), PASS in Windows PowerShell 5.1 and PowerShell 7. `Test-Install` 30/30, `Test-Lan` 15/15, `Test-SessionSave` 8/8 (with `-JarPath`: in 5.1 `$PSScriptRoot` is empty in its parameter default, an older quirk).
 
+**25 October 2026 — Claude Code: the host's save and the own character are safe.** Branch `fix/host-save-character` (from `main`). Found in the owner's first two-PC session: the host loaded its newest save in White Orchard, the second PC loaded an old Kaer Morhen save of its own, and later lost all its gear (fists and the base shirt).
+
+- **The wrong save** (`coopLobby.ws`, `coopSession.ws`):
+  - When the host started, the second PC looked for the save in its own list first, by name *containing* the host's save name, and loaded it without downloading. Autosave and quicksave names repeat, and the second PC's own game had made saves with those names in the first session.
+  - Now the second PC always downloads the host's save (`WO_LobbyFetchSave` replaces any local file of that name) and finds it by its exact base name (`CoopSaveNameIs`: `AutoSave_1` no longer finds `AutoSave_10`).
+  - A download that cannot start is reported instead of silently doing nothing.
+- **The lost gear** (`coopCharacter.ws`):
+  - The own-character restore replaces the character: it removes everything the character owns and adds back the record. It ran in any game started with Play Join LAN, so it recorded the second PC's own old world (around the prologue) and later applied that record.
+  - **In the host's world only.** `r_CoopSession` knows when the game is the host's world: after loading the host's save (`LoadSave`, `ExpectHostWorld`) or the host's new game, until the main menu or a load of another save from the game's menus (`CR4IngameMenu.LoadSaveRequested` wrapped; the host's save, or the death screen while in the host's world, keep it). Recording and restoring happen only there, as the witcher, and after the prologue's Kaer Morhen dream (`q001_nightmare_ended`).
+  - **Once per load of the host's world**, not after every loading screen (`HostLoadSerial`): other loading screens keep the character as it is, so nothing picked up shortly before is lost.
+  - **A record without gear is not applied** over a character with a sword or armour equipped (`SKIPPED`); the current character is kept and recorded.
+  - **Backups:** before a restore or a fresh start replaces a record, it is copied to `coop-characters\backups\<host>-<time>.txt` (newest 10 kept; native `WO_CharacterBackup`).
+  - **The host's new game** starts a new character (the previous record backed up).
+  - **Recorded when the pause menu opens** too, so quitting right after picking something up loses nothing.
+- **Logs:** session, lobby and character events now go to the player's `bin\WitcherOnline\WitcherOnline_<name>.log` (native `WO_Log`); before, only the test bots saw them.
+- **Tests:**
+  - `character_safety` (new): the second PC, launched for BotA's session with a gearless record for BotA, first loads a save of its own: no restore, no recording, sword on. Then it loads BotA's save through the session: the record is skipped and backed up, the sword stays, recording starts. Run `20261025-194355`: **PASS**.
+  - `lobby_stale` (new): the second PC starts with a different save under the host save's name; it must download the host's (its file afterwards is byte for byte the host's). Run `20261025-194617`: **PASS** (fetches=1, files identical).
+  - `run_test.py` passes the session save's full base name, as the launcher does (it passed only the start of it, which the old matching accepted).
+  - Regressions on this branch, all **PASS**: `player_character` (`20261025-194756`), `lobby_save` (`-195005`), `lobby_new` (`-195118`), `session_join` (`-195504`), `loot_share` (`-195639`).
+  - The log file is rewritten at each game start: copy it before starting the game again.
+
