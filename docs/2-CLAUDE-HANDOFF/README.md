@@ -562,4 +562,6 @@ Branch rebased onto `8c920f9` before publication, preserving Claude's additional
   - `character_safety` (new): the second PC, launched for BotA's session with a gearless record for BotA, first loads a save of its own: no restore, no recording, sword on. Then it loads BotA's save through the session: the record is skipped and backed up, the sword stays, recording starts. Run `20261025-194355`: **PASS**.
   - `lobby_stale` (new): the second PC starts with a different save under the host save's name; it must download the host's (its file afterwards is byte for byte the host's). Run `20261025-194617`: **PASS** (fetches=1, files identical).
   - `run_test.py` passes the session save's full base name, as the launcher does (it passed only the start of it, which the old matching accepted).
+  - Regressions on this branch, all **PASS**: `player_character` (`20261025-194756`), `lobby_save` (`-195005`), `lobby_new` (`-195118`), `session_join` (`-195504`), `loot_share` (`-195639`).
+  - The log file is rewritten at each game start: copy it before starting the game again.
 
