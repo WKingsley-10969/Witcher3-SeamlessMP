@@ -102,6 +102,11 @@ class r_SeamlessCampaign
     private var initialized : bool;
     private var enabled : bool;
     private var ready : bool;
+    private var reconnecting : bool;
+    private var catchingUp : bool;
+    private var recoveryFloor : int;
+    private var recoveryCount : int;
+    private var recoverySceneBlocked : bool;
     private var halted : bool;
     private var effectsEnabled : bool;
     private var sessionStarted : bool;
@@ -120,6 +125,7 @@ class r_SeamlessCampaign
     private var liveFloor : int;
     private var ackDue : int;
     private var lastSend : float;
+    private var retryDelay : float;
     private var nextPoll : float;
     private var nextRenew : float;
     private var floorInitialized : bool;
@@ -196,6 +202,7 @@ class r_SeamlessCampaign
     private var probeFactsSetIds : array<string>;
 
     default requestSeq = 1;
+    default retryDelay = 0.75;
     default nextRenew = -1;
     default lastStatus = "DISABLED";
 
@@ -242,7 +249,8 @@ class r_SeamlessCampaign
     }
 
     public function IsApplyingChoice() : bool { return applyingChoice; }
-    public function IsReady() : bool { return ready && !halted; }
+    public function IsReady() : bool { return ready && !halted && !reconnecting && !catchingUp; }
+    public function GetRecoveryCount() : int { return recoveryCount; }
     public function GetStatus() : string { return lastStatus; }
     public function GetCursor() : int { return cursor; }
     public function GetLatest() : int { return latest; }
@@ -311,6 +319,32 @@ class r_SeamlessCampaign
         }
     }
 
+    private function Capabilities() : string
+    {
+        if(effectsEnabled) { return "fact,journal,fact_remove"; }
+        return "-";
+    }
+
+    private function BeginRecovery()
+    {
+        // Keep pendingWire, pendingOp, sequence and capture receipt intact. RESUME
+        // authenticates the transport without spending that sequence on HELLO.
+        reconnecting = true;
+        catchingUp = true;
+        recoverySceneBlocked = recoverySceneBlocked || currentSceneConversation != "";
+        ClearConversation();
+        currentScene = "";
+        currentSceneConversation = "";
+        localChoices.Clear();
+        choicesActive = false;
+        needsPublish = false;
+        needsVote = false;
+        observedConversation = "";
+        observedOwner = "";
+        lastSend = -999;
+        lastStatus = "RECONNECTING";
+    }
+
     public function OnSessionStart()
     {
         WO_SCResetFacts();
@@ -334,6 +368,7 @@ class r_SeamlessCampaign
     private function ReconcileAfterLoad()
     {
         loadCount += 1;
+        recoverySceneBlocked = false;
         // Scene and prompt state belonged to the unloaded world.
         currentScene = "";
         currentSceneConversation = "";
@@ -369,6 +404,7 @@ class r_SeamlessCampaign
         pendingOp = op;
         pendingWire = "coop sc 1 " + sessionId + " " + requestSeq + " " + op + " " + args;
         attempts = 1;
+        retryDelay = 0.75;
         lastSend = theGame.GetEngineTimeAsSeconds();
         WO_Send(pendingWire);
         return true;
@@ -376,13 +412,7 @@ class r_SeamlessCampaign
 
     private function Hello() : bool
     {
-        var capabilities : string;
-        capabilities = "-";
-        if(effectsEnabled)
-        {
-            capabilities = "fact,journal,fact_remove";
-        }
-        return SendRequest("HELLO", role + " " + proof + " " + capabilities);
+        return SendRequest("HELLO", role + " " + proof + " " + Capabilities());
     }
 
     private function QueueRequest(op : string, args : string) : bool
@@ -402,13 +432,31 @@ class r_SeamlessCampaign
             return;
         }
         now = theGame.GetEngineTimeAsSeconds();
+        if(reconnecting)
+        {
+            if(now - lastSend >= 2.0 || now < lastSend)
+            {
+                WO_Send("coop sc 1 " + sessionId + " " + requestSeq + " RESUME " + epoch + " "
+                    + role + " " + proof + " " + Capabilities());
+                lastSend = now;
+            }
+            return;
+        }
         if(pendingWire != "")
         {
-            if(now - lastSend >= 0.75 || now < lastSend)
+            if(now - lastSend >= retryDelay || now < lastSend)
             {
                 if(attempts >= 12)
                 {
-                    Halt("REQUEST_TIMEOUT_RETRY_SAME_REQUEST");
+                    if(epoch != "" && pendingOp != "HELLO") { BeginRecovery(); }
+                    else
+                    {
+                        // Initial HELLO is also safe to retry through a long outage.
+                        attempts = 1;
+                        retryDelay = 2.0;
+                        lastSend = now;
+                        lastStatus = "CONNECTING";
+                    }
                     return;
                 }
                 WO_Send(pendingWire);
@@ -426,6 +474,20 @@ class r_SeamlessCampaign
         {
             SendRequest("ACK", epoch + " " + ackDue);
             return;
+        }
+        if(catchingUp)
+        {
+            if(cursor >= recoveryFloor)
+            {
+                catchingUp = false;
+                recoveryCount += 1;
+                lastStatus = "RECOVERED";
+            }
+            else
+            {
+                SendRequest("GET_STATE", epoch + " " + cursor + " -");
+                return;
+            }
         }
         if(wantClose)
         {
@@ -555,6 +617,40 @@ class r_SeamlessCampaign
             return;
         }
         status = WO_Str(6);
+        if(pendingOp != "HELLO" && WO_Str(2) != epoch) { Halt("CAMPAIGN_REPLACED"); return; }
+        if(status == "RESUMED")
+        {
+            if(!reconnecting) { return; }
+            expectedSeq = StringToInt(WO_Str(9), -1);
+            recoveryFloor = StringToInt(WO_Str(8), -1);
+            if(count != 10 || WO_Str(7) != epoch || WO_Str(2) != epoch
+                || recoveryFloor < cursor || recoveryFloor > 20000
+                || (expectedSeq != requestSeq && expectedSeq != requestSeq - 1))
+            {
+                Halt("INVALID_RESUME_STATE");
+                return;
+            }
+            if(recoveryFloor > liveFloor) { liveFloor = recoveryFloor; }
+            reconnecting = false;
+            ready = true;
+            attempts = 0;
+            lastSend = -999;
+            lastStatus = "CATCHING_UP";
+            // Retransmit the original request. Its committed response remains cached.
+            return;
+        }
+        if(reconnecting)
+        {
+            if(status == "SESSION_ACTIVE" || status == "USERNAME_ACTIVE") { return; }
+            if(status == "STALE_EPOCH" || status == "HOST_AUTH_FAILED" || status == "SESSION_OWNED"
+                || status == "CAPABILITY_REQUIRED" || status == "BAD_REQUEST" || status == "UNKNOWN_OP"
+                || status == "HELLO_REQUIRED" || status == "STORAGE_ERROR" || status == "REQUEST_CONFLICT"
+                || status == "BAD_SEQUENCE" || status == "ALREADY_APPLIED" || status == "SESSION_LIMIT_OR_SEQUENCE")
+            { Halt("RESUME_" + status); }
+            // A delayed response to the original request is ignored until RESUME
+            // supplies the replay floor. Its exact retry will retrieve the same result.
+            return;
+        }
         if(status == "STORAGE_ERROR")
         {
             // Keep the exact pending request. Caller can retry after storage is repaired.
@@ -563,6 +659,7 @@ class r_SeamlessCampaign
         }
         if(status == "BAD_SEQUENCE" || status == "ALREADY_APPLIED")
         {
+            if(pendingOp != "HELLO") { Halt("REQUEST_SEQUENCE_CONFLICT"); return; }
             expectedSeq = StringToInt(WO_Str(7), 0);
             if(status == "ALREADY_APPLIED") { expectedSeq += 1; }
             if(count < 8 || expectedSeq < 1 || expectedSeq > 1000000)
@@ -578,16 +675,22 @@ class r_SeamlessCampaign
             lastStatus = "RECONNECT_RECONCILE_STATE";
             return;
         }
-        if(status == "HELLO_REQUIRED" || status == "STALE_EPOCH")
+        if(status == "HELLO_REQUIRED")
         {
-            pendingWire = "";
-            pendingOp = "";
-            captureInFlight = false;
-            ready = false;
-            epoch = WO_Str(2);
-            lastStatus = "RECONNECT_RECONCILE_STATE";
+            if(pendingOp == "HELLO") { Halt("HELLO_REFUSED"); return; }
+            BeginRecovery();
             return;
         }
+        if(status == "STALE_EPOCH") { Halt("CAMPAIGN_REPLACED"); return; }
+        if(status == "SESSION_ACTIVE" || status == "USERNAME_ACTIVE")
+        {
+            // A restarted process may need to wait for the old endpoint's lease.
+            attempts = 1;
+            retryDelay = 2.0;
+            lastSend = theGame.GetEngineTimeAsSeconds();
+            return;
+        }
+        if(status == "CAPABILITY_REQUIRED") { Halt(status); return; }
         if(status == "BAD_REQUEST" || status == "HOST_AUTH_FAILED" || status == "SESSION_OWNED"
             || status == "SESSION_ACTIVE" || status == "USERNAME_ACTIVE" || status == "REQUEST_CONFLICT"
             || status == "SESSION_LIMIT_OR_SEQUENCE")
@@ -612,6 +715,7 @@ class r_SeamlessCampaign
                 Halt("BAD_WELCOME");
                 return;
             }
+            if(epoch != "" && epoch != WO_Str(2)) { Halt("CAMPAIGN_REPLACED"); return; }
             epoch = WO_Str(2);
             latest = StringToInt(WO_Str(8), -1);
             if(latest < cursor || latest > 20000)
@@ -624,7 +728,16 @@ class r_SeamlessCampaign
                 liveFloor = latest;
                 floorInitialized = true;
             }
+            recoveryFloor = latest;
+            catchingUp = cursor < recoveryFloor;
             ready = true;
+            nextPoll = 0;
+            return;
+        }
+        // A cached pre-disconnect response may describe a scene/lease which has
+        // already ended. Consume its receipt, then drain state without restoring it.
+        if(catchingUp && completedOp != "GET_STATE" && completedOp != "ACK")
+        {
             nextPoll = 0;
             return;
         }
@@ -865,6 +978,13 @@ class r_SeamlessCampaign
         {
             Halt("BAD_STATE_CURSOR");
             return;
+        }
+        if(catchingUp)
+        {
+            // The first replay reply may be a cached GET_STATE from before the
+            // outage. It cannot lower the floor supplied by RESUME.
+            if(latest > recoveryFloor) { recoveryFloor = latest; }
+            if(latest > liveFloor) { liveFloor = latest; }
         }
         observedConversation = WO_Str(9);
         observedOwner = WO_Str(10);
@@ -1257,6 +1377,11 @@ class r_SeamlessCampaign
         if(i < 0) { return; }
         currentSceneConversation = sceneConversations[i];
         currentMain = sceneMain[i];
+        if(reconnecting || catchingUp || recoverySceneBlocked)
+        {
+            recoverySceneBlocked = true;
+            return;
+        }
         needsPublish = choicesActive;
         // This notification occurs AFTER the engine has begun the scene.
         // It cannot prevent a second quest graph from already running.
@@ -1272,6 +1397,7 @@ class r_SeamlessCampaign
     public function OnSceneEnded()
     {
         if(!IsEnabled()) { return; }
+        recoverySceneBlocked = false;
         if(currentSceneConversation != "" && desiredConversation == currentSceneConversation)
         {
             if(pendingOp == "OPEN" || pendingOp == "LISTEN") { wantClose = true; }
@@ -1293,6 +1419,7 @@ class r_SeamlessCampaign
         var i : int;
         var unchanged : bool;
         if(!IsEnabled()) { return; }
+        if(recoverySceneBlocked) { return; }
         unchanged = choicesActive && choices.Size() == localChoices.Size();
         for(i = 0; i < choices.Size() && unchanged; i += 1)
         {
@@ -1390,6 +1517,7 @@ class r_SeamlessCampaign
     {
         var i : int;
         var choice : string;
+        if(recoverySceneBlocked) { lastStatus = "DISCONNECTED_SCENE_REQUIRES_EXIT"; return true; }
         if(!IsEnabled() || applyingChoice || currentSceneConversation == "") { return false; }
         if(!IsReady()) { lastStatus = "CHOICE_WAITING_FOR_COORDINATOR"; return true; }
         if(localPromptInstance == "" || promptInstance != localPromptInstance || conversationLease == "")

@@ -74,8 +74,71 @@ public final class SeamlessUdpIntegrationTest {
         } finally { if (server.isAlive()) stop(server); }
         dialogueInstances(java, classes, root, port);
         factRemovals(java, classes, root, port);
+        disconnectRejoin(java, classes, root, port);
         System.out.println("SeamlessUdpIntegrationTest passed: " + assertions + " assertions (loss/duplicate/reorder/auth/crash/replay)");
     }
+    private static void disconnectRejoin(String java, String classes, Path root, int port) throws Exception {
+        Path state = Files.createTempDirectory(root, "udp-rejoin-");
+        Process server = start(java, classes, state, port, "rejoin.log");
+        try (Peer host = new Peer(port, "Host", H); Peer guest = new Peer(port, "SecondPC", G);
+             Peer returning = new Peer(port, "SecondPC", G)) {
+            ready(host, server);
+            String caps = "fact,fact_remove";
+            String epoch = statusReply("WELCOME", host.send(1, "HELLO", "host", TOKEN, caps)).get(5);
+            status("WELCOME", guest.send(1, "HELLO", "guest", "-", caps));
+            status("OK", host.send(2, "OPEN", epoch, "online", "quest", "questA"));
+            String lease = statusReply("OK", guest.send(2, "OPEN", epoch, "oldTalk", "npc", "npcA")).get(11);
+            status("OK", guest.send(3, "CHOICES", epoch, "oldTalk", lease, "prompt", "yes,no", "false"));
+            status("OK", guest.send(4, "CHOICE", epoch, "oldTalk", lease, "prompt", "yes"));
+            List<String> lost = statusReply("OK", guest.send(5, "EFFECT", epoch, "beforeDrop", "oldTalk", "fact", "sc_test_removed", "0"));
+            status("SESSION_ACTIVE", returning.send(5, "RESUME", epoch, "guest", "-", caps));
+            // Disconnect only the guest. Keep the host's scope alive throughout the
+            // real transport timeout; no accelerated server clock or fake network.
+            guest.close(); long hostSeq = 3;
+            for (int i = 0; i < 17; i++) {
+                Thread.sleep(1000);
+                status("OK", host.send(hostSeq++, "RENEW", epoch, "online"));
+            }
+            status("OK", host.send(hostSeq++, "EFFECT", epoch, "offlineSet", "online", "fact", "sc_test_changed", "9"));
+            status("OK", host.send(hostSeq++, "EFFECT", epoch, "offlineRemove", "online", "fact", "sc_test_removed", "absent"));
+            status("HELLO_REQUIRED", returning.send(5, "EFFECT", epoch, "beforeDrop", "oldTalk", "fact", "sc_test_removed", "0"));
+            List<String> resumed = statusReply("RESUMED", returning.send(5, "RESUME", epoch, "guest", "-", caps));
+            eq("5", resumed.get(12));
+            List<String> exact = statusReply("OK", returning.send(5, "EFFECT", epoch, "beforeDrop", "oldTalk", "fact", "sc_test_removed", "0"));
+            eq(lost.subList(9, lost.size()), exact.subList(9, exact.size()));
+            long seq = 6, cursor = 0; Set<String> transactions = new HashSet<>(); int choices = 0;
+            Map<String, String> facts = new HashMap<>();
+            while (true) {
+                List<String> event = statusReply("STATE", returning.send(seq++, "GET_STATE", epoch, Long.toString(cursor), "-"));
+                if (event.get(18).equals("0")) break;
+                eq(Long.toString(cursor + 1), event.get(19)); cursor++;
+                if (event.get(20).equals("TRANSACTION")) {
+                    eq(true, transactions.add(event.get(22)));
+                    facts.put(event.get(29), event.get(30));
+                }
+                if (event.get(20).equals("DIALOG_CHOICE")) choices++;
+                status("OK", returning.send(seq++, "ACK", epoch, Long.toString(cursor)));
+            }
+            eq(3, transactions.size()); eq(1, choices);
+            eq("absent", facts.get("sc_test_removed")); eq("9", facts.get("sc_test_changed"));
+            status("NO_CONVERSATION", returning.send(seq++, "GET_DIALOGUE", epoch, "oldTalk"));
+            // A second rejoin at the applied cursor must be empty and append nothing.
+            status("RESUMED", returning.send(seq, "RESUME", epoch, "guest", "-", caps));
+            status("RESUMED", returning.send(seq, "RESUME", epoch, "guest", "-", caps));
+            List<String> tail = statusReply("STATE", returning.send(seq++, "GET_STATE", epoch, Long.toString(cursor), "oldTalk"));
+            eq("0", tail.get(18)); eq("", tail.get(12)); eq(Long.toString(cursor), tail.get(10));
+            // Recover a lost polling reply across an abrupt server restart, too.
+            long pending = seq - 1;
+            server.destroyForcibly(); if (!server.waitFor(5, TimeUnit.SECONDS)) throw new AssertionError("Rejoin server did not stop");
+            server = start(java, classes, state, port, "rejoin-restart.log"); ready(returning, server);
+            status("RESUMED", returning.send(pending, "RESUME", epoch, "guest", "-", caps));
+            List<String> cached = statusReply("STATE", returning.send(pending, "GET_STATE", epoch, Long.toString(cursor), "oldTalk"));
+            eq(tail.subList(9, tail.size()), cached.subList(9, cached.size()));
+            List<String> afterRestart = statusReply("STATE", returning.send(seq++, "GET_STATE", epoch, Long.toString(cursor), "-"));
+            eq("CLOSE", afterRestart.get(20)); eq("online", afterRestart.get(22));
+        } finally { if (server.isAlive()) stop(server); }
+    }
+    private static List<String> statusReply(String expected, List<String> reply) { status(expected, reply); return reply; }
     private static void factRemovals(String java, String classes, Path root, int port) throws Exception {
         Path state = Files.createTempDirectory(root, "udp-removal-"); Process server = start(java, classes, state, port, "removal-first.log");
         try (Peer host = new Peer(port, "Host", H); Peer guest = new Peer(port, "SecondPC", G)) {

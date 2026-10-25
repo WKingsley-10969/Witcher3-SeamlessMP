@@ -74,6 +74,7 @@ public final class SeamlessCampaign implements AutoCloseable {
             Session prior = state.sessions.get(session);
             if (prior != null && !prior.username.equalsIgnoreCase(username)) return reply(session, seqText, "SESSION_OWNED");
             if ("HELLO".equals(op)) return hello(username, endpoint, session, seq, args, prior);
+            if ("RESUME".equals(op)) return resume(username, endpoint, session, seq, args, prior);
             Active connection = active.get(session);
             if (prior == null || connection == null || !connection.endpoint.equals(endpoint)) return reply(session, seqText, "HELLO_REQUIRED");
             connection.seen = clock.getAsLong();
@@ -94,27 +95,49 @@ public final class SeamlessCampaign implements AutoCloseable {
         }
     }
 
-    private List<String> hello(String username, String endpoint, String id, long seq, List<String> args, Session prior) throws IOException {
-        if (args.size() != 3) return reply(id, Long.toString(seq), "BAD_REQUEST");
+    // Transport recovery must not consume the outstanding mutation's sequence or
+    // replace its cached reply. The client retransmits that exact request next.
+    private List<String> resume(String username, String endpoint, String id, long seq, List<String> args, Session prior) {
+        if (args.size() != 4) return reply(id, Long.toString(seq), "BAD_REQUEST");
+        if (parseLong(args.get(0), -1) != state.epoch) return reply(id, Long.toString(seq), "STALE_EPOCH");
+        if (prior == null) return reply(id, Long.toString(seq), "HELLO_REQUIRED");
+        List<String> auth = args.subList(1, 4);
+        List<String> denied = authorizeTransport(username, endpoint, id, auth, prior);
+        if (denied != null) return reply(id, Long.toString(seq), denied);
+        active.put(id, new Active(endpoint, clock.getAsLong(), parseCapabilities(auth.get(2))));
+        return reply(id, Long.toString(seq), "RESUMED", Long.toString(state.epoch),
+            Long.toString(state.nextEvent - 1), Long.toString(prior.seq));
+    }
+
+    private List<String> authorizeTransport(String username, String endpoint, String id, List<String> args, Session prior) {
         String role = args.get(0);
         boolean isHost = "host".equals(role);
-        if (!(isHost || "guest".equals(role))) return reply(id, Long.toString(seq), "BAD_REQUEST");
-        if (isHost && (!username.equalsIgnoreCase(host) || !constantEquals(args.get(1), hostToken))) return reply(id, Long.toString(seq), "HOST_AUTH_FAILED");
-        if (!isHost && username.equalsIgnoreCase(host)) return reply(id, Long.toString(seq), "HOST_AUTH_FAILED");
+        if (!(isHost || "guest".equals(role))) return list("BAD_REQUEST");
+        if (isHost && (!username.equalsIgnoreCase(host) || !constantEquals(args.get(1), hostToken))) return list("HOST_AUTH_FAILED");
+        if (!isHost && username.equalsIgnoreCase(host)) return list("HOST_AUTH_FAILED");
+        if (prior != null && prior.host != isHost) return list("SESSION_OWNED");
         Set<String> capabilities = parseCapabilities(args.get(2));
-        // History is replayed from cursor zero after a game load. Even if a removed
-        // fact was subsequently set, an old adapter must never read absent as zero.
-        if (!capabilities.contains("fact_remove") && hasFactRemoval(state))
-            return reply(id, Long.toString(seq), "CAPABILITY_REQUIRED", "fact_remove");
+        if (!capabilities.contains("fact_remove") && hasFactRemoval(state)) return list("CAPABILITY_REQUIRED", "fact_remove");
         Active existing = active.get(id);
         long now = clock.getAsLong();
         if (existing != null && !existing.endpoint.equals(endpoint) && now - existing.seen < LEASE_MS)
-            return reply(id, Long.toString(seq), "SESSION_ACTIVE");
+            return list("SESSION_ACTIVE");
         for (Map.Entry<String, Active> e : active.entrySet()) {
             Session p = state.sessions.get(e.getKey());
             if (!e.getKey().equals(id) && p != null && p.username.equalsIgnoreCase(username) && now - e.getValue().seen < LEASE_MS)
-                return reply(id, Long.toString(seq), "USERNAME_ACTIVE");
+                return list("USERNAME_ACTIVE");
         }
+        return null;
+    }
+
+    private List<String> hello(String username, String endpoint, String id, long seq, List<String> args, Session prior) throws IOException {
+        if (args.size() != 3) return reply(id, Long.toString(seq), "BAD_REQUEST");
+        List<String> denied = authorizeTransport(username, endpoint, id, args, prior);
+        if (denied != null) return reply(id, Long.toString(seq), denied);
+        String role = args.get(0);
+        boolean isHost = "host".equals(role);
+        Set<String> capabilities = parseCapabilities(args.get(2));
+        long now = clock.getAsLong();
         if (prior == null && (seq != 1 || state.sessions.size() >= MAX_SESSIONS)) return reply(id, Long.toString(seq), "SESSION_LIMIT_OR_SEQUENCE");
         if (prior != null && seq != prior.seq && seq != prior.seq + 1) return reply(id, Long.toString(seq), "BAD_SEQUENCE", Long.toString(prior.seq + 1));
         if (prior != null && prior.host != isHost) return reply(id, Long.toString(seq), "SESSION_OWNED");
@@ -340,8 +363,13 @@ public final class SeamlessCampaign implements AutoCloseable {
         State next = new State(state); boolean changed = false;
         for (Scope scope : new ArrayList<>(next.scopes.values())) {
             if (now >= scope.leaseUntil || disconnected.contains(scope.owner)) { release(next, scope, "LEASE_EXPIRED"); changed = true; }
-            else if (!scope.voteId.isEmpty() && scope.voteResult.isEmpty() && !Collections.disjoint(scope.voters, disconnected)) {
-                scope.voters.removeAll(disconnected); resolveVote(next, scope); changed = true;
+            else {
+                // Expired listeners must explicitly join again. Retaining them
+                // would silently enrol a returning session in the next prompt.
+                if (scope.listeners.removeAll(disconnected)) changed = true;
+                if (!scope.voteId.isEmpty() && scope.voteResult.isEmpty() && !Collections.disjoint(scope.voters, disconnected)) {
+                    scope.voters.removeAll(disconnected); resolveVote(next, scope); changed = true;
+                }
             }
         }
         if (changed) { persist(next); state = next; }
