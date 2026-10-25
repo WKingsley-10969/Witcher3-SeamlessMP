@@ -380,7 +380,7 @@ class r_SeamlessCampaign
         capabilities = "-";
         if(effectsEnabled)
         {
-            capabilities = "fact,journal";
+            capabilities = "fact,journal,fact_remove";
         }
         return SendRequest("HELLO", role + " " + proof + " " + capabilities);
     }
@@ -764,7 +764,7 @@ class r_SeamlessCampaign
     // effect. The native wire is "generation revision target exists value".
     private function PumpSnapshot()
     {
-        var wire : string;
+        var wire, valueText : string;
         var parts : array<string>;
         wire = WO_SCReadFactChange();
         if(wire == "") { return; }
@@ -780,11 +780,15 @@ class r_SeamlessCampaign
             Halt("SNAPSHOT_BAD_RECORD");
             return;
         }
-        // The ledger has no fact-removal effect yet; stop rather than drop it.
+        valueText = parts[4];
         if(parts[3] == "0")
         {
-            Halt("SNAPSHOT_REMOVAL_UNSUPPORTED");
-            return;
+            if(!SC_IsFactRemovalAllowed(parts[2]))
+            {
+                Halt("SNAPSHOT_REMOVAL_NOT_VETTED");
+                return;
+            }
+            valueText = "absent";
         }
         if(captureNonce == "") { captureNonce = WO_SCInstance(); }
         captureGeneration = StringToInt(parts[0], 0);
@@ -792,7 +796,7 @@ class r_SeamlessCampaign
         captureFromSnapshot = true;
         captureTx = "fs_" + captureNonce + "_" + parts[0] + "_" + parts[1];
         captureScope = conversation;
-        captureArgs = captureTx + " " + conversation + " fact " + parts[2] + " " + parts[4];
+        captureArgs = captureTx + " " + conversation + " fact " + parts[2] + " " + valueText;
     }
 
     // The local queue entry is acknowledged only after the ledger committed it.
@@ -962,7 +966,12 @@ class r_SeamlessCampaign
             if(!SC_IsToken(WO_Str(idx), 96) || !SC_IsToken(target, 96)) { return false; }
             if(kind == "fact")
             {
-                if(!SC_ParseFactValue(WO_Str(idx + 3), value, validFor)) { return false; }
+                if(WO_Str(idx + 3) == "absent")
+                {
+                    if(!SC_IsFactRemovalAllowed(target)) { return false; }
+                    value = 0;
+                }
+                else if(!SC_ParseFactValue(WO_Str(idx + 3), value, validFor)) { return false; }
             }
             else
             {
@@ -986,8 +995,15 @@ class r_SeamlessCampaign
             target = WO_Str(idx + 2);
             if(kind == "fact")
             {
-                SC_ParseFactValue(WO_Str(idx + 3), value, validFor);
-                if(!ApplyRemoteFact(target, value, validFor)) { return false; }
+                if(WO_Str(idx + 3) == "absent")
+                {
+                    if(!ApplyRemoteFact(target, 0, -1, true)) { return false; }
+                }
+                else
+                {
+                    SC_ParseFactValue(WO_Str(idx + 3), value, validFor);
+                    if(!ApplyRemoteFact(target, value, validFor, false)) { return false; }
+                }
             }
             else if(kind == "journal")
             {
@@ -1001,7 +1017,7 @@ class r_SeamlessCampaign
         return true;
     }
 
-    private function ApplyRemoteFact(target : string, value : int, validFor : int) : bool
+    private function ApplyRemoteFact(target : string, value : int, validFor : int, removeFact : bool) : bool
     {
         var applied, ended, suppressCapture : bool;
         if(!WO_SCWatchFact(target) || !WO_SCBeginRemoteFact(target)) { return false; }
@@ -1012,7 +1028,8 @@ class r_SeamlessCampaign
             WO_SCEndRemoteFact();
             return false;
         }
-        applied = SC_ApplyFactSet(target, value, validFor);
+        if(removeFact) { applied = SC_ApplyFactRemoval(target); }
+        else { applied = SC_ApplyFactSet(target, value, validFor); }
         // No Sleep/yield/callback queue between Begin and End. End is mandatory on failure too.
         ended = true;
         if(suppressCapture) { ended = WNB_FactOpsEndRemote(); }
@@ -1158,6 +1175,13 @@ class r_SeamlessCampaign
     public function RequestFactSet(tx : string, target : string, value : int) : bool
     {
         return RequestEffect(tx, "fact", target, value);
+    }
+
+    public function RequestFactRemoval(tx : string, target : string) : bool
+    {
+        if(!OwnsConversation() || !effectsEnabled || !SC_IsToken(tx, 96)
+            || !SC_IsFactRemovalAllowed(target)) { return false; }
+        return QueueRequest("EFFECT", epoch + " " + tx + " " + conversation + " fact " + target + " absent");
     }
 
     public function RequestJournalSet(tx : string, target : string, value : int) : bool
