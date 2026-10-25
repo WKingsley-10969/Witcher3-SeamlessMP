@@ -179,6 +179,8 @@ class r_CoopNpcs
     private var lastSend : float;
     private var lastCollect : float;
     private var sceneNpc : CNewNPC;   // in a shared conversation here: shown as itself, left out of sync
+    private var sceneHold : bool;     // a scene plays here: every synced NPC near it is itself, left out of sync
+    private var sceneCenter : Vector;
     private var lastSnapshotAt : float;
     private var wasHost : bool;
 
@@ -375,21 +377,69 @@ class r_CoopNpcs
         return best;
     }
 
-    // The shared conversation is over: sync takes the NPC back. A leader whose member still owns
-    // it shows its stand-in again.
+    // A scene started here: its actors are this world's own NPCs, so every synced NPC near it is
+    // shown as itself (stand-ins swapped back, hidden copies shown) and left out of sync until
+    // ReleaseScene.
+    public function HoldAround(center : Vector)
+    {
+        var i : int;
+        sceneHold = true;
+        sceneCenter = center;
+        for(i = 0; i < puppets.Size(); i += 1)
+        {
+            if(!puppets[i].npc || !(InSceneHold(puppets[i].npc) || (puppets[i].display && NearScene(puppets[i].display.GetWorldPosition())))) { continue; }
+            if(puppets[i].display)
+            {
+                SwapToReal(puppets[i].npc, puppets[i].display);
+                puppets[i].display = NULL;
+            }
+            Unhide(puppets[i].npc);
+        }
+        for(i = 0; i < hosted.Size(); i += 1)
+        {
+            if(hosted[i].npc && hosted[i].display && (InSceneHold(hosted[i].npc) || NearScene(hosted[i].display.GetWorldPosition())))
+            {
+                SwapToReal(hosted[i].npc, hosted[i].display);
+                hosted[i].display = NULL;
+            }
+        }
+        for(i = hidden.Size() - 1; i >= 0; i -= 1)
+        {
+            if(InSceneHold(hidden[i].npc)) { Unhide(hidden[i].npc); }
+        }
+    }
+
+    // Left out of sync for a scene playing here.
+    private function InSceneHold(npc : CNewNPC) : bool
+    {
+        if(!npc) { return false; }
+        if(sceneNpc && npc == sceneNpc) { return true; }
+        return NearScene(npc.GetWorldPosition());
+    }
+
+    private function NearScene(pos : Vector) : bool
+    {
+        return sceneHold && VecDistance(pos, sceneCenter) < COOP_SCENE_HOLD_RADIUS();
+    }
+
+    // The scene or shared conversation is over: sync takes the NPCs back. A leader whose member
+    // still owns one shows its stand-in again; puppets and extra copies are picked up by the
+    // next update.
     public function ReleaseScene()
     {
         var i : int;
-        if(!sceneNpc) { return; }
+        if(!sceneNpc && !sceneHold) { return; }
         for(i = 0; i < hosted.Size(); i += 1)
         {
-            if(hosted[i].npc == sceneNpc && hosted[i].owner != "" && !hosted[i].display)
+            if(InSceneHold(hosted[i].npc) && hosted[i].owner != "" && !hosted[i].display)
             {
-                hosted[i].display = ShowDisplay(sceneNpc, sceneNpc.GetReadableName(), NameToString(sceneNpc.GetAppearance()), sceneNpc.GetWorldPosition(), sceneNpc.GetHeading());
+                hosted[i].display = ShowDisplay(hosted[i].npc, hosted[i].npc.GetReadableName(), NameToString(hosted[i].npc.GetAppearance()),
+                    hosted[i].npc.GetWorldPosition(), hosted[i].npc.GetHeading());
                 if(hosted[i].track) { hosted[i].track.Clear(); }
             }
         }
         sceneNpc = NULL;
+        sceneHold = false;
     }
 
     // What this world shows for the NPC with one voicetag: a stand-in or the real one; NULL if neither.
@@ -645,7 +695,7 @@ class r_CoopNpcs
         for(i = 0; i < hosted.Size(); i += 1)
         {
             h = hosted[i];
-            if(sceneNpc && h.npc == sceneNpc) { continue; }
+            if(InSceneHold(h.npc)) { continue; }
             pos = h.npc.GetWorldPosition();
             if(h.display) { pos = h.display.GetWorldPosition(); }
             mine = VecDistance(thePlayer.GetWorldPosition(), pos);
@@ -1078,7 +1128,7 @@ class r_CoopNpcs
                 if(p.npc) { worstSwapPop = MaxF(worstSwapPop, VecDistance(p.npc.GetWorldPosition(), p.swapPos)); }
                 p.pinUntil = 0;
             }
-            if(p.owned || (sceneNpc && p.npc == sceneNpc)) { continue; }
+            if(p.owned || InSceneHold(p.npc)) { continue; }
             if(!p.display)
             {
                 // An agreeing copy on its own AI. The moment this world's routine walks it while
@@ -1132,7 +1182,7 @@ class r_CoopNpcs
         for(i = 0; i < actors.Size(); i += 1)
         {
             npc = (CNewNPC)actors[i];
-            if(!Shareable(npc) || FindPuppetByNpc(npc) || IsHidden(npc) || !leaderTemplates.Contains(CoopEncode(npc.GetReadableName()))) { continue; }
+            if(!Shareable(npc) || FindPuppetByNpc(npc) || IsHidden(npc) || InSceneHold(npc) || !leaderTemplates.Contains(CoopEncode(npc.GetReadableName()))) { continue; }
             h = new r_CoopNpcHidden in this;
             h.npc = npc;
             h.aiId = NpcForceIdle(npc);
