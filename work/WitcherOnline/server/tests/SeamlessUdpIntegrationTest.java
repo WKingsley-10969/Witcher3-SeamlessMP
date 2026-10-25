@@ -73,7 +73,37 @@ public final class SeamlessUdpIntegrationTest {
             status("NOT_OWNER", guest.send(7, "TX_COMMIT", epoch, "tx-wire"));
         } finally { if (server.isAlive()) stop(server); }
         dialogueInstances(java, classes, root, port);
+        factRemovals(java, classes, root, port);
         System.out.println("SeamlessUdpIntegrationTest passed: " + assertions + " assertions (loss/duplicate/reorder/auth/crash/replay)");
+    }
+    private static void factRemovals(String java, String classes, Path root, int port) throws Exception {
+        Path state = Files.createTempDirectory(root, "udp-removal-"); Process server = start(java, classes, state, port, "removal-first.log");
+        try (Peer host = new Peer(port, "Host", H); Peer guest = new Peer(port, "SecondPC", G)) {
+            ready(host, server);
+            List<String> welcome = host.send(1, "HELLO", "host", TOKEN, "fact,fact_remove"); status("WELCOME", welcome); String epoch = welcome.get(5);
+            status("WELCOME", guest.send(1, "HELLO", "guest", "-", "fact,fact_remove"));
+            status("OK", guest.send(2, "OPEN", epoch, "guestRemoval", "quest", "questRemoval"));
+            status("OK", guest.send(3, "EFFECT", epoch, "zero", "guestRemoval", "fact", "sc_test_removed", "0"));
+            List<String> removed = guest.send(4, "EFFECT", epoch, "remove", "guestRemoval", "fact", "sc_test_removed", "absent"); status("OK", removed);
+            // Drop the observed response and resend the same request, then a new-sequence duplicate.
+            List<String> retry = guest.send(4, "EFFECT", epoch, "remove", "guestRemoval", "fact", "sc_test_removed", "absent"); status("OK", retry);
+            eq(removed.subList(9, removed.size()), retry.subList(9, retry.size()));
+            List<String> duplicate = guest.send(5, "EFFECT", epoch, "remove", "guestRemoval", "fact", "sc_test_removed", "absent"); status("OK", duplicate); eq("DUPLICATE", duplicate.get(11));
+            List<String> event = host.send(2, "GET_STATE", epoch, "2", "-"); status("STATE", event);
+            eq("3", event.get(10)); eq("TRANSACTION", event.get(20)); eq("absent", event.get(30));
+            status("TRANSACTION_CONFLICT", guest.send(6, "EFFECT", epoch, "remove", "guestRemoval", "fact", "sc_test_removed", "0"));
+            // Kill only this test's owned server after durable removal and recover its ledger.
+            server.destroyForcibly(); if (!server.waitFor(5, TimeUnit.SECONDS)) throw new AssertionError("Removal server did not stop");
+            server = start(java, classes, state, port, "removal-restart.log"); ready(host, server);
+            status("CAPABILITY_REQUIRED", host.send(3, "HELLO", "host", TOKEN, "fact"));
+            status("WELCOME", host.send(3, "HELLO", "host", TOKEN, "fact,fact_remove"));
+            List<String> replay = host.send(4, "GET_STATE", epoch, "2", "-"); status("STATE", replay);
+            eq("absent", replay.get(30)); eq("remove", replay.get(22));
+            status("WELCOME", guest.send(7, "HELLO", "guest", "-", "fact,fact_remove"));
+            status("OK", guest.send(8, "EFFECT", epoch, "remove", "guestRemoval", "fact", "sc_test_removed", "absent"));
+            List<String> tail = host.send(5, "GET_STATE", epoch, "3", "-"); status("STATE", tail);
+            eq("CLOSE", tail.get(20)); eq("4", tail.get(10)); // no second removal event
+        } finally { if (server.isAlive()) stop(server); }
     }
     private static void dialogueInstances(String java, String classes, Path root, int port) throws Exception {
         Path state = Files.createTempDirectory(root, "udp-dialogue-"); Process server = start(java, classes, state, port, "dialogue-first.log");
