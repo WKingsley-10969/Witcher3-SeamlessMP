@@ -34,6 +34,8 @@ for src in scripts.rglob('*'):
         out=package/'mod/mods/modWitcherOnline/content/scripts'/src.relative_to(scripts)
         out.parent.mkdir(parents=True,exist_ok=True)
         shutil.copy2(src,out)
+# The mod's settings menu (the join-conversations option), over the baseline's.
+shutil.copytree(work/'WitcherOnline/witcher/bin/config',package/'mod/bin/config',dirs_exist_ok=True)
 shutil.copy2(work/'witcher3-coop/w3test/build/w3test.asi',package/'mod/bin/x64_dx12/w3test.asi')
 shutil.copy2(work/'WitcherNativeBridge/build/Release/WitcherNativeBridge.asi',package/'mod/bin/x64_dx12/WitcherNativeBridge.asi')
 shutil.copy2(work/'WitcherOnline/client/build/Release/WitcherOnlineClient.asi',package/'mod/bin/x64_dx12/WitcherOnlineClient.asi')
