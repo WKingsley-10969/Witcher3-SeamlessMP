@@ -461,7 +461,7 @@ Branch rebased onto `8c920f9` before publication, preserving Claude's additional
   - `CoopLobbyTest` (server, 14 assertions, including the 403 from a LAN address). `SaveShareTest` now clears its folder, so it passes twice in a row.
   - Game test `lobby_save` (new): the second PC started with no save. The host's lobby listed it, and the host started with its save. The second PC downloaded the save, loaded it, joined the host's party and stood 1.5 m from the host.
   - Game test `lobby_new` (new): neither PC had a save. The host started a new game from the lobby, and the second PC started the same new game.
-  - Not rerun on the final code: `session_join` and `party_revive`, and `lobby_save` after removing the debug logging (the scripts compile). They need a save from the owner's Steam account, which was switched for other work.
+  - On the final code, merged with `main` (#10, party menu): `lobby_save` (run `20261025-163647`), `session_join` (`20261025-163839`) and `party_revive` (`20261025-164013`) passed.
 - **Limits:**
   - The **Co-op lobby** main-menu entry is not covered by the bots, which open the lobby directly.
   - In `lobby_new` both games start the prologue; joining the party then depends on the session's auto-party, which this test does not check.
