@@ -1,5 +1,11 @@
 # Verification — game integration, 2026-10-25
 
+## In-place installer verification (25 October 2026)
+
+The installer/profile launcher update is separate from the unchanged game payload below. `tests/Test-Install.ps1` passed 30 fixture scenarios in Windows PowerShell 5.1 and PowerShell 7: exact binary backups, no-op reinstall, updates without a game copy, superseded-file restoration, original retention across updates, full file-content revert, retained saves, reinstallation identity, outside edits, checksum/path/link/record/backup rejection, concurrent lock, failed writes and rollback, refused launch during a pending transaction, and recovery after killing an owned installer process during install and uninstall. Private fixture guards use fake executable bytes and do not operate on the actual installed game. The existing isolated-copy profile regression also passed on both shells.
+
+Managed-install launch construction is tested with fake game files; no real managed game session or two-physical-PC run has been verified. Earlier real-game results below used isolated copies. This installer package does not include PRs #2/#3 or enable their experimental recovery adapter.
+
 ## Real game checks
 
 Two actual Witcher 3 clients on one PC, separate copied saves/settings, direct local UDP server and automated bots. Target: Steam build 25773555, executable resource version 5.0.0.1048522. Executable SHA-256: `2df765398a3d1f165db418271be7200178320a4466817379f2fa0dc0001fb101`.
