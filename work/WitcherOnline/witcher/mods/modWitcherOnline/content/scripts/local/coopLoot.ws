@@ -535,6 +535,14 @@ class r_CoopLoot
         }
     }
 
+    // Tests: the newest shared corpse's loot here (a member's given the leader's loot, the leader's sent).
+    public function NewestCorpseRemains() : W3ActorRemains
+    {
+        if(corpseFilled.Size() > 0) { return CorpseRemains(corpseFilled[corpseFilled.Size() - 1]); }
+        if(corpsesSentKeys.Size() > 0) { return CorpseRemains(corpsesSentKeys[corpsesSentKeys.Size() - 1]); }
+        return NULL;
+    }
+
     private function CorpseTick(now : float)
     {
         var i, role : int;
