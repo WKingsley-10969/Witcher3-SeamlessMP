@@ -1,0 +1,76 @@
+# Witcher 3 LAN — development build
+
+Two Windows PCs on one home network: one hosts, the other joins by private IPv4 address. Built on **W3Coop v0.2.0**, a fork of **Witcher Online**. This is an experimental LAN adaptation, not a verified seamless campaign.
+
+The full development ZIP contains the native mod, its DLC/templates, Java server, LAN launchers, source and licenses. It contains no Witcher 3 installation or Java runtime. Each player needs a matching game. Target: Steam build **25773555**, executable resource version **5.0.0.1048522**; other builds are rejected until checked.
+
+## On this development PC
+
+An isolated game copy is already prepared by this chat. Use **Play Host LAN.cmd** to host it and choose a player name. The approved portable JDK is found in this workspace's `work/tooling` directory while the package stays in its current location.
+
+## Prepare the other PC
+
+1. Extract the complete LAN development ZIP into a short, writable path. Keep its folders together.
+2. With the matching Steam game installed and closed, run **Setup LAN.cmd**. The default Steam folder is supported. Setup creates a separate `game-copy` beside the launcher and needs about **70 GB of extra space**, plus headroom. It does not patch the registered Steam install.
+3. For other locations, use:
+
+```powershell
+.\Install-LAN.ps1 -SourceGameDir 'D:\SteamLibrary\steamapps\common\The Witcher 3' -Destination 'D:\W3LAN\game-copy'
+```
+
+The payload is hash-checked. Existing destinations are refused; replaced files in the new copy are backed up. Setup writes `launcher.settings.json` locally. Do not include that file, the game copy or personal saves in a public release.
+
+## Play over LAN
+
+1. Host: **Play Host LAN.cmd**, with a name such as `HostWitcher`. Keep the console open; it runs the UDP 40000 server alongside the game.
+2. Second PC: **Play Join LAN.cmd**, with a different name such as `GuestWitcher`. Enter the host's home-network IPv4 address shown in its console.
+3. Load matching saves in the same region and meet. Interact with the host character and choose **Join party** for shared enemies and quest updates. Different story branches are not a reliable starting point.
+
+**Nearby NPCs (new, experimental).** While in a party, the townsfolk, guards and characters such as Ciri within about 45 m of either player are shared. The host's game runs them, except that when the second PC walks up to one (within about 4 m and closer than the host), the second PC's game takes it over, so it reacts to that player at once; it goes back once they walk off. Whichever PC does not run an NPC shows a look-alike stand-in in its place that follows the other screen. You can't talk to a stand-in directly: walk up to it and the real NPC is handed to you first. Stand-ins walk and stand but do not play work animations, gestures or chatter.
+
+Steam must be running for the game normally. Mod traffic goes directly over LAN: no Steam relay, VPN or router port forwarding. If Windows Firewall blocks the host's Java process, allow it on your private home network; scripts do not change firewall rules. Guest Wi-Fi can isolate PCs.
+
+Only the host needs Java 21+. On another host, use `JAVA_HOME`, put a portable JDK under `runtime`, or pass `-JavaPath` to `Play-LAN.ps1`. Java is not installed automatically. Names are 2-16 ASCII letters, digits or underscores; choose different names, and avoid reserved `none`.
+
+## Saves, settings and controls
+
+Each player gets a separate `<game-copy>/.w3lan-profiles/<name>/The Witcher 3` profile. First use copies existing solo saves/settings; later launches preserve co-op progress. Originals are read for seeding and are not the game's save destination.
+
+The native helper redirects three imported Documents APIs and stops on invalid/missing hooks or paths resolving to the original Documents/save folder. Human mode does not activate bots, choose dialogue, mute audio or change focus/input. Launch arguments request 960×540. Normal menu/startup prompts remain yours to answer.
+
+This is application-level redirection, not an OS sandbox for every file access. It is tested on the pinned executable, not unrelated mods or future patches.
+
+```powershell
+.\Play-LAN.ps1 -Mode Host -GameDir 'D:\W3LAN\game-copy' -PlayerName HostWitcher
+.\Play-LAN.ps1 -Mode Join -GameDir 'D:\W3LAN\game-copy' -PlayerName GuestWitcher -Address 192.168.1.20
+```
+
+## Checks and limits
+
+The older **Host LAN.cmd** and **Join LAN.cmd** are server/probe tools; they do not launch or join Witcher 3. A probe proves UDP reachability only.
+
+```powershell
+.\Lan.ps1 -Mode Probe -Address 192.168.1.20
+.\tests\Test-Lan.ps1 -JavaPath 'C:\path\to\jdk-21\bin\java.exe'
+.\Build-Server.ps1 -JdkPath 'C:\path\to\jdk-21'
+```
+
+See **TEST-RESULTS.md** for actual checks. Real game tests use two clients on one PC. A second-PC LAN session, full quest playthrough, travel/death/rejoin recovery and expansion coverage are not yet established.
+
+Nearby-NPC limits: at most 24 shared NPCs and 12 stand-ins at a time (any beyond that are left on each game's own routine); only in a party and within about 45 m; a quest character's own script may still move or teleport it right after it is handed back. Tested with two clients on one PC on one Novigrad street, not yet on two physical PCs.
+
+Inherited limits include the roughly 60 m shared-enemy range, independently started scenes, incomplete enemy animation/spell/summon cases and per-player loot. This adaptation does not remove them. The server has no enforced two-player cap or authenticated LAN session; use it on your trusted home network.
+
+To remove the development installation, close its game/server and remove the separate copy and launcher folders. Keep desired co-op saves first. The normal Steam installation stays in place.
+
+## Credits and source
+
+- Original Witcher Online: rejuvenate7 and contributors, https://github.com/rejuvenate7/WitcherOnline, GPL-3.0.
+- W3Coop baseline: https://github.com/Emillock/witcher3-coop, v0.2.0, commit `1dea513153ecb4c8eefb2f6b4041d388971f3d09`.
+- Native client/server fork: https://github.com/Emillock/WitcherOnline, commit `3823f98c3364806a4b748f1e4b429101f013bc07`. Included source: `mod/W3Coop/source` and `server/src`.
+- WitcherNativeBridge: Flawkee and rejuvenate7, MIT, https://github.com/rejuvenate7/WitcherNativeBridge; built from `415e1c1e79a9d5ab78629c70cd3a76131ad98941`. Included under `source/WitcherNativeBridge`.
+- Ultimate ASI Loader: ThirteenAG, MIT; license included with the baseline mod.
+- LAN launchers, profile-helper changes and tests: MIT. Included under the package root, `source/witcher3-coop/w3test` and `source/native-tests`. This does not replace upstream GPL-3.0 licensing.
+- Workflow: https://github.com/cranebeaker/coop-anything/blob/main/AGENTS.md.
+
+This unofficial fan project is not affiliated with CD PROJEKT RED or Valve.

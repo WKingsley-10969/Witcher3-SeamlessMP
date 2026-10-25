@@ -1,0 +1,7356 @@
+// Witcher Online by rejuvenate
+// https://www.nexusmods.com/profile/rejuvenate7
+struct r_AnimRequest
+{
+    var anim : name;
+    var duration : float;
+    var fadeIn : float;
+    var fadeOut : float;
+    var overrideNow : bool;
+    var type : name;
+    var loop : bool;
+}
+
+struct r_Anim
+{
+    var anim : name;
+    var duration : float;
+}
+
+struct r_GwentGame
+{
+    var deck : SDeckDefinition;
+    var faction : eGwintFaction;
+}
+
+statemachine class r_RemotePlayer 
+{
+    public var serverPlayerId      : int;
+    public var lastMovementSequence : int;
+    public var id      : string;
+    public var lastUpdate : float;
+    public var username      : string;
+    public var idName      : name;
+    public var pos     : Vector;
+    public var lastMoveDir : name;
+    public var lastMoveDirAlt : name;
+    public var lastMoveDirAltAlt : name;
+    public var lastVerticalMoveDir : name;
+    public var yaw     : float;
+    public var heading     : float;
+    public var speed     : float;
+    public var area     : int; // old EAreaName code, see areaCompat.ws
+    public var ghost     : CActor;
+    public var inGame : bool;
+    public var heldItem : string;
+    public var heldSecondaryItem : string;
+    public var inCombat : bool;
+    public var lastCombat : bool;
+    public var isGuarded : bool;
+    public var lastHit : float;
+    public var lastParry : float;
+    public var lastFinisher : float;
+    public var signType : ESignType;
+    public var lastSign : float;
+    public var horseSpeed : float;
+    public var menuName : string;
+    public var menuStatusActive : bool;
+    public var lastStatus : string;
+    public var lastUsername : string;
+    public var lastDummyUsername : string;
+
+    public var isSwimming : bool;
+    public var isDiving : bool;
+    public var isFalling : bool;
+    public var isSailing : bool;
+    public var isMounted : bool;
+    public var lastMounted : bool;
+    public var aimingCrossbow : bool;
+    public var lastAimingCrossbow : bool;
+    public var lastMovement : bool;
+    public var smoothNext : bool;
+    public var smoothDelayedNext : bool;
+    public var bombActive : bool;
+    public var bombSelected : bool;
+    public var lastBombSelected : bool;
+    public var isAlive : bool;
+    public var lastAlive : bool;
+    public var lastSliding : bool;
+    public var isJumping : bool;
+    public var isClimbing : bool;
+
+    public var curState : name;
+    public var currentState : name;
+    public var lastJumpTime : float;
+    public var lastJumpType : EJumpType;
+    public var lastClimbType : EClimbHeightType;
+    public var lastSwimType : name;
+    public var lastMovementType : name;
+
+    public var lastLightAttackTime : float;
+    public var lastHeavyAttackTime : float;
+    public var lastDodgeTime : float;
+    public var lastRollTime : float;
+    public var prevHitTime : float;
+    public var prevParryTime : float;
+    public var prevRollTime : float;
+    public var prevDodgeTime : float;
+    public var prevFinisherTime : float;
+    public var prevSignTime : float;
+    public var signVisualAt : float;       // when to show the last cast's area visual (with its throw)
+    public var signVisualType : ESignType;
+    public var quenShield : name;          // Quen's lasting shield shown on the copy
+    public var quenShieldUntil : float;    // when to drop it, for a player whose game doesn't send signFx
+    public var quenShieldNames : array<name>;  // the template's lasting shields by S_Magic_s13 level 0-3
+    // snapshot fields 73-79, sent by games that have them (signFx): the player's own Quen shield is up; the last
+    // cast's sign, Yrden range and duration, and Quen shield level; how often their Quen played its hit burst and impulse
+    public var signFx : bool;
+    public var quenUp : bool;
+    public var castSignType : ESignType;
+    public var castYrdenRange : float;
+    public var castYrdenDuration : float;
+    public var castQuenLevel : int;
+    public var quenBurstSeq : int;
+    public var quenImpulseSeq : int;
+    public var prevQuenBurstSeq : int;
+    public var prevQuenImpulseSeq : int;
+    public var yrdenRunes : array<CEntity>;  // Yrden's trap drawn around the copy, and until when
+    public var yrdenRunesUntil : float;
+    public var prevJumpTime : float;
+    public var prevClimbTime : float;
+    public var isLadder : bool;
+    public var lastLadder : bool;
+    public var lastLeftLadder : bool;
+    public var lastFiredDir : name;
+    public var lastLastFiredDir : name;
+    public var lastLadderTick : float;
+
+    public var lastAnim : name;
+    public var lastEmote : int;
+    public var lastEmoteTime : float;
+    public var prevEmoteTime : float;
+    public var emoteCancelableAt : float;
+
+    public var lastChat : string;
+    public var lastChatTime : float;
+    public var prevChatTime : float;
+
+    public var prevHeavyTime : float;
+    public var prevLightTime : float;
+
+    public var animQueue : array<r_AnimRequest>;
+    public var currentAnimEndTime : float;
+    public var isAnimPlaying : bool;
+    public var currentType : name;
+
+    public var chillOutAnim : name; 
+    public var lastChillOutAnim : name; 
+    public var lastChillOut : bool;
+    public var chillRequeueLead : float;
+    public var holdingTorch : bool;
+
+    public var lastRoll : bool;
+    public var lastDiving : bool;
+
+    public var lastIdleAnim : float;
+    public var lastIdle : bool;
+    public var lastIdleRand : int;
+
+    public var stamina : float;
+    public var swirling : bool;
+    public var lastSwirling : bool;
+    public var rend : bool;
+    public var lastRend : bool;
+    public var channeling : bool;
+    public var lastChanneling : bool;
+    public var chatShownAt : float;
+
+    public var lastActionTime : float;
+    public var prevActionTime : float;
+    public var lastAction : EPlayerExplorationAction;
+
+    public var finisherMonster : bool;
+    public var currentEmoteLoops : bool;
+    public var currentEmoteLoopDur : float;
+
+    public var initSmooth : bool;
+
+    public var isRiding : bool;
+    public var ridingPlayerId : int;
+
+    public var outgoingTradeTo : string;
+    public var outgoingTradeItem : name;
+    public var outgoingTradePrice : int;
+    public var outgoingTradeFlag : int;
+    default outgoingTradeFlag = -1;
+
+    public var tradeHandshake : bool;
+
+    // gwent
+    public var outgoingGwentTo : string;
+    public var outgoingGwentRequest : E_GwentRequest;
+    public var outgoingGwentBet : int;
+    public var outgoingGwentSeed : int;
+
+    public var gwentHandshake : bool;
+
+    // items
+    public var eq_steel : name;
+    public var eq_silver : name;
+    public var eq_armor : name;
+    public var eq_gloves : name;
+    public var eq_pants : name;
+    public var eq_boots : name;
+    public var eq_head : name;
+    public var eq_hair : name;
+    public var eq_steelScab : name;
+    public var eq_silverScab : name;
+    public var eq_crossbow : name;
+    public var eq_mask : name;
+
+    public var last_eq_steel : name;
+    public var last_eq_silver : name;
+    public var last_eq_armor : name;
+    public var last_eq_gloves : name;
+    public var last_eq_pants : name;
+    public var last_eq_boots : name;
+    public var last_eq_head : name;
+    public var last_eq_hair : name;
+    public var last_eq_steelScab : name;
+    public var last_eq_silverScab : name;
+    public var last_eq_crossbow : name;
+    public var last_eq_mask : name;
+
+    // cpc
+    public var cpcPlayerType : ENR_PlayerType;
+    public var cpcHead : name;
+    public var cpcHair : string;
+    public var cpcBody : string;
+    public var cpcTorso : string;
+    public var cpcArms : string;
+    public var cpcGloves : string;
+    public var cpcDress : string;
+    public var cpcLegs : string;
+    public var cpcShoes : string;
+    public var cpcMisc : string;
+    public var cpcItem1 : string;
+    public var cpcItem2 : string;
+    public var cpcItem3 : string;
+    public var cpcItem4 : string;
+    public var cpcItem5 : string;
+    public var cpcItem6 : string;
+    public var cpcItem7 : string;
+    public var cpcItem8 : string;
+    public var cpcItem9 : string;
+    public var cpcItem10 : string;
+
+    public var lastcpcPlayerType : ENR_PlayerType;
+
+    public var lastcpcHead : name;
+    public var lastcpcHair : string;
+    public var lastcpcBody : string;
+    public var lastcpcTorso : string;
+    public var lastcpcArms : string;
+    public var lastcpcGloves : string;
+    public var lastcpcDress : string;
+    public var lastcpcLegs : string;
+    public var lastcpcShoes : string;
+    public var lastcpcMisc : string;
+    public var lastcpcItem1 : string;
+    public var lastcpcItem2 : string;
+    public var lastcpcItem3 : string;
+    public var lastcpcItem4 : string;
+    public var lastcpcItem5 : string;
+    public var lastcpcItem6 : string;
+    public var lastcpcItem7 : string;
+    public var lastcpcItem8 : string;
+    public var lastcpcItem9 : string;
+    public var lastcpcItem10 : string;
+
+    public var cpcHairTemp : CEntityTemplate;
+    public var cpcBodyTemp : CEntityTemplate;
+    public var cpcTorsoTemp : CEntityTemplate;
+    public var cpcArmsTemp : CEntityTemplate;
+    public var cpcGlovesTemp : CEntityTemplate;
+    public var cpcDressTemp : CEntityTemplate;
+    public var cpcLegsTemp : CEntityTemplate;
+    public var cpcShoesTemp : CEntityTemplate;
+    public var cpcMiscTemp : CEntityTemplate;
+    public var cpcItem1Temp : CEntityTemplate;
+    public var cpcItem2Temp : CEntityTemplate;
+    public var cpcItem3Temp : CEntityTemplate;
+    public var cpcItem4Temp : CEntityTemplate;
+    public var cpcItem5Temp : CEntityTemplate;
+    public var cpcItem6Temp : CEntityTemplate;
+    public var cpcItem7Temp : CEntityTemplate;
+    public var cpcItem8Temp : CEntityTemplate;
+    public var cpcItem9Temp : CEntityTemplate;
+    public var cpcItem10Temp : CEntityTemplate;
+
+    public var hideBody : bool;
+    public var headOverride : bool;
+    public var hideHair : bool;
+
+    public var nextOnelinerEnsureAt : float;
+    public var cpcNeedsRebuild : bool;
+
+    public var horse : CActor;
+    public var boat : CActor;
+    public var morph : CActor;
+
+    public var horseAppearance : string;
+    public var prevEmote : int;
+    public var prevPropEmote : bool;
+
+    public var playerNum : int;
+    default playerNum = -1;
+
+    public var morphActive : bool;
+    public var morphType : name;
+    public var morphAppearance : name;
+    public var morphRotation : float;
+
+    public var gwentGame : r_GwentGame;
+    public var lastGwentAction : string;
+    public var lastGwentActionTime  : float;
+    public var prevGwentActionTime : float;
+    default prevGwentActionTime = -1;
+
+    // party
+    public var inParty : bool;
+    public var joinedParty : string;
+    public var lastJoinedParty : string;
+    public var lastInParty : bool;
+
+    public var weather : name;
+    public var day, hour, minute, second : int;
+
+    public var dialogChoices : array<wo_SSceneChoice>;
+    public var lastDialogIndex : int;
+    public var lastDialogCount : int;
+    public var prevDialogCount : int;
+    public var dialogChoicesActive : bool;
+
+    public var armorDye : int;
+    public var gloveDye : int;
+    public var pantDye : int;
+    public var bootDye : int;
+
+    public var lastArmorDye : int;
+    default lastArmorDye = 1;
+
+    public var lastGloveDye : int;
+    default lastGloveDye = 1;
+
+    public var lastPantDye : int;
+    default lastPantDye = 1;
+
+    public var lastBootDye : int;
+    default lastBootDye = 1;
+
+    public var health : float;
+    default health = 1;
+
+    private var chillOutNPCCleanupAt : float;
+    private var chillOutNPCCleanupInterval : float;
+
+    default chillOutNPCCleanupAt = -999;
+    default chillOutNPCCleanupInterval = 1.0;
+
+    protected var npcAdjustorDelay : float;
+    default npcAdjustorDelay = 0.4;
+
+    protected var horseAdjustorDelay : float;
+    default horseAdjustorDelay = 0.4;
+
+    protected var boatAdjustorDelay : float;
+    default boatAdjustorDelay = 0.4;
+
+    protected var morphAdjustorDelay : float;
+    default morphAdjustorDelay = 0.4;
+
+    public function setDeck(val : SDeckDefinition)
+    {
+        gwentGame.deck = val;
+    }
+
+    public function setFaction(val : int)
+    {
+        var manager : CR4GwintManager;
+        manager = theGame.GetGwintManager();
+
+#ifdef WO_GWENT_PVP
+        gwentGame.faction = manager.leaderIndexToFaction(val);
+#endif
+    }
+
+    public function getGwentGame() : r_GwentGame
+    {
+        return gwentGame;
+    }
+
+    private function loadHead(newHeadName : name) {
+		var headManager : CHeadManagerComponent;
+
+		headManager = (CHeadManagerComponent)(ghost.GetComponentByClassName( 'CHeadManagerComponent' ));
+		headManager.BlockGrowing( true );
+		headManager.SetCustomHead( newHeadName );
+	}
+
+    protected function removeTemplate(temp : CEntityTemplate)
+    {
+        var appearanceComponent : CAppearanceComponent;
+        appearanceComponent = (CAppearanceComponent)ghost.GetComponentByClassName( 'CAppearanceComponent' );
+        appearanceComponent.ExcludeAppearanceTemplate(temp);
+    }
+
+    private function updateCPC()
+    {
+        if(NR_GetPlayerManager().IsPlayerTypeChangeLocked() || theGame.IsDialogOrCutscenePlaying() || thePlayer.IsInNonGameplayCutscene() || !ghost)
+            return;
+        
+        if(this.GetCurrentStateName() != 'WO_UpdateCPC')
+        {
+            this.GotoState('WO_UpdateCPC');
+        }
+    }
+
+    protected function queueAnim(anim : name, duration : float, fadeIn : float, fadeOut : float, type : name, optional overrideNow : bool, optional loop : bool)
+    {
+        var req : r_AnimRequest;
+
+        req.anim = anim;
+        req.duration = duration;
+        req.fadeIn = fadeIn;
+        req.fadeOut = fadeOut;
+        req.type = type;
+        req.overrideNow = overrideNow;
+        req.loop = loop;
+
+        if(currentType == 'emote' && type == 'emote' && overrideNow && (lastAnim != anim))
+        {
+            animQueue.Clear();
+            playAnimNow(req);
+            return;
+        }
+
+        if (isAnimPlaying && currentType == 'emote' && type != 'emote')
+            return;
+
+        if (!isAnimPlaying && animQueue.Size() > 0 && animQueue[0].type == 'emote' && type != 'emote')
+            return;
+
+        if (!overrideNow && isAnimPlaying && currentType == type && lastAnim == anim)
+            return;
+
+        if (animQueue.Size() > 0)
+        {
+            if (animQueue[0].anim == anim && animQueue[0].type == type && !overrideNow)
+                return;
+        }
+
+        if (isAnimPlaying && IsLocomotion(currentType) && IsLocomotion(type) && currentType != type)
+        {
+            animQueue.Clear();
+            playAnimNow(req);
+            return;
+        }
+
+        if ((isAnimPlaying && currentType == 'emote') || (animQueue.Size() > 0 && animQueue[0].type == 'emote'))
+        {
+            if (type != 'emote') 
+                return;
+            if (animQueue.Size() >= 5) 
+                return; 
+
+            animQueue.PushBack(req);
+            return;
+        }
+
+        if(overrideNow)
+        {
+            animQueue.Clear();
+            playAnimNow(req);
+            return;
+        }
+
+        if (animQueue.Size() > 0)
+        {
+            if (isAnimPlaying && IsProtected(currentType) && IsLocomotion(type))
+            {
+                animQueue[0] = req;
+                return;
+            }
+
+            if (IsLocomotion(animQueue[0].type) && IsLocomotion(type) && animQueue[0].type != type)
+            {
+                animQueue.Clear();
+                playAnimNow(req);
+                return;
+            }
+        }
+
+        if(type == 'chillout' && animQueue.Size() >= 1) 
+            return;
+
+        if (animQueue.Size() >= 3) 
+            return;
+
+        animQueue.PushBack(req);
+    }
+
+    private function playAnimFromQueue()
+    {
+        var request : r_AnimRequest;
+
+        if (isAnimPlaying) return;
+        if (animQueue.Size() == 0) return;
+
+        request = animQueue[0];
+        animQueue.Erase(0);
+        playAnimNow(request);
+    }
+
+    private function playAnimNow(request : r_AnimRequest)
+    {
+        var now : float;
+        now = theGame.GetEngineTimeAsSeconds();
+        
+        if(lastAnim != request.anim && request.type == 'emote' && request.loop)
+        {
+            request.fadeIn = 0.4f;
+        }
+
+        ghost.GetRootAnimatedComponent().PlaySlotAnimationAsync(
+            request.anim, 
+            'NPC_ANIM_SLOT',
+            SAnimatedComponentSlotAnimationSettings(request.fadeIn, request.fadeOut)
+        );
+
+        isAnimPlaying = true;
+        currentType = request.type; 
+        currentAnimEndTime = now + request.duration;
+
+        if (currentType == 'emote')
+        {
+            currentEmoteLoops = request.loop;
+            currentEmoteLoopDur = request.duration;
+
+            if (emoteCancelableAt <= 0.0f)
+            {
+                emoteCancelableAt = now + 4.0f;
+            }
+        }
+        else
+        {
+            emoteCancelableAt = 0.0f;
+            currentEmoteLoops = false;
+            currentEmoteLoopDur = 0.0f; 
+        }
+
+        lastAnim = request.anim;
+    }
+
+    private function stopAllAnims()
+    {
+        animQueue.Clear();
+
+        isAnimPlaying = false;
+        currentAnimEndTime = 0.0f;
+        currentType = 'none';
+        lastAnim = '';
+
+        currentEmoteLoops = false;
+        currentEmoteLoopDur = 0.0f;
+        emoteCancelableAt = 0.0f;
+
+        ghost.GetRootAnimatedComponent().PlaySlotAnimationAsync( '', 'NPC_ANIM_SLOT', SAnimatedComponentSlotAnimationSettings(0.7f, 0.7f) );
+
+        smoothNext = true;
+    }
+
+    private function updateAnimState()
+    {
+        var now : float = theGame.GetEngineTimeAsSeconds();
+        var req : r_AnimRequest;
+
+        if (isAnimPlaying && theGame.GetEngineTimeAsSeconds() >= currentAnimEndTime)
+        {
+            if (currentType == 'emote' && currentEmoteLoops && animQueue.Size() == 0)
+            {
+                req.anim = lastAnim;
+                req.duration = currentEmoteLoopDur;
+                req.fadeIn = 0.0f;
+                req.fadeOut = 0.0f;
+                req.type = 'emote';
+                req.overrideNow = true;
+                req.loop = true;
+
+                playAnimNow(req);
+                return;
+            }
+
+            isAnimPlaying = false;
+
+            if (animQueue.Size() == 0)
+            {
+                if (currentType == 'emote')
+                {
+                    theGame.r_getMultiplayerClient().unmountItems(ghost);
+                    smoothNext = true;
+                }
+
+                currentType = 'none';
+                currentEmoteLoops = false;
+                currentEmoteLoopDur = 0.0f;
+                emoteCancelableAt = 0.0f;  
+            }
+        }
+
+        if (isAnimPlaying && currentType == 'emote')
+        {
+            if(lastEmote == -2)
+            {
+                stopAllAnims();
+                theGame.r_getMultiplayerClient().unmountItems(ghost);
+                lastEmote = -1;
+            }
+        }
+
+        if (!isAnimPlaying && animQueue.Size() > 0)
+        {
+            playAnimFromQueue();
+        }
+    }
+
+    private function IsLocomotion(t : name) : bool
+    {
+        return (t == 'forward' || t == 'backward' || t == 'left' || t == 'right' 
+                || t == 'fistidle' || t == 'swordidle' || t == 'parryswordidle' || t == 'parryfistidle'
+                || t == 'swim_idle' || t == 'swim_idle_underwater' || t == 'swim_fast_f' || t == 'swim_fast_l' || t == 'swim_fast_r' || t == 'swim_slow_f' || t == 'swim_slow_l' || t == 'swim_slow_r' || t == 'swim_up_f' || t == 'swim_up_l' || t == 'swim_up_r' || t == 'swim_down_f' || t == 'swim_down_l' || t == 'swim_down_r' || t == 'swim_underwater_f' || t == 'swim_underwater_l' || t == 'swim_underwater_r'
+                || t == 'sailing' 
+                || t == 'mounted_0' || t == 'mounted_1' || t == 'mounted_2' || t == 'mounted_3' 
+                || t == 'mounted_4' || t == 'mounted_5'
+                || t == 'crossbow_forward' || t == 'crossbow_backward' || t == 'crossbow_left' || t == 'crossbow_right' || t == 'crossbow_idle' || t == 'swim_crossbow_idle'
+                || t == 'falling'
+                || t == 'movement_idle' || t == 'movement_slow_walk' || t == 'movement_walk' || t == 'movement_run' || t == 'movement_sprint'
+                || t == 'sword_movement_idle' || t == 'sword_movement_slow_walk' || t == 'sword_movement_walk' || t == 'sword_movement_run' || t == 'sword_movement_sprint'
+                || t == 'ladder_up' || t == 'ladder_down' || t == 'bomb'
+                || t == 'chillout' || t == 'slide' || t == 'swirl');
+    }
+
+    private function IsProtected(t : name) : bool
+    {
+        return (t == 'dodge' || t == 'roll' || t == 'attack' || t == 'hit' || t == 'parry' || t == 'finisher'
+                || t == 'sign' || t == 'jump' || t == 'climb' || t == 'dead' || t == 'rend');
+    }
+
+    protected function ensureOneliners()
+    {
+        MP_SUOL_getManager().deleteRemotePlayerOneliners(serverPlayerId);
+
+        MP_SUOL_getManager().deleteByTag("MPGhost" + id);
+        MP_SUOL_getManager().deleteByTag("MPGhostStatus" + id);
+        MP_SUOL_getManager().deleteByTag("MPGhostDummy" + id);
+
+        createOneliner();
+        createStatusOneliner();
+    }
+
+    private var lastEntityUsernameColor : string;
+    private var lastDummyUsernameColor : string;
+
+    private function getUsernameColor() : string
+    {
+        var colors : array<r_NameColor>;
+        var i : int;
+        var myJoinedParty : string;
+
+        colors = theGame.r_getMultiplayerClient().getNameColors();
+
+        if(theGame.r_getMultiplayerClient().getInParty())
+        {
+            myJoinedParty = theGame.r_getMultiplayerClient().getJoinedParty();
+
+            if(myJoinedParty == username)
+            {
+                return "#5ACCF6";
+            }
+            else if(inParty && joinedParty == myJoinedParty)
+            {
+                return "#5ACCF6";
+            }
+        }
+        else
+        {
+            if(inParty && joinedParty == theGame.r_getMultiplayerClient().getUsername())
+            {
+                return "#5ACCF6";
+            }
+        }
+
+        for(i = 0; i < colors.Size(); i += 1)
+        {
+            if(colors[i].playerName == username)
+            {
+                return colors[i].color;
+            }
+        }
+
+        return "#EDCBA3";
+    }
+
+    private function createOneliner()
+    {
+        var tag: string;
+        var oneliner: MP_SU_OnelinerEntity;
+        var finalUsername: string;
+        var color: string;
+
+        tag = "MPGhost" + id;
+
+        color = getUsernameColor();
+
+        if(theGame.r_getMultiplayerClient().isDev(username))
+        {
+            finalUsername = "[DEV] " + username;
+        }
+        else
+        {
+            finalUsername = username;
+        }
+
+        oneliner = (MP_SU_OnelinerEntity)MP_SUOL_getManager().findByIntTag(MP_SUOL_usernameKey(serverPlayerId));
+
+        if(oneliner)
+        {
+            oneliner.entity = ghost;
+            oneliner.visible = true;
+            return;
+        }
+
+        MP_SUOL_getManager().deleteByTag(tag);
+
+        oneliner = new MP_SU_OnelinerEntity in theInput;
+
+        oneliner.text = (new MP_SUOL_TagBuilder in theInput)
+        .tag("font")
+        .attr("size", "20")
+        .attr("color", color)
+        .text(finalUsername);
+
+        oneliner.visible = true;
+        oneliner.entity = ghost;
+        oneliner.tag = tag;
+        oneliner.intTag = MP_SUOL_usernameKey(serverPlayerId);
+
+        oneliner.render_distance = StringToInt(theGame.GetInGameConfigWrapper().GetVarValue('MPGhosts_Main','MPGhosts_RenderDistance'));
+
+        MP_SUOL_getManager().createOneliner(oneliner);
+    }
+
+    private function createDummyOneliner()
+    {
+        var oneliner: MP_SU_Oneliner;
+        var tag: string;
+        var finalUsername: string;
+        var color: string;
+
+        tag = "MPGhostDummy" + id;
+
+        color = getUsernameColor();
+
+        if(theGame.r_getMultiplayerClient().isDev(username))
+        {
+            finalUsername = "[DEV] " + username;
+        }
+        else
+        {
+            finalUsername = username;
+        }
+
+        MP_SUOL_getManager().deleteByTag(tag);
+
+        oneliner = new MP_SU_Oneliner in theInput;
+
+        oneliner.text = (new MP_SUOL_TagBuilder in theInput)
+        .tag("font")
+        .attr("size", "20")
+        .attr("color", color)
+        .text(finalUsername);
+
+        oneliner.position = pos;
+        oneliner.tag = tag;
+        oneliner.intTag = MP_SUOL_dummyKey(serverPlayerId);
+        oneliner.visible = true;
+
+        oneliner.render_distance = StringToInt(theGame.GetInGameConfigWrapper().GetVarValue('MPGhosts_Main','MPGhosts_RenderDistance'));
+
+        MP_SUOL_getManager().createOneliner(oneliner);
+    }
+
+    private function createStatusOneliner()
+    {
+        var tag: string;
+        var chatOneliner: MP_SU_OnelinerEntity;
+
+        tag = "MPGhostStatus" + id;
+
+        lastStatus = "";
+
+        chatOneliner = (MP_SU_OnelinerEntity)MP_SUOL_getManager().findByIntTag(MP_SUOL_statusKey(serverPlayerId));
+
+        if(chatOneliner)
+        {
+            chatOneliner.entity = ghost;
+            chatOneliner.visible = false;
+            return;
+        }
+
+        MP_SUOL_getManager().deleteByTag(tag);
+
+        chatOneliner = new MP_SU_OnelinerEntity in theInput;
+        chatOneliner.head = true;
+        chatOneliner.visible = false;
+        chatOneliner.entity = ghost;
+        chatOneliner.tag = tag;
+        chatOneliner.intTag = MP_SUOL_statusKey(serverPlayerId);
+        chatOneliner.render_distance = 100;
+
+        MP_SUOL_getManager().createOneliner(chatOneliner);
+    }
+
+    private function updateUsername()
+    {
+        var oneliner     : MP_SU_OnelinerEntity;
+        var tag : string;
+        var color : string;
+        var finalUsername : string;
+        
+        color = getUsernameColor();
+
+        tag = "MPGhost" + id;
+
+        if(theGame.r_getMultiplayerClient().isDev(username))
+        {
+            finalUsername = "[DEV] " + username;
+        }
+        else
+        {
+            finalUsername = username;
+        }
+
+        if(lastUsername != username || lastEntityUsernameColor != color)
+        {
+            lastUsername = username;
+            lastEntityUsernameColor = color;
+
+            oneliner = (MP_SU_OnelinerEntity)MP_SUOL_getManager().findByIntTag(MP_SUOL_usernameKey(serverPlayerId));
+        
+            if(!oneliner)
+                return;
+
+            oneliner.text = (new MP_SUOL_TagBuilder in theInput)
+            .tag("font")
+            .attr("size", "20")
+            .attr("color", color)
+            .text(finalUsername);
+
+            oneliner.visible = true;
+            MP_SUOL_getManager().updateOneliner(oneliner);
+        }
+    }
+
+    private function updateDummyOneliner()
+    {
+        var oneliner     : MP_SU_Oneliner;
+        var tag : string;
+        var color : string;
+        var finalUsername : string;
+        
+        color = getUsernameColor();
+
+        tag = "MPGhostDummy" + id;
+
+        oneliner = (MP_SU_Oneliner)MP_SUOL_getManager().findByIntTag(MP_SUOL_dummyKey(serverPlayerId));
+    
+        if(!oneliner)
+        {
+            createDummyOneliner();
+            return;
+        }
+
+        if(theGame.r_getMultiplayerClient().isDev(username))
+        {
+            finalUsername = "[DEV] " + username;
+        }
+        else
+        {
+            finalUsername = username;
+        }
+        
+        if(lastDummyUsername != username || lastDummyUsernameColor != color)
+        {
+            lastDummyUsername = username;
+            lastDummyUsernameColor = color;
+            
+            oneliner.text = (new MP_SUOL_TagBuilder in theInput)
+            .tag("font")
+            .attr("size", "20")
+            .attr("color", color)
+            .text(finalUsername);
+        }
+        
+        if(!isInRange())
+        {
+            oneliner.visible = true;
+        }
+        else
+        {
+            oneliner.visible = false;
+        }
+
+        oneliner.render_distance = StringToInt(theGame.GetInGameConfigWrapper().GetVarValue('MPGhosts_Main', 'MPGhosts_RenderDistance'));
+        oneliner.position = pos;
+        MP_SUOL_getManager().updateOneliner(oneliner);
+    }
+
+    private function updateStatus(msg : string)
+    {
+        var tag : string;
+        var chatOneliner     : MP_SU_OnelinerEntity;
+
+        tag = "MPGhostStatus" + id;
+
+        chatOneliner = (MP_SU_OnelinerEntity)MP_SUOL_getManager().findByIntTag(MP_SUOL_statusKey(serverPlayerId));
+
+        if(!chatOneliner)
+            return;
+
+        chatOneliner.text = (new MP_SUOL_TagBuilder in theInput)
+        .tag("font")
+        .attr("size", "20")
+        .attr("color", "#ffffff")
+        .text(msg);
+
+        MP_SUOL_getManager().updateOneliner(chatOneliner);
+    }
+
+    public function updateOnelinerHeights()
+    {
+        var oneliner     : MP_SU_OnelinerEntity;
+        var tag : string;
+        var statusTag : string;
+        var chatOneliner     : MP_SU_OnelinerEntity;
+        var ridingPlayer : r_RemotePlayer;
+
+        tag = "MPGhost" + id;
+        statusTag = "MPGhostStatus" + id;
+
+        oneliner     = (MP_SU_OnelinerEntity)MP_SUOL_getManager().findByIntTag(MP_SUOL_usernameKey(serverPlayerId));
+        chatOneliner = (MP_SU_OnelinerEntity)MP_SUOL_getManager().findByIntTag(MP_SUOL_statusKey(serverPlayerId));
+
+        if(!oneliner || !chatOneliner)
+        {
+            return;
+        }
+
+        //ridingPlayer = hm_getRemotePlayer(theGame.r_getMultiplayerClient().getPlayerMap(), ridingPlayerId);
+        ridingPlayer = theGame.r_getMultiplayerClient().getPlayerByServerId(ridingPlayerId);
+
+        if(isMounted || (ridingPlayer && isRiding && ridingPlayer.isMounted))
+        {
+            oneliner.offset = Vector(0,0,1);
+
+            MP_SUOL_getManager().updateOneliner(oneliner);
+            MP_SUOL_getManager().updateOneliner(chatOneliner);
+        }
+        else
+        {
+            oneliner.offset = Vector(0,0,0);
+            MP_SUOL_getManager().updateOneliner(oneliner);
+            MP_SUOL_getManager().updateOneliner(chatOneliner);
+        }
+    }
+
+    private function createPin()
+    {
+        var pin: MP_SU_MapPin;
+        var tagname : name;
+
+        pin = MP_SUMP_getCustomPinByPlayerId(playerNum);
+
+        if(pin)
+        {
+            return;
+        }
+
+        pin = new MP_SU_MapPin in this;
+        pin.tag = "MPGhost_" + id;
+        pin.pin_tag = idName;
+        pin.playerId = playerNum;
+
+        if(ghost)
+        {
+            pin.position = ghost.GetWorldPosition();
+        }
+        else
+        {
+            pin.position = pos;
+        }
+
+        pin.description = username + GetLocStringById(2111114265);
+        pin.label = username;
+        pin.type = "Player";
+        pin.radius = 0;
+        pin.region = area;
+        pin.appears_on_minimap = true;
+        pin.highlighted = false;
+        pin.pointed_by_arrow = false;
+        pin.is_fast_travel = true;
+
+        MP_SUMP_addCustomPin(pin);
+    }
+
+    private function updatePin()
+    {
+        var playerAngle         : float;
+        var pin : MP_SU_MapPin;
+
+        playerAngle = -yaw;
+        pin = MP_SUMP_getCustomPinByPlayerId(playerNum);
+
+        if(!pin)
+        {
+            createPin();
+            return;
+        }
+
+        if ( playerAngle < 0 )
+		{
+			playerAngle += 360.0;
+		}
+
+        if(ghost)
+        {
+            pin.position = ghost.GetWorldPosition();
+        }
+        else
+        {
+            pin.position = pos;
+        }
+
+        pin.rotation = playerAngle;
+        pin.description = username + GetLocStringById(2111114265);
+        pin.label = username;
+        pin.region = area;
+    }
+
+    public function destroyPin()
+    {
+        MP_SU_removeCustomPinByPlayerId(playerNum);
+    }
+
+    private function resetStates()
+    {
+        prevJumpTime = 0;
+        chatShownAt = -1;
+
+        prevLightTime = -1;
+        prevHeavyTime = -1;
+        prevHitTime = -1;
+        prevParryTime = -1;
+        prevRollTime = -1;
+        prevDodgeTime = -1;
+        prevFinisherTime = -1;
+        prevSignTime = -1;
+        prevQuenBurstSeq = -1;
+        prevQuenImpulseSeq = -1;
+        prevEmoteTime = -1;
+        prevChatTime = -1;
+        prevActionTime = -1;
+        prevGwentActionTime = -1;
+
+        lastMoveDir = 'none';
+        lastVerticalMoveDir = 'none';
+        currentType = 'none';
+        lastSwimType = 'none';
+        lastMovementType = 'none';
+        lastEmote = -1;
+        prevEmote = -1;
+
+        lastIdleAnim = theGame.GetEngineTimeAsSeconds();
+    }
+
+    public function Init()
+    {
+        if (playerNum < 0)
+        {
+            playerNum = theGame.r_getMultiplayerClient().getNextPlayerNum();
+        }
+        
+        if(isInRange())
+        {
+            spawnGhost();
+        }
+
+        createPin();
+        isAlive = true;
+
+        resetStates();
+
+        chillRequeueLead = 0.12;
+        outgoingTradeFlag = -1;
+        
+        smoothNext = true;
+
+        lastcpcPlayerType = ENR_PlayerGeralt;
+    }
+
+    protected function ClassifyMoveDirRelativeToCamera(entpos : Vector, targpos : Vector, camYawDeg : float) : name
+    {
+        var moveVec : Vector;
+        var moveHeadingDeg, d : float;
+
+        moveVec = targpos - entpos;
+
+        if (VecLength(moveVec) < 0.05f)
+            return 'none';
+
+        moveHeadingDeg = VecHeading(moveVec);
+        d = AngleDistance(moveHeadingDeg, camYawDeg);
+
+        if (AbsF(d) <= 45.0f)      
+            return 'forward';
+        if (AbsF(d) >= 135.0f)     
+            return 'backward';
+        if (d > 0.0f)              
+            return 'left';
+
+        return 'right';
+    }
+
+    private function ClassifyVerticalMoveDir(entpos : Vector, targpos : Vector) : name
+    {
+        var deltaZ : float;
+        deltaZ = targpos.Z - entpos.Z;
+
+        if (AbsF(deltaZ) < 0.05f)
+            return 'none';
+
+        if (deltaZ > 0.0f)
+            return 'up';
+
+        return 'down';
+    }
+
+    public function spawnGhost()
+    {
+        var rot : EulerAngles;
+        var ids : array<SItemUniqueId>;
+        var inv : CInventoryComponent;
+
+        despawn();
+
+        initSmooth = false;
+
+        if(cpcPlayerType == ENR_PlayerGeralt || cpcPlayerType == ENR_PlayerWitcher || cpcPlayerType == ENR_PlayerUnknown)
+        {
+            ghost = (CActor)theGame.CreateEntity(theGame.r_getMultiplayerClient().getMaleTemp(), pos, rot, true, true, false, PM_DontPersist );
+        }
+        else
+        {
+            ghost = (CActor)theGame.CreateEntity(theGame.r_getMultiplayerClient().getFemaleTemp(), pos, rot, true, true, false, PM_DontPersist );
+        }
+
+        if(!ghost)
+        {
+            return;
+        }
+
+        ghost.AddTag('MPEntity');
+        ghost.EnableCollisions(false);
+        ghost.EnableCharacterCollisions(false); 
+        ghost.SetGameplayVisibility( false );
+        ghost.SetCanPlayHitAnim(false);
+        ghost.SetImmortalityMode( AIM_Invulnerable, AIC_Default, true );
+
+        ghost.SetTemporaryAttitudeGroup( 'friendly_to_player', AGP_Default );	
+        ghost.SetAttitude(thePlayer, AIA_Friendly);
+
+        if(!ghost.HasAbility('IsNotScaredOfMonsters')) ghost.AddAbility('IsNotScaredOfMonsters', true); 
+
+        inv = ghost.GetInventory();
+
+        ids = inv.AddAnItem('Torch_work', 1); 
+        ghost.EquipItem(ids[0]);
+
+        if(cpcPlayerType == ENR_PlayerCiri)
+        {
+            ids = inv.AddAnItem('Zireael Sword', 1); 
+        }
+
+        ensureOneliners();
+        cpcNeedsRebuild = true;
+
+        resetStates();
+    }
+
+    private function updateOneliners()
+    {
+        var tag : string;
+        var statusTag : string; 
+        var now : float = theGame.GetEngineTimeAsSeconds();
+        var oneliner     : MP_SU_OnelinerEntity;
+        var chatOneliner     : MP_SU_OnelinerEntity;
+
+        if (now < nextOnelinerEnsureAt) return;
+
+        nextOnelinerEnsureAt = now + 0.25;
+
+        tag = "MPGhost" + id;
+        statusTag = "MPGhostStatus" + id;
+
+        oneliner = (MP_SU_OnelinerEntity)MP_SUOL_getManager().findByIntTag(MP_SUOL_usernameKey(serverPlayerId));
+        chatOneliner = (MP_SU_OnelinerEntity)MP_SUOL_getManager().findByIntTag(MP_SUOL_statusKey(serverPlayerId));
+        
+        if (!oneliner)
+        {
+            createOneliner();
+            oneliner = (MP_SU_OnelinerEntity)MP_SUOL_getManager().findByIntTag(MP_SUOL_usernameKey(serverPlayerId));
+        }
+
+        if(!chatOneliner)
+        {
+            createStatusOneliner();
+            chatOneliner = (MP_SU_OnelinerEntity)MP_SUOL_getManager().findByIntTag(MP_SUOL_statusKey(serverPlayerId));
+        }
+
+        if(oneliner)
+        {
+            oneliner.render_distance = StringToInt(theGame.GetInGameConfigWrapper().GetVarValue('MPGhosts_Main', 'MPGhosts_RenderDistance'));
+        }
+
+        if(chatOneliner)
+        {
+            chatOneliner.render_distance = StringToInt(theGame.GetInGameConfigWrapper().GetVarValue('MPGhosts_Main', 'MPGhosts_RenderDistance'));
+        }
+    }
+
+    private function repairGhost()
+    {
+        if(!ghost)
+        {
+            spawnGhost();
+        }
+    }
+
+    private function isInRange() : bool
+    {
+        if (VecDistance2D( thePlayer.GetWorldPosition(), pos) < 100 )
+        {
+            return true;
+        }  
+
+        return false;
+    }
+
+    public function despawn()
+    {
+        var players : array<r_RemotePlayer>;
+        var i : int;
+        var ridingPlayer : r_RemotePlayer;
+
+        ridingPlayer = theGame.r_getMultiplayerClient().getRidingPlayer();
+
+        if(ghost)
+        {
+            players = theGame.r_getMultiplayerClient().getPlayers();
+            
+            for(i = 0; i < players.Size(); i+=1)
+            {
+                if(players[i] && players[i].ghost && players[i].ghost.HasAttachment() && players[i].isRiding && players[i].ridingPlayerId == serverPlayerId)
+                {
+                    theGame.r_getMultiplayerClient().detachRiderSafe(players[i].ghost, true);
+                    theGame.r_getMultiplayerClient().fixAttachRotation(players[i].ghost);
+                }
+            }
+        }
+        
+        if(ridingPlayer && theGame.r_getMultiplayerClient().isRiding())
+        {
+            if(thePlayer.HasAttachment() && ridingPlayer == this)
+            {
+                theGame.r_getMultiplayerClient().detachRiderSafe(thePlayer, true);
+                mpghosts_stopeemote();
+            }
+        }
+
+        if(horse)
+        {
+            theGame.r_getMultiplayerClient().destroyHorseAnchorsForTarget(horse, true);
+
+            if(isMounted && ghost)
+            {
+                ghost.SignalGameplayEventParamInt('RidingManagerDismountHorse', DT_instant | DT_fromScript);
+            }
+
+            horse.Destroy();
+            horse = NULL;
+        }
+
+        if(ghost)
+        {
+            theGame.r_getMultiplayerClient().detachRiderSafe(ghost, false);
+
+            destroyPin();
+            ghost.Destroy();
+            ghost = NULL;
+        }
+
+        if(boat)
+        {
+            boat.Destroy();
+            boat = NULL;
+        }
+
+        if(morph)
+        {
+            morph.Destroy();
+            morph = NULL;
+        }
+
+        lastMounted = false;
+        lastMountType = "none";
+    }
+
+    var lastMountType : string;
+
+    public function checkRidingAttachment()
+    {
+        var ridingPlayer : r_RemotePlayer;
+        var toRide : CActor;
+        var targetHorse : CActor;
+        var targetSailing : bool;
+        var targetMounted : bool;
+        var targetLastHorse : bool;
+        var targetIsLocalPlayer : bool;
+
+        if(!ghost)
+            return;
+
+        if(isMounted)
+            return;
+
+        if(isRiding)
+        {
+            targetIsLocalPlayer = ridingPlayerId == theGame.r_getMultiplayerClient().getServerId();
+
+            if(targetIsLocalPlayer)
+            {
+                toRide = thePlayer;
+                targetSailing = thePlayer.IsSailing();
+                targetMounted = thePlayer.IsUsingHorse(true);
+                targetLastHorse = theGame.r_getMultiplayerClient().getLastRidingType() == "horse";
+
+                if(targetMounted)
+                {
+                    targetHorse = thePlayer.GetHorseCurrentlyMounted();
+                }
+            }
+            else
+            {
+                ridingPlayer = theGame.r_getMultiplayerClient().getPlayerByServerId(ridingPlayerId);
+
+                if(!ridingPlayer || !ridingPlayer.ghost)
+                    return;
+
+                toRide = ridingPlayer.ghost;
+                targetSailing = ridingPlayer.isSailing;
+                targetMounted = ridingPlayer.isMounted;
+                targetLastHorse = ridingPlayer.lastMountType == "horse";
+
+                if(ridingPlayer.horse)
+                {
+                    targetHorse = ridingPlayer.horse;
+                }
+            }
+
+            if(!toRide)
+                return;
+
+            if(!ghost.HasAttachment())
+            {
+                if(targetSailing)
+                {
+                    theGame.r_getMultiplayerClient().attachRiderBoat(ghost, toRide);
+                    lastMountType = "boat";
+                }
+                else if(targetMounted && targetHorse)
+                {
+                    if(theGame.r_getMultiplayerClient().attachRiderHorse(ghost, targetHorse))
+                    {
+                        lastMountType = "horse";
+                    }
+                }
+                else
+                {
+                    if(targetLastHorse)
+                    {
+                        theGame.r_getMultiplayerClient().attachRider(ghost, toRide, true);
+                        lastMountType = "playerhorse";
+                    }
+                    else
+                    {
+                        theGame.r_getMultiplayerClient().attachRider(ghost, toRide);
+                        lastMountType = "player";
+                    }
+                }
+            }
+            else
+            {
+                if(targetSailing && lastMountType != "boat")
+                {
+                    theGame.r_getMultiplayerClient().detachRiderSafe(ghost, false);
+                    theGame.r_getMultiplayerClient().attachRiderBoat(ghost, toRide);
+                    lastMountType = "boat";
+                }
+                else if(targetMounted && targetHorse && lastMountType != "horse")
+                {
+                    theGame.r_getMultiplayerClient().detachRiderSafe(ghost, false);
+                    if(theGame.r_getMultiplayerClient().attachRiderHorse(ghost, targetHorse))
+                    {
+                        lastMountType = "horse";
+                    }
+                }
+                else if(!targetSailing && !targetMounted && targetLastHorse && lastMountType != "playerhorse")
+                {
+                    theGame.r_getMultiplayerClient().detachRiderSafe(ghost, false);
+                    theGame.r_getMultiplayerClient().attachRider(ghost, toRide, true);
+                    lastMountType = "playerhorse";
+                }
+                else if(!targetSailing && !targetMounted && !targetLastHorse && lastMountType != "player")
+                {
+                    theGame.r_getMultiplayerClient().detachRiderSafe(ghost, false);
+                    theGame.r_getMultiplayerClient().attachRider(ghost, toRide);
+                    lastMountType = "player";
+                }
+            }
+        }
+        else
+        {
+            if(ghost.HasAttachment())
+            {
+                theGame.r_getMultiplayerClient().detachRiderSafe(ghost, true);
+                lastMountType = "none";
+            }
+        }
+    }
+
+    public function updateGhost()
+    {
+        updateDummyOneliner();
+
+        if (!isInRange())
+        {
+            if(ghost || horse || boat || morph)
+            {
+                despawn();
+            }
+            updatePin();
+            prune();
+            return;
+        }
+
+        if(theGame.IsPaused() || theGame.GetPhotomodeEnabled())
+        {
+            return;
+        }
+
+        repairGhost();
+
+        if(!ghost)
+        {
+            updatePin();
+            prune();
+            return;
+        }
+
+        updateAnimState();
+        updateChillOut();
+        updateGeraltAnims();
+        updateHeldItems();
+        updateEquippedItems();
+        playEmotes();
+        updateMenuStatus();
+        updateChat();
+        updateCPC();
+
+        checkRidingAttachment();
+        moveEntity(ghost, pos);
+
+        updatePin();
+        fixGeraltAppearance();
+        updateUsername();
+        updateOneliners();
+        updateOnelinerHeights();
+        prune();
+    }
+
+    private function prune()
+    {
+        if((theGame.GetEngineTimeAsSeconds() - lastUpdate) > 5)
+        {
+            theGame.r_getMultiplayerClient().disconnect(id);
+            theGame.r_getMultiplayerClient().disconnectGlobal(id);
+        }
+    }
+
+    private function scheduleChillOutNPCCleanup()
+    {
+        chillOutNPCCleanupAt = theGame.GetEngineTimeAsSeconds() + 0.75;
+    }
+
+    private function updateChillOutNPCCleanup()
+    {
+        var now : float;
+
+        if(chillOutAnim == '')
+        {
+            chillOutNPCCleanupAt = -999;
+            return;
+        }
+
+        if(lastMoveDir != 'none')
+        {
+            return;
+        }
+
+        now = theGame.GetEngineTimeAsSeconds();
+
+        if(chillOutNPCCleanupAt < 0)
+        {
+            chillOutNPCCleanupAt = now + 0.75;
+            return;
+        }
+
+        if(now < chillOutNPCCleanupAt)
+        {
+            return;
+        }
+
+        despawnNearbyChillOutNPCs();
+
+        chillOutNPCCleanupAt = now + chillOutNPCCleanupInterval;
+    }
+
+    private function despawnNearbyChillOutNPCs()
+    {
+        var npc : CNewNPC;
+        var i : int;
+        var ents : array<CGameplayEntity>;
+        var scanPos : Vector;
+        var radius : float;
+        var tags : array<name>;
+
+        radius = 0.65;
+
+        if(!ghost)
+        {
+            return;
+        }
+
+        scanPos = ghost.GetWorldPosition();
+
+        FindGameplayEntitiesInSphere(ents, scanPos, radius, 20,,,,'CNewNPC');
+
+        for(i = 0; i < ents.Size(); i += 1)
+        {
+            npc = (CNewNPC)ents[i];
+
+            if(!npc)
+            {
+                continue;
+            }
+
+            if(npc == ghost)
+            {
+                continue;
+            }
+
+            if(npc == thePlayer)
+            {
+                continue;
+            }
+
+            tags = npc.GetTags();
+
+            if(tags.Size() > 0)
+            {
+                continue;
+            }
+
+            if(!npc.IsHuman())
+            {
+                continue;
+            }
+
+            if(!npc.GetVisibility())
+            {
+                continue;
+            }
+
+            if(!npc.GetGameplayVisibility())
+            {
+                continue;
+            }
+
+            if(npc.IsVIP())
+            {
+                continue;
+            }
+
+            npc.Destroy();
+        }
+    }
+
+    private function updateChillOut()
+    {
+        var chillDur : float;
+        var now : float = theGame.GetEngineTimeAsSeconds();
+
+        if ((now - theGame.r_getMultiplayerClient().getSpawnTime()) < 2) return;
+
+        if (chillOutAnim != '')
+        {
+            ghost.GetMovingAgentComponent().SetEnabledFeetIK(false, 0.0);
+
+            chillDur = theGame.r_getMultiplayerClient().findChillDuration(chillOutAnim);
+
+            if (!lastChillOut)
+            {
+                queueAnim(chillOutAnim, chillDur, 0.3, 0, 'chillout', true);
+                lastChillOutAnim = chillOutAnim;
+                lastChillOut = true;
+                scheduleChillOutNPCCleanup();
+                return;
+            }
+
+            if (lastChillOutAnim != chillOutAnim)
+            {
+                queueAnim(chillOutAnim, chillDur, 0.3, 0, 'chillout', true);
+                lastChillOutAnim = chillOutAnim;
+                scheduleChillOutNPCCleanup();
+                return;
+            }
+
+            if(chillDur != 1)
+            {
+                queueAnim(chillOutAnim, chillDur, 0.0001, 0, 'chillout');
+            }
+
+            updateChillOutNPCCleanup();
+        }
+        else
+        {
+            chillOutNPCCleanupAt = -999;
+
+            if (lastChillOut)
+            {
+                stopAllAnims();
+                theGame.r_getMultiplayerClient().unmountItems(ghost);
+                lastJumpTime = 99;
+                lastChillOut = false;
+                smoothNext = true;
+            }
+
+            if(!ghost.GetMovingAgentComponent().GetEnabledFeetIK())
+            {
+                ghost.GetMovingAgentComponent().SetEnabledFeetIK(true, 0.0);
+            }
+        }
+    }
+
+    private function updateChat()
+    {
+        var chatOneliner     : MP_SU_OnelinerEntity;
+
+        if((theGame.GetEngineTimeAsSeconds() - theGame.r_getMultiplayerClient().getSpawnTime()) < 2)
+        {
+            return;
+        }
+
+        if(menuName != "none")
+        {
+            return;
+        }
+
+        chatOneliner = (MP_SU_OnelinerEntity)MP_SUOL_getManager().findByIntTag(MP_SUOL_statusKey(serverPlayerId));
+
+        if(!chatOneliner)
+        {
+            return;
+        }
+
+        if (prevChatTime < 0.0f)
+        {
+            prevChatTime = lastChatTime;
+        }
+        else if (lastChatTime != prevChatTime && lastChat != "reserved_string")
+        {
+            updateStatus(lastChat);
+            chatOneliner.visible = true;
+            prevChatTime = lastChatTime;
+            chatShownAt = theGame.GetEngineTimeAsSeconds();
+        }
+
+        if (chatOneliner && chatOneliner.visible && chatShownAt >= 0.0f)
+        {
+            if ((theGame.GetEngineTimeAsSeconds() - chatShownAt) > 12.0f)
+            {
+                chatOneliner.visible = false;
+                chatShownAt = -1.0f;
+            }
+        }
+    }
+
+    private function updateMenuStatus()
+    {
+        var status : string;
+        var chatOneliner     : MP_SU_OnelinerEntity;
+
+        if((theGame.GetEngineTimeAsSeconds() - theGame.r_getMultiplayerClient().getSpawnTime()) < 2)
+        {
+            return;
+        }  
+
+        chatOneliner = (MP_SU_OnelinerEntity)MP_SUOL_getManager().findByIntTag(MP_SUOL_statusKey(serverPlayerId));
+
+        if(!chatOneliner)
+        {
+            return;
+        }
+
+        if(menuName == "none")
+        {
+            if(menuStatusActive)
+            {
+                chatOneliner.visible = false;
+                menuStatusActive = false;
+                lastStatus = "";
+            }
+            
+            return;
+        }
+
+        if(menuName == "InCutscene")
+            status = GetLocStringById(2111114105);
+        else if(menuName == "Teleporting")
+            status = "Teleporting...";
+        else if (menuName == "IngameMenu")
+            status = GetLocStringById(2111114106);
+        else if (menuName == "GlossaryBestiaryMenu")
+            status = GetLocStringById(2111114107);
+        else if (menuName == "GlossaryTutorialsMenu")
+            status = GetLocStringById(2111114108);
+        else if (menuName == "GlossaryEncyclopediaMenu")
+            status = GetLocStringById(2111114109);
+        else if (menuName == "GlossaryBooksMenu")
+            status = GetLocStringById(2111114110);
+        else if (menuName == "CraftingMenu")
+            status = GetLocStringById(2111114111);
+        else if (menuName == "AlchemyMenu")
+            status = GetLocStringById(2111114112);
+        else if (menuName == "InventoryMenu")
+            status = GetLocStringById(2111114113);
+        else if (menuName == "MapMenu")
+            status = GetLocStringById(2111114114);
+        else if (menuName == "JournalQuestMenu")
+            status = GetLocStringById(2111114115);
+        else if (menuName == "CharacterMenu")
+            status = GetLocStringById(2111114116);
+        else if (menuName == "MeditationClockMenu")
+            status = GetLocStringById(2111114117);
+        else if (menuName == "BlacksmithMenu")
+            status = GetLocStringById(2111114118);
+
+        if(status == "")
+        {
+            return;
+        }
+
+        if(lastStatus != status)
+        {
+            lastStatus = status;
+            menuStatusActive = true;
+
+            updateStatus(status);
+            chatOneliner.visible = true;
+        }
+    }
+
+    private function playEmotes()
+    {
+        var propEmote : bool;
+
+        if((theGame.GetEngineTimeAsSeconds() - theGame.r_getMultiplayerClient().getSpawnTime()) < 2)
+        {
+            return;
+        }
+
+        if (prevEmoteTime < 0.0f)
+        {
+            prevEmoteTime = lastEmoteTime;
+        }
+        else if (lastEmoteTime != prevEmoteTime)
+        {
+            if (prevPropEmote && lastEmote != prevEmote)
+            {
+                theGame.r_getMultiplayerClient().unmountItems(ghost);
+            }
+            
+            if (lastEmote == 0)
+            {
+                queueAnim('man_work_greeting_with_hand_gesture_05', 3.13, 0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 1)
+            {
+                queueAnim('man_work_greeting_with_hand_gesture_02', 3.3, 0.4, 0, 'emote', true);
+            }
+            else if (lastEmote == 2)
+            {
+                queueAnim('meditation_idle01', 6.1, 0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 3)
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('add_gesture_question_01', 3.27, 0.4, 0, 'emote', true);
+                }
+                else
+                {
+                    queueAnim('high_standing_determined_gesture_question', 2.03, 0.4, 0, 'emote', true);
+                }
+            }
+            else if (lastEmote == 4)
+            {
+                queueAnim('add_gesture_point_forward', 5, 0.4, 0, 'emote', true);
+            }
+            else if (lastEmote == 5)
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('high_standing_aggressive_gesture_decline_01', 3.7, 0.4, 0, 'emote', true);
+                }
+                else
+                {
+                    queueAnim('high_standing_determined_gesture_holdit', 5.23, 0.4, 0, 'emote', true);
+                }
+            }
+            else if (lastEmote == 6)
+            {
+                queueAnim('man_crying_loop_01', 6.17, 0.4, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 7)
+            {
+                queueAnim('man_cheering_loop', 3.63, 0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 8)
+            {
+                queueAnim('man_begging_for_mercy_loop_01', 10.53, 0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 9)
+            {
+                queueAnim('audience_in_theatre_standing_loop_02', 8.97, 0.4, 0, 'emote', true);
+            }
+            else if (lastEmote == 10)
+            {
+                queueAnim('man_work_drunk_puke', 6.33, 0.4, 0, 'emote', true);
+            }
+            else if (lastEmote == 11)
+            {
+                queueAnim('geralt_drunk_walk', 2.8, 0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 12)
+            {
+                queueAnim('man_praying_crossed_legs_loop_02', 7.5, 0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 13)
+            {
+                queueAnim('q101_man_hitting_alarm_bell_with_hammer_loop_01', 3.5, 0.4, 0, 'emote', true);
+            }
+            else if (lastEmote == 14)
+            {
+                queueAnim('q103_man_prophesying_1', 15.07, 0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 15)
+            {
+                queueAnim('q203_druid_using_wand_1', 14, 0.4, 0, 'emote', true);
+            }
+            else if (lastEmote == 16)
+            {
+                queueAnim('geralt_chocking_loop_01', 7.67, 0.4, 0, 'emote', true);
+            }
+            else if (lastEmote == 17)
+            {
+                queueAnim('seaman_working_on_the_ship_loop_01', 3.6, 0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 18)
+            {
+                queueAnim('ep1_high_standing_determined2_gesture_laugh_01', 3, 0.4, 0, 'emote', true);
+            }
+            else if (lastEmote == 19)
+            {
+                queueAnim('vanilla_sitting_on_ground_loop', 15.63, 0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 20)
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('woman_noble_lying_relaxed_on_grass_loop_03', 11.2, 0, 0, 'emote', true, true);
+                }
+                else
+                {
+                    queueAnim('mq7009_geralt_heroic_pose_lying', 19.7, 0, 0, 'emote', true, true);
+                }
+            }
+            else if (lastEmote == 21)
+            {
+                queueAnim('locomotion_salsa_cycle_02', 40, 0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 22)
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('high_standing_determined_gesture_cough', 4.37, 0.4, 0, 'emote', true);
+                }
+                else
+                {
+                    queueAnim('high_standing_determined_gesture_facepalm', 9.47, 0.4, 0, 'emote', true);
+                }
+            }
+            else if (lastEmote == 23)
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('woman_work_standing_hands_crossed_loop_02', 5.43, 0, 0, 'emote', true, true);
+                }
+                else
+                {
+                    queueAnim('high_standing_determined2_idle', 23.07, 0, 0, 'emote', true, true);
+                }
+            }
+            else if (lastEmote == 24)
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('q705_anarietta_standing_tense_gesture_angry', 11.43, 0.4, 0, 'emote', true);
+                }
+                else
+                {
+                    queueAnim('high_standing_sad_gesture_go_plough_yourself', 4.6, 0.4, 0, 'emote', true);
+                }
+            }
+            else if (lastEmote == 25)
+            {
+                queueAnim('man_use_horn', 8.33, 0.4, 0, 'emote', true);
+            }
+            else if (lastEmote == 26)
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('ep1_mirror_sitting_on_shrine_gesture_explain_04', 9.37, 0.4, 0, 'emote', true);
+                }
+                else
+                {
+                    queueAnim('fall_up_idle', 18.67, 0.4, 0, 'emote', true);
+                }
+            }
+            else if (lastEmote == 27)
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('man_fistfight_finisher_1_looser', 2.10, 0.4, 0, 'emote', true);
+                }
+                else
+                {
+                    queueAnim('man_finisher_head_01_reaction', 2.07, 0.4, 0, 'emote', true);
+                }
+            }
+            else if (lastEmote == 28)
+            {
+                queueAnim('man_peeing_loop', 3.07, 0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 29)
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('ep1_shani_sitting_sad_idle', 3.23, 0, 0, 'emote', true, true);
+                }
+                else
+                {
+                    queueAnim('geralt_relaxed_sitting_and_resting_2', 8.7, 0, 0, 'emote', true, true);
+                }
+            }
+            else if (lastEmote == 30)
+            {
+                queueAnim('boat_passenger_sit_idle', 2.33, 0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 31)
+            {
+                queueAnim('horse_breathing_slow', 2.6, 0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 32)
+            {
+                queueAnim('man_work_playing_lute_02', 6.00, 0.4, 0, 'emote', true, true);
+                theGame.r_getMultiplayerClient().Mount(ghost, 'Lute 01');
+                propEmote = true;
+            }
+            else if (lastEmote == 33)
+            {
+                queueAnim('man_bard_cartwheels_loop', 9.57, 0.0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 34)
+            {
+                queueAnim('man_throat_cut_loop', 1.8, 0.0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 35)
+            {
+                queueAnim('man_scout_01', 8.83, 0.0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 36)
+            {
+                queueAnim('man_nobel_with_fan_loop_2', 6.33, 0.0, 0, 'emote', true, true);
+                theGame.r_getMultiplayerClient().Mount(ghost, 'fan_01');
+                propEmote = true;
+            }
+            else if (lastEmote == 37)
+            {
+                queueAnim('man_trader_stand_loop_01', 15.5, 0.0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 38)
+            {
+                queueAnim('man_work_spyglass_01', 13.2, 0.0, 0, 'emote', true, true);
+                theGame.r_getMultiplayerClient().Mount(ghost, 'Spyglass');
+                propEmote = true;
+            }
+            else if (lastEmote == 39)
+            {
+                if(lastAnim != 'man_work_standing_performance_fire_eater_loop_01')
+                {
+                    theGame.r_getMultiplayerClient().MountRightTorch(ghost);
+                }
+
+                queueAnim('man_work_standing_performance_fire_eater_loop_01', 15.4, 0.0, 0, 'emote', true, true);
+                propEmote = true;
+            }
+            else if (lastEmote == 40)
+            {
+                queueAnim('man_work_writing_stand_01', 2.0, 0.0, 0, 'emote', true, true);
+                theGame.r_getMultiplayerClient().Mount(ghost, 'Note_01');
+                theGame.r_getMultiplayerClient().Mount(ghost, 'Quill');
+                propEmote = true;
+            }
+            else if (lastEmote == 41)
+            {
+                queueAnim('man_cowering_low_loop_04', 8.33, 0.0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 42)
+            {
+                queueAnim('man_cowering_high_loop_03', 9.0, 0.0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 43)
+            {
+                queueAnim('man_kneeling_on_floor_in_pain_loop_01', 10.6, 0.0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 44)
+            {
+                queueAnim('q703_first_mime_pulling_rope_loop', 20.0, 0.0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 45)
+            {
+                queueAnim('man_work_broom_sweeping_01', 0.83, 0.0, 0, 'emote', true, true);
+                theGame.r_getMultiplayerClient().Mount(ghost, 'Broom');
+                propEmote = true;
+            }
+            else if (lastEmote == 46)
+            {
+                queueAnim('man_work_carry_bag_walk', 1.3, 0.0, 0, 'emote', true, true);
+                theGame.r_getMultiplayerClient().Mount(ghost, 'Sack');
+                propEmote = true;
+            }
+            else if (lastEmote == 47)
+            {
+                queueAnim('man_work_chauffer_04', 5.33, 0.0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 48)
+            {
+                queueAnim('man_work_crouch_01', 5.0, 0.0, 0, 'emote', true, true);
+            }
+            else if (lastEmote == 49)
+            {
+                queueAnim('man_work_digging_shovel_loop_04', 8.77, 0.0, 0, 'emote', true, true);
+                theGame.r_getMultiplayerClient().Mount(ghost, 'shovel');
+                propEmote = true;
+            }
+            else if (lastEmote == 50)
+            {
+                queueAnim('man_work_drinking_loop_01', 4.83, 0.0, 0, 'emote', true, true);
+                theGame.r_getMultiplayerClient().Mount(ghost, 'Cup_01');
+                propEmote = true;
+            }
+            else if (lastEmote == 51)
+            {
+                queueAnim('man_work_pull_bag_walk', 1.23, 0.0, 0, 'emote', true, true);
+                theGame.r_getMultiplayerClient().Mount(ghost, 'Sack');
+                propEmote = true;
+            }
+            else if (lastEmote == 52)
+            {
+                queueAnim('man_guard_eating_baguette_02', 25.8, 0.0, 0, 'emote', true, true);
+                theGame.r_getMultiplayerClient().Mount(ghost, 'baguette');
+                propEmote = true;
+            }
+            else if (lastEmote == 53)
+            {
+                queueAnim('man_smoking_stand_01', 22.17, 0.0, 0, 'emote', true, true);
+                theGame.r_getMultiplayerClient().Mount(ghost, 'Pipe_01');
+                propEmote = true;
+            }
+            else if (lastEmote == 54)
+            {
+                queueAnim('woman_noble_stand_eating_fancy_loop_01', 27.8, 0.0, 0, 'emote', true, true);
+                theGame.r_getMultiplayerClient().Mount(ghost, 'rich_plate_full_canapes_righthand');
+                propEmote = true;
+            }
+            else if (lastEmote == 55)
+            {
+                if(lastAnim != 'woman_noble_stand_in_rain_with_umbrella_loop_01')
+                {
+                    theGame.r_getMultiplayerClient().Mount(ghost, 'rich_umbrella');
+                }
+
+                queueAnim('woman_noble_stand_in_rain_with_umbrella_loop_01', 8.2, 0.0, 0, 'emote', true, true);
+                propEmote = true;
+            }
+
+            prevPropEmote = propEmote;
+            prevEmote = lastEmote;
+
+            lastEmote = -1;
+            prevEmoteTime = lastEmoteTime;
+        }
+    }
+
+    protected function unmountHair()
+    {
+        var ids : array<SItemUniqueId>;
+        var inv : CInventoryComponent;
+        var size : int;
+        var i : int;
+
+        inv = ghost.GetInventory();
+        ids = inv.GetItemsByCategory( 'hair' );
+		size = ids.Size();
+		
+		if( size > 0 )
+		{
+			for( i = 0; i < size; i+=1 )
+			{
+				if(inv.IsItemMounted( ids[i] ) )
+					inv.DespawnItem(ids[i]);
+
+                inv.RemoveItem(ids[i], 1);
+			}
+			
+		}
+    }
+
+    private function fixGeraltAppearance()
+    {
+        if(cpcPlayerType != ENR_PlayerGeralt)
+        {
+            giveBodyItem(true, 'Body feet 01');
+            giveBodyItem(true, 'Body palms 01');
+            giveBodyItem(true, 'Body underwear 01');
+            giveBodyItem(true, 'Body torso medalion');
+        }
+        else
+        {
+            giveBodyItem(false, 'Body feet 01');
+            giveBodyItem(false, 'Body palms 01');
+            giveBodyItem(false, 'Body underwear 01');
+            giveBodyItem(false, 'Body torso medalion');
+        }
+    }
+
+    private function giveBodyItem(clear : bool, item : name)
+    {
+        var inv : CInventoryComponent;
+        var ids : array<SItemUniqueId>;
+        var i : int;
+        var ent : CEntity;
+
+        inv = ghost.GetInventory();
+
+        ids = inv.GetItemsByName(item);
+        if(clear)
+        {
+            for( i = 0; i < ids.Size(); i+=1 )
+            {
+                inv.DespawnItem(ids[i]);
+            }	
+
+            ent = inv.GetItemEntityUnsafe(ids[0]);
+            if (ent)
+            {
+                ent.SetHideInGame(true);
+            }
+        }
+        else
+        {
+            if(ids.Size() == 0)
+            {
+                ids = inv.AddAnItem(item);
+				inv.MountItem(ids[0]);
+            }
+
+            ent = inv.GetItemEntityUnsafe(ids[0]);
+            if (ent)
+            {
+                ent.SetHideInGame(false);
+            }
+        }
+    }
+
+    private function normalizeNGPItem(item : name) : name
+    {
+        if(FactsQuerySum("NewGamePlus") > 0)
+        {
+            return item;
+        }
+
+        if(item == 'NGP Viper School steel sword') return 'Viper School steel sword';
+        if(item == 'NGP Viper School silver sword') return 'Viper School silver sword';
+        if(item == 'NGP Lynx Armor') return 'Lynx Armor';
+        if(item == 'NGP Lynx Armor 1') return 'Lynx Armor 1';
+        if(item == 'NGP Lynx Armor 2') return 'Lynx Armor 2';
+        if(item == 'NGP Lynx Armor 3') return 'Lynx Armor 3';
+        if(item == 'NGP Lynx Gloves 1') return 'Lynx Gloves 1';
+        if(item == 'NGP Lynx Gloves 2') return 'Lynx Gloves 2';
+        if(item == 'NGP Lynx Gloves 3') return 'Lynx Gloves 3';
+        if(item == 'NGP Lynx Gloves 4') return 'Lynx Gloves 4';
+        if(item == 'NGP Lynx Pants 1') return 'Lynx Pants 1';
+        if(item == 'NGP Lynx Pants 2') return 'Lynx Pants 2';
+        if(item == 'NGP Lynx Pants 3') return 'Lynx Pants 3';
+        if(item == 'NGP Lynx Pants 4') return 'Lynx Pants 4';
+        if(item == 'NGP Lynx Boots 1') return 'Lynx Boots 1';
+        if(item == 'NGP Lynx Boots 2') return 'Lynx Boots 2';
+        if(item == 'NGP Lynx Boots 3') return 'Lynx Boots 3';
+        if(item == 'NGP Lynx Boots 4') return 'Lynx Boots 4';
+        if(item == 'NGP Lynx School steel sword') return 'Lynx School steel sword';
+        if(item == 'NGP Lynx School steel sword 1') return 'Lynx School steel sword 1';
+        if(item == 'NGP Lynx School steel sword 2') return 'Lynx School steel sword 2';
+        if(item == 'NGP Lynx School steel sword 3') return 'Lynx School steel sword 3';
+        if(item == 'NGP Lynx School silver sword') return 'Lynx School silver sword';
+        if(item == 'NGP Lynx School silver sword 1') return 'Lynx School silver sword 1';
+        if(item == 'NGP Lynx School silver sword 2') return 'Lynx School silver sword 2';
+        if(item == 'NGP Lynx School silver sword 3') return 'Lynx School silver sword 3';
+        if(item == 'NGP Gryphon Armor') return 'Gryphon Armor';
+        if(item == 'NGP Gryphon Armor 1') return 'Gryphon Armor 1';
+        if(item == 'NGP Gryphon Armor 2') return 'Gryphon Armor 2';
+        if(item == 'NGP Gryphon Armor 3') return 'Gryphon Armor 3';
+        if(item == 'NGP Gryphon Gloves 1') return 'Gryphon Gloves 1';
+        if(item == 'NGP Gryphon Gloves 2') return 'Gryphon Gloves 2';
+        if(item == 'NGP Gryphon Gloves 3') return 'Gryphon Gloves 3';
+        if(item == 'NGP Gryphon Gloves 4') return 'Gryphon Gloves 4';
+        if(item == 'NGP Gryphon Pants 1') return 'Gryphon Pants 1';
+        if(item == 'NGP Gryphon Pants 2') return 'Gryphon Pants 2';
+        if(item == 'NGP Gryphon Pants 3') return 'Gryphon Pants 3';
+        if(item == 'NGP Gryphon Pants 4') return 'Gryphon Pants 4';
+        if(item == 'NGP Gryphon Boots 1') return 'Gryphon Boots 1';
+        if(item == 'NGP Gryphon Boots 2') return 'Gryphon Boots 2';
+        if(item == 'NGP Gryphon Boots 3') return 'Gryphon Boots 3';
+        if(item == 'NGP Gryphon Boots 4') return 'Gryphon Boots 4';
+        if(item == 'NGP Gryphon School steel sword') return 'Gryphon School steel sword';
+        if(item == 'NGP Gryphon School steel sword 1') return 'Gryphon School steel sword 1';
+        if(item == 'NGP Gryphon School steel sword 2') return 'Gryphon School steel sword 2';
+        if(item == 'NGP Gryphon School steel sword 3') return 'Gryphon School steel sword 3';
+        if(item == 'NGP Gryphon School silver sword') return 'Gryphon School silver sword';
+        if(item == 'NGP Gryphon School silver sword 1') return 'Gryphon School silver sword 1';
+        if(item == 'NGP Gryphon School silver sword 2') return 'Gryphon School silver sword 2';
+        if(item == 'NGP Gryphon School silver sword 3') return 'Gryphon School silver sword 3';
+        if(item == 'NGP Bear Armor') return 'Bear Armor';
+        if(item == 'NGP Bear Armor 1') return 'Bear Armor 1';
+        if(item == 'NGP Bear Armor 2') return 'Bear Armor 2';
+        if(item == 'NGP Bear Armor 3') return 'Bear Armor 3';
+        if(item == 'NGP Bear Gloves 1') return 'Bear Gloves 1';
+        if(item == 'NGP Bear Gloves 2') return 'Bear Gloves 2';
+        if(item == 'NGP Bear Gloves 3') return 'Bear Gloves 3';
+        if(item == 'NGP Bear Gloves 4') return 'Bear Gloves 4';
+        if(item == 'NGP Bear Pants 1') return 'Bear Pants 1';
+        if(item == 'NGP Bear Pants 2') return 'Bear Pants 2';
+        if(item == 'NGP Bear Pants 3') return 'Bear Pants 3';
+        if(item == 'NGP Bear Pants 4') return 'Bear Pants 4';
+        if(item == 'NGP Bear Boots 1') return 'Bear Boots 1';
+        if(item == 'NGP Bear Boots 2') return 'Bear Boots 2';
+        if(item == 'NGP Bear Boots 3') return 'Bear Boots 3';
+        if(item == 'NGP Bear Boots 4') return 'Bear Boots 4';
+        if(item == 'NGP Bear School steel sword') return 'Bear School steel sword';
+        if(item == 'NGP Bear School steel sword 1') return 'Bear School steel sword 1';
+        if(item == 'NGP Bear School steel sword 2') return 'Bear School steel sword 2';
+        if(item == 'NGP Bear School steel sword 3') return 'Bear School steel sword 3';
+        if(item == 'NGP Bear School silver sword') return 'Bear School silver sword';
+        if(item == 'NGP Bear School silver sword 1') return 'Bear School silver sword 1';
+        if(item == 'NGP Bear School silver sword 2') return 'Bear School silver sword 2';
+        if(item == 'NGP Bear School silver sword 3') return 'Bear School silver sword 3';
+        if(item == 'NGP Ofir Armor') return 'Ofir Armor';
+        if(item == 'NGP Ofir Sabre 2') return 'Ofir Sabre 2';
+        if(item == 'NGP Crafted Burning Rose Armor') return 'Crafted Burning Rose Armor';
+        if(item == 'NGP Crafted Burning Rose Gloves') return 'Crafted Burning Rose Gloves';
+        if(item == 'NGP Crafted Burning Rose Sword') return 'Crafted Burning Rose Sword';
+        if(item == 'NGP Crafted Ofir Armor') return 'Crafted Ofir Armor';
+        if(item == 'NGP Crafted Ofir Boots') return 'Crafted Ofir Boots';
+        if(item == 'NGP Crafted Ofir Gloves') return 'Crafted Ofir Gloves';
+        if(item == 'NGP Crafted Ofir Pants') return 'Crafted Ofir Pants';
+        if(item == 'NGP Crafted Ofir Steel Sword') return 'Crafted Ofir Steel Sword';
+        if(item == 'NGP EP1 Crafted Witcher Silver Sword') return 'EP1 Crafted Witcher Silver Sword';
+        if(item == 'NGP Olgierd Sabre') return 'Olgierd Sabre';
+        if(item == 'NGP EP1 Witcher Armor') return 'EP1 Witcher Armor';
+        if(item == 'NGP EP1 Witcher Boots') return 'EP1 Witcher Boots';
+        if(item == 'NGP EP1 Witcher Gloves') return 'EP1 Witcher Gloves';
+        if(item == 'NGP EP1 Witcher Pants') return 'EP1 Witcher Pants';
+        if(item == 'NGP EP1 Viper School steel sword') return 'EP1 Viper School steel sword';
+        if(item == 'NGP EP1 Viper School silver sword') return 'EP1 Viper School silver sword';
+        if(item == 'NGP Lynx Armor 4') return 'Lynx Armor 4';
+        if(item == 'NGP Gryphon Armor 4') return 'Gryphon Armor 4';
+        if(item == 'NGP Bear Armor 4') return 'Bear Armor 4';
+        if(item == 'NGP Wolf Armor 4') return 'Wolf Armor 4';
+        if(item == 'NGP Red Wolf Armor 1') return 'Red Wolf Armor 1';
+        if(item == 'NGP Lynx Gloves 5') return 'Lynx Gloves 5';
+        if(item == 'NGP Gryphon Gloves 5') return 'Gryphon Gloves 5';
+        if(item == 'NGP Bear Gloves 5') return 'Bear Gloves 5';
+        if(item == 'NGP Wolf Gloves 5') return 'Wolf Gloves 5';
+        if(item == 'NGP Red Wolf Gloves 1') return 'Red Wolf Gloves 1';
+        if(item == 'NGP Lynx Pants 5') return 'Lynx Pants 5';
+        if(item == 'NGP Gryphon Pants 5') return 'Gryphon Pants 5';
+        if(item == 'NGP Bear Pants 5') return 'Bear Pants 5';
+        if(item == 'NGP Wolf Pants 5') return 'Wolf Pants 5';
+        if(item == 'NGP Red Wolf Pants 1') return 'Red Wolf Pants 1';
+        if(item == 'NGP Lynx Boots 5') return 'Lynx Boots 5';
+        if(item == 'NGP Gryphon Boots 5') return 'Gryphon Boots 5';
+        if(item == 'NGP Bear Boots 5') return 'Bear Boots 5';
+        if(item == 'NGP Wolf Boots 5') return 'Wolf Boots 5';
+        if(item == 'NGP Red Wolf Boots 1') return 'Red Wolf Boots 1';
+        if(item == 'NGP Lynx School steel sword 4') return 'Lynx School steel sword 4';
+        if(item == 'NGP Gryphon School steel sword 4') return 'Gryphon School steel sword 4';
+        if(item == 'NGP Bear School steel sword 4') return 'Bear School steel sword 4';
+        if(item == 'NGP Wolf School steel sword 4') return 'Wolf School steel sword 4';
+        if(item == 'NGP Red Wolf School steel sword 1') return 'Red Wolf School steel sword 1';
+        if(item == 'NGP Lynx School silver sword 4') return 'Lynx School silver sword 4';
+        if(item == 'NGP Gryphon School silver sword 4') return 'Gryphon School silver sword 4';
+        if(item == 'NGP Bear School silver sword 4') return 'Bear School silver sword 4';
+        if(item == 'NGP Wolf School silver sword 4') return 'Wolf School silver sword 4';
+        if(item == 'NGP Red Wolf School silver sword 1') return 'Red Wolf School silver sword 1';
+        if(item == 'NGP Guard Lvl1 Armor 3') return 'Guard Lvl1 Armor 3';
+        if(item == 'NGP Guard Lvl1 A Armor 3') return 'Guard Lvl1 A Armor 3';
+        if(item == 'NGP Guard Lvl2 Armor 3') return 'Guard Lvl2 Armor 3';
+        if(item == 'NGP Guard Lvl2 A Armor 3') return 'Guard Lvl2 A Armor 3';
+        if(item == 'NGP Knight Geralt Armor 3') return 'Knight Geralt Armor 3';
+        if(item == 'NGP Knight Geralt A Armor 3') return 'Knight Geralt A Armor 3';
+        if(item == 'NGP q702_vampire_armor') return 'q702_vampire_armor';
+        if(item == 'NGP Guard Lvl1 Gloves 3') return 'Guard Lvl1 Gloves 3';
+        if(item == 'NGP Guard Lvl1 A Gloves 3') return 'Guard Lvl1 A Gloves 3';
+        if(item == 'NGP Guard Lvl2 Gloves 3') return 'Guard Lvl2 Gloves 3';
+        if(item == 'NGP Guard Lvl2 A Gloves 3') return 'Guard Lvl2 A Gloves 3';
+        if(item == 'NGP Knight Geralt Gloves 3') return 'Knight Geralt Gloves 3';
+        if(item == 'NGP Knight Geralt A Gloves 3') return 'Knight Geralt A Gloves 3';
+        if(item == 'NGP q702_vampire_gloves') return 'q702_vampire_gloves';
+        if(item == 'NGP Guard Lvl1 Pants 3') return 'Guard Lvl1 Pants 3';
+        if(item == 'NGP Guard Lvl1 A Pants 3') return 'Guard Lvl1 A Pants 3';
+        if(item == 'NGP Guard Lvl2 Pants 3') return 'Guard Lvl2 Pants 3';
+        if(item == 'NGP Guard Lvl2 A Pants 3') return 'Guard Lvl2 A Pants 3';
+        if(item == 'NGP Knight Geralt Pants 3') return 'Knight Geralt Pants 3';
+        if(item == 'NGP Knight Geralt A Pants 3') return 'Knight Geralt A Pants 3';
+        if(item == 'NGP q702_vampire_pants') return 'q702_vampire_pants';
+        if(item == 'NGP Guard Lvl1 Boots 3') return 'Guard Lvl1 Boots 3';
+        if(item == 'NGP Guard Lvl1 A Boots 3') return 'Guard Lvl1 A Boots 3';
+        if(item == 'NGP Guard Lvl2 Boots 3') return 'Guard Lvl2 Boots 3';
+        if(item == 'NGP Guard Lvl2 A Boots 3') return 'Guard Lvl2 A Boots 3';
+        if(item == 'NGP Knight Geralt Boots 3') return 'Knight Geralt Boots 3';
+        if(item == 'NGP Knight Geralt A Boots 3') return 'Knight Geralt A Boots 3';
+        if(item == 'NGP q702_vampire_boots') return 'q702_vampire_boots';
+        if(item == 'NGP Serpent Steel Sword 1') return 'Serpent Steel Sword 1';
+        if(item == 'NGP Serpent Steel Sword 2') return 'Serpent Steel Sword 2';
+        if(item == 'NGP Serpent Steel Sword 3') return 'Serpent Steel Sword 3';
+        if(item == 'NGP Guard lvl1 steel sword 3') return 'Guard lvl1 steel sword 3';
+        if(item == 'NGP Guard lvl2 steel sword 3') return 'Guard lvl2 steel sword 3';
+        if(item == 'NGP Knights steel sword 3') return 'Knights steel sword 3';
+        if(item == 'NGP Hanza steel sword 3') return 'Hanza steel sword 3';
+        if(item == 'NGP Toussaint steel sword 3') return 'Toussaint steel sword 3';
+        if(item == 'NGP q702 vampire steel sword') return 'q702 vampire steel sword';
+        if(item == 'NGP Serpent Silver Sword 1') return 'Serpent Silver Sword 1';
+        if(item == 'NGP Serpent Silver Sword 2') return 'Serpent Silver Sword 2';
+        if(item == 'NGP Serpent Silver Sword 3') return 'Serpent Silver Sword 3';
+        if(item == 'NGP Netflix Armor') return 'Netflix Armor';
+        if(item == 'NGP Netflix Armor 1') return 'Netflix Armor 1';
+        if(item == 'NGP Netflix Armor 2') return 'Netflix Armor 2';
+        if(item == 'NGP Netflix Gloves 1') return 'Netflix Gloves 1';
+        if(item == 'NGP Netflix Gloves 2') return 'Netflix Gloves 2';
+        if(item == 'NGP Netflix Gloves') return 'Netflix Gloves';
+        if(item == 'NGP Netflix Pants 1') return 'Netflix Pants 1';
+        if(item == 'NGP Netflix Pants 2') return 'Netflix Pants 2';
+        if(item == 'NGP Netflix Pants') return 'Netflix Pants';
+        if(item == 'NGP Netflix Boots 1') return 'Netflix Boots 1';
+        if(item == 'NGP Netflix Boots 2') return 'Netflix Boots 2';
+        if(item == 'NGP Netflix Boots') return 'Netflix Boots';
+        if(item == 'NGP Netflix steel sword') return 'Netflix steel sword';
+        if(item == 'NGP Netflix steel sword 1') return 'Netflix steel sword 1';
+        if(item == 'NGP Netflix steel sword 2') return 'Netflix steel sword 2';
+        if(item == 'NGP Netflix silver sword') return 'Netflix silver sword';
+        if(item == 'NGP Netflix silver sword 1') return 'Netflix silver sword 1';
+        if(item == 'NGP Netflix silver sword 2') return 'Netflix silver sword 2';
+        if(item == 'NGP Dol Blathanna Armor') return 'Dol Blathanna Armor';
+        if(item == 'NGP Dol Blathanna Gloves') return 'Dol Blathanna Gloves';
+        if(item == 'NGP Dol Blathanna Pants') return 'Dol Blathanna Pants';
+        if(item == 'NGP Dol Blathanna Boots') return 'Dol Blathanna Boots';
+        if(item == 'NGP Dol Blathanna longsword') return 'Dol Blathanna longsword';
+        if(item == 'NGP White Widow of Dol Blathanna') return 'White Widow of Dol Blathanna';
+        if(item == 'NGP White Tiger Armor') return 'White Tiger Armor';
+        if(item == 'NGP White Tiger Gloves') return 'White Tiger Gloves';
+        if(item == 'NGP White Tiger Pants') return 'White Tiger Pants';
+        if(item == 'NGP White Tiger Boots') return 'White Tiger Boots';
+        if(item == 'NGP Steel Vixen') return 'Steel Vixen';
+        if(item == 'NGP Silver Vixen') return 'Silver Vixen';
+
+        return item;
+    }
+
+    protected function EquipNewItem(inv : CInventoryComponent, out lastItem : name, newItem : name, optional mount : bool, optional hide : bool)
+    {
+        var ids : array<SItemUniqueId>;
+        var ent : CEntity;
+        var equipped : bool;
+
+        lastItem = normalizeNGPItem(lastItem);
+        newItem = normalizeNGPItem(newItem);
+
+        if(lastItem != '' && lastItem != newItem)
+        {
+            ids = inv.GetItemsByName(lastItem);
+
+            if(ids.Size() > 0)
+            {
+                if(mount)
+                {
+                    inv.UnmountItem(ids[0], true);
+                }
+                else
+                {
+                    ghost.UnequipItem(ids[0]);
+                }
+
+                inv.RemoveItemByName(lastItem, 1);
+            }
+        }
+
+        if(newItem == '')
+        {
+            lastItem = newItem;
+            return;
+        }
+
+        ids = inv.GetItemsByName(newItem);
+
+        if(ids.Size() == 0)
+        {
+            ids = inv.AddAnItem(newItem, 1);
+        }
+
+        if(ids.Size() == 0)
+        {
+            return;
+        }
+
+        ent = inv.GetItemEntityUnsafe(ids[0]);
+
+        if(!ent)
+        {
+            if(mount)
+            {
+                inv.MountItem(ids[0]);
+            }
+            else
+            {
+                ghost.EquipItem(ids[0]);
+            }
+
+            ent = inv.GetItemEntityUnsafe(ids[0]);
+        }
+
+        if(ent)
+        {
+            ent.SetHideInGame(hide);
+            equipped = true;
+        }
+
+        if(equipped)
+        {
+            lastItem = newItem;
+        }
+    }
+
+    private function updateDye(inv : CInventoryComponent, val : name, dye : string)
+    {
+        var itemEnt : CItemEntity;
+        var ids : array<SItemUniqueId>;
+
+        if(dye == "none")
+        {
+            return;
+        }
+
+        val = normalizeNGPItem(val);
+
+        ids = inv.GetItemsByName(val);
+        
+        if(ids.Size() > 0)
+        {
+            itemEnt = inv.GetItemEntityUnsafe(ids[0]);
+            if(itemEnt)
+            {
+                itemEnt.ApplyAppearance( dye );
+            }
+        }
+        
+    }
+
+    private function updateEquippedItems()
+    {
+        var inv : CInventoryComponent;
+        var acs : array< CComponent >;
+        var head : name;
+
+        acs = ghost.GetComponentsByClassName( 'CHeadManagerComponent' );
+	    head = ( ( CHeadManagerComponent ) acs[0] ).GetCurHeadName();
+
+        inv = ghost.GetInventory();
+
+        EquipNewItem(inv, last_eq_steel, eq_steel);
+        EquipNewItem(inv, last_eq_silver, eq_silver);
+        EquipNewItem(inv, last_eq_armor, eq_armor, false, hideBody);
+        EquipNewItem(inv, last_eq_gloves, eq_gloves, false, hideBody);
+        EquipNewItem(inv, last_eq_pants, eq_pants, false, hideBody);
+        EquipNewItem(inv, last_eq_boots, eq_boots, false, hideBody);
+        EquipNewItem(inv, last_eq_steelScab, eq_steelScab);
+        EquipNewItem(inv, last_eq_silverScab, eq_silverScab);
+        EquipNewItem(inv, last_eq_crossbow, eq_crossbow);
+
+        updateDye(inv, eq_armor, idToColor(armorDye));
+        updateDye(inv, eq_gloves, idToColor(gloveDye));
+        updateDye(inv, eq_pants, idToColor(pantDye));
+        updateDye(inv, eq_boots, idToColor(bootDye));
+
+        if(!hideHair)
+        {
+            EquipNewItem(inv, last_eq_hair, eq_hair, true);
+        }
+
+        if(!headOverride)
+        {
+            EquipNewItem(inv, last_eq_head, eq_head);
+        }
+
+        EquipNewItem(inv, last_eq_mask, eq_mask);
+    }
+
+    private function idToColor(id : int) : string
+    {
+        if (id == 1)
+            return "dye_default";
+        if (id == 2)
+            return "dye_black";
+        if (id == 3)
+            return "dye_blue";
+        if (id == 4)
+            return "dye_brown";
+        if (id == 5)
+            return "dye_gray";
+        if (id == 6)
+            return "dye_green";
+        if (id == 7)
+            return "dye_orange";
+        if (id == 8)
+            return "dye_pink";
+        if (id == 9)
+            return "dye_purple";
+        if (id == 10)
+            return "dye_red";
+        if (id == 11)
+            return "dye_turquoise";
+        if (id == 12)
+            return "dye_white";
+        if (id == 13)
+            return "dye_yellow";
+
+        return "none";
+    }
+
+    private function isLastSwordMovement() : bool
+    {
+        return (lastMovementType == 'sword_idle' || lastMovementType == 'sword_slow_walk' || lastMovementType == 'sword_walk' || lastMovementType == 'sword_run' || lastMovementType == 'sword_sprint');
+    }
+
+    private function isLastNonSwordMovement() : bool
+    {
+        return (lastMovementType == 'idle' || lastMovementType == 'slow_walk' || lastMovementType == 'walk' || lastMovementType == 'run' || lastMovementType == 'sprint');
+    }
+
+    private function swim()
+    {
+        // woman complete
+        if(curState == 'Swim' && speed == 0)
+        {
+            if(isDiving)
+            {
+                if(lastSwimType == 'idle')
+                {
+                    queueAnim('swim_idle_to_underwater', 1.83, 0.2, 0, 'none', true);
+                }
+
+                lastSwimType = 'swim_underwater';
+
+                if(lastVerticalMoveDir == 'up')
+                {
+                    if(lastAnim != 'swim_underwater_u')
+                    {
+                        queueAnim('swim_underwater_u', 1.17, 0.2, 0, 'swim_up_f');
+                    }
+
+                    queueAnim('swim_underwater_u', 1.17, 0, 0, 'swim_up_f');
+                }
+                else if(lastVerticalMoveDir == 'down')
+                {
+                    if(lastAnim != 'swim_underwater_d')
+                    {
+                        queueAnim('swim_underwater_d', 1.17, 0.2, 0, 'swim_down_f');
+                    }
+
+                    queueAnim('swim_underwater_d', 1.17, 0, 0, 'swim_down_f');
+                }
+                else
+                {
+                    if(lastAnim != 'swim_underwater_idle')
+                    {
+                        queueAnim('swim_underwater_idle', 1.5, 0.2, 0, 'swim_idle_underwater');
+                    }
+
+                    queueAnim('swim_underwater_idle', 1.5, 0, 0, 'swim_idle_underwater');
+                }
+            }
+            else
+            {
+                if(lastSwimType == 'swim' || lastSwimType == 'swim_underwater')
+                {
+                    queueAnim('swim_stop_left_arm', 1.0, 0.2, 0, 'none', true);
+                }
+
+                lastSwimType = 'idle';
+
+                if(lastAnim != 'swim_idle')
+                {
+                    queueAnim('swim_idle', 1.5, 0.2, 0, 'swim_idle');
+                }
+
+                queueAnim('swim_idle', 1.5, 0, 0, 'swim_idle');
+            }
+        }
+        else if(curState == 'Swim' && speed > 0 && !isDiving)
+        {
+            if(lastSwimType == 'idle')
+            {
+                queueAnim('swim_start', 0.83, 0.2, 0, 'none', true);
+            }
+            else if(lastSwimType == 'none')
+            {
+                queueAnim('man_swimming_walk_jump_water', 2.0, 0.2, 0, 'none', true);
+            }
+
+            lastSwimType = 'swim';
+
+            if(speed > 1)
+            {
+                if(lastMoveDir == 'forward')
+                {
+                    if(lastAnim != 'swim_fast_f')
+                    {
+                        queueAnim('swim_fast_f', 1.07, 0.2, 0, 'swim_fast_f');
+                    }
+
+                    queueAnim('swim_fast_f', 1.07, 0, 0, 'swim_fast_f');
+                }
+                else if(lastMoveDir == 'left')
+                {
+                    if(lastAnim != 'swim_fast_l')
+                    {
+                        queueAnim('swim_fast_l', 1.07, 0.2, 0, 'swim_fast_l');
+                    }
+
+                    queueAnim('swim_fast_l', 1.07, 0, 0, 'swim_fast_l');
+                }
+                else if(lastMoveDir == 'right')
+                {
+                    if(lastAnim != 'swim_fast_r')
+                    {
+                        queueAnim('swim_fast_r', 1.07, 0.2, 0, 'swim_fast_r');
+                    }
+
+                    queueAnim('swim_fast_r', 1.07, 0, 0, 'swim_fast_r');
+                }
+                else
+                {
+                    if(lastAnim != 'swim_fast_f')
+                    {
+                        queueAnim('swim_fast_f', 1.07, 0.2, 0, 'swim_fast_f');
+                    }
+
+                    queueAnim('swim_fast_f', 1.07, 0, 0, 'swim_fast_f');
+                }
+            }
+            else
+            {
+                if(lastMoveDir == 'forward')
+                {
+                    if(lastAnim != 'swim_slow_f')
+                    {
+                        queueAnim('swim_slow_f', 1.4, 0.2, 0, 'swim_slow_f');
+                    }
+
+                    queueAnim('swim_slow_f', 1.4, 0, 0, 'swim_slow_f');
+                }
+                else if(lastMoveDir == 'left')
+                {
+                    if(lastAnim != 'swim_slow_l')
+                    {
+                        queueAnim('swim_slow_l', 1.4, 0.2, 0, 'swim_slow_l');
+                    }
+
+                    queueAnim('swim_slow_l', 1.4, 0, 0, 'swim_slow_l');
+                }
+                else if(lastMoveDir == 'right')
+                {
+                    if(lastAnim != 'swim_slow_r')
+                    {
+                        queueAnim('swim_slow_r', 1.4, 0.2, 0, 'swim_slow_r');
+                    }
+
+                    queueAnim('swim_slow_r', 1.4, 0, 0, 'swim_slow_r');
+                }
+                else
+                {
+                    if(lastAnim != 'swim_slow_f')
+                    {
+                        queueAnim('swim_slow_f', 1.4, 0.2, 0, 'swim_slow_f');
+                    }
+
+                    queueAnim('swim_slow_f', 1.4, 0, 0, 'swim_slow_f');
+                }
+            }
+        }
+        else if(curState == 'Swim' && speed > 0 && isDiving)
+        {
+            if(lastSwimType == 'idle')
+            {
+                queueAnim('swim_idle_to_underwater', 1.83, 0.2, 0, 'none', true);
+            }
+            else if(lastSwimType == 'swim')
+            {
+                queueAnim('swim_underwater_start_r45', 1.5, 0.2, 0, 'none', true);
+            }
+
+            lastSwimType = 'swim_underwater';
+
+            if(lastVerticalMoveDir == 'up')
+            {
+                if(lastMoveDir == 'forward')
+                {
+                    if(lastAnim != 'swim_underwater_u')
+                    {
+                        queueAnim('swim_underwater_u', 1.17, 0.2, 0, 'swim_up_f');
+                    }
+
+                    queueAnim('swim_underwater_u', 1.17, 0, 0, 'swim_up_f');
+                }
+                else if(lastMoveDir == 'left')
+                {
+                    if(lastAnim != 'swim_underwater_lu')
+                    {
+                        queueAnim('swim_underwater_lu', 1.17, 0.2, 0, 'swim_up_l');
+                    }
+
+                    queueAnim('swim_underwater_lu', 1.17, 0, 0, 'swim_up_l');
+                }
+                else if(lastMoveDir == 'right')
+                {
+                    if(lastAnim != 'swim_underwater_ru')
+                    {
+                        queueAnim('swim_underwater_ru', 1.17, 0.2, 0, 'swim_up_r');
+                    }
+
+                    queueAnim('swim_underwater_ru', 1.17, 0, 0, 'swim_up_r');
+                }
+                else
+                {
+                    if(lastAnim != 'swim_underwater_u')
+                    {
+                        queueAnim('swim_underwater_u', 1.17, 0.2, 0, 'swim_up_f');
+                    }
+
+                    queueAnim('swim_underwater_u', 1.17, 0, 0, 'swim_up_f');
+                }
+            }
+            else if(lastVerticalMoveDir == 'down')
+            {
+                if(lastMoveDir == 'forward')
+                {
+                    if(lastAnim != 'swim_underwater_d')
+                    {
+                        queueAnim('swim_underwater_d', 1.17, 0.2, 0, 'swim_down_f');
+                    }
+
+                    queueAnim('swim_underwater_d', 1.17, 0, 0, 'swim_down_f');
+                }
+                else if(lastMoveDir == 'left')
+                {
+                    if(lastAnim != 'swim_underwater_ld')
+                    {
+                        queueAnim('swim_underwater_ld', 1.17, 0.2, 0, 'swim_down_l');
+                    }
+
+                    queueAnim('swim_underwater_ld', 1.17, 0, 0, 'swim_down_l');
+                }
+                else if(lastMoveDir == 'right')
+                {
+                    if(lastAnim != 'swim_underwater_rd')
+                    {
+                        queueAnim('swim_underwater_rd', 1.17, 0.2, 0, 'swim_down_r');
+                    }
+
+                    queueAnim('swim_underwater_rd', 1.17, 0, 0, 'swim_down_r');
+                }
+                else
+                {
+                    if(lastAnim != 'swim_underwater_d')
+                    {
+                        queueAnim('swim_underwater_d', 1.17, 0.2, 0, 'swim_down_f');
+                    }
+
+                    queueAnim('swim_underwater_d', 1.17, 0, 0, 'swim_down_f');
+                }
+            }
+            else
+            {
+                if(lastMoveDir == 'forward')
+                {
+                    if(lastAnim != 'swim_underwater_f')
+                    {
+                        queueAnim('swim_underwater_f', 1.17, 0.2, 0, 'swim_underwater_f');
+                    }
+
+                    queueAnim('swim_underwater_f', 1.17, 0, 0, 'swim_underwater_f');
+                }
+                else if(lastMoveDir == 'left')
+                {
+                    if(lastAnim != 'swim_underwater_l')
+                    {
+                        queueAnim('swim_underwater_l', 1.17, 0.2, 0, 'swim_underwater_l');
+                    }
+
+                    queueAnim('swim_underwater_l', 1.17, 0, 0, 'swim_underwater_l');
+                }
+                else if(lastMoveDir == 'right')
+                {
+                    if(lastAnim != 'swim_underwater_r')
+                    {
+                        queueAnim('swim_underwater_r', 1.17, 0.2, 0, 'swim_underwater_r');
+                    }
+
+                    queueAnim('swim_underwater_r', 1.17, 0, 0, 'swim_underwater_r');
+                }
+                else
+                {
+                    if(lastAnim != 'swim_underwater_f')
+                    {
+                        queueAnim('swim_underwater_f', 1.17, 0.2, 0, 'swim_underwater_f');
+                    }
+
+                    queueAnim('swim_underwater_f', 1.17, 0, 0, 'swim_underwater_f');
+                }
+            }
+        }
+        else
+        {
+            if(lastSwimType != 'none')
+            {
+                queueAnim('swim_to_walk_lef_arm', 1, 0.2, 0, 'none', true);
+                smoothDelayedNext = true;
+            }
+            lastSwimType = 'none';
+        }
+    }
+
+    // The sign's own visual at this player's copy (Igni's fire, Aard's wave, Axii, Yrden's trap, Quen): the sign entity
+    // is created only to play its effects (no projectile, no damage, no slowing trap) and removed after a while.
+    private function PlaySignVisual(type : ESignType)
+    {
+        var template : CEntityTemplate;
+        var sign : W3SignEntity;
+        var igni : W3IgniEntity;
+        var aard : W3AardEntity;
+        var axii : W3AxiiEntity;
+        var yrden : W3YrdenEntity;
+        var quen : W3QuenEntity;
+        var effect, second : name;
+        var lasting : float;
+        var coop : r_CoopEnemies;
+
+        template = GetWitcherPlayer().GetSignTemplate(type);
+        if(!ghost || !template)
+        {
+            return;
+        }
+        sign = (W3SignEntity)theGame.CreateEntity(template, ghost.GetWorldPosition(), ghost.GetWorldRotation());
+        if(!sign)
+        {
+            return;
+        }
+        igni = (W3IgniEntity)sign;
+        aard = (W3AardEntity)sign;
+        axii = (W3AxiiEntity)sign;
+        yrden = (W3YrdenEntity)sign;
+        quen = (W3QuenEntity)sign;
+        lasting = 3.0;
+        if(igni && igni.effects.Size() > 0)
+        {
+            effect = igni.effects[0].throwEffect;
+        }
+        else if(aard && aard.effects.Size() > 0)
+        {
+            effect = aard.effects[0].baseCommonThrowEffect;
+        }
+        else if(axii && axii.effects.Size() > 0)
+        {
+            effect = axii.effects[0].castEffect;
+            second = axii.effects[0].throwEffect;
+        }
+        else if(yrden && yrden.effects.Size() > 0)
+        {
+            effect = yrden.effects[0].placeEffect;
+            second = yrden.effects[0].castEffect;
+            lasting = 10.0;
+            PlaceYrdenRunes(yrden);
+        }
+        coop = theGame.r_getMultiplayerClient().getCoopEnemies();
+        coop.signVisualsPlayed += 1;
+        if(quen)
+        {
+            // nothing to play on the sign: its cast effect is empty; what shows is the lasting shield on the copy
+            CacheQuenShieldNames(quen);
+            sign.Destroy();
+            UpdateQuenShield(true);
+            coop.lastSignVisual = type + ":" + quenShield;
+            return;
+        }
+        // Yrden's trap stays where it was cast; the others go with the caster
+        if(!yrden)
+        {
+            sign.CreateAttachment(ghost);
+        }
+        sign.PlayEffect(effect);
+        if(IsNameValid(second))
+        {
+            sign.PlayEffect(second);
+        }
+        sign.DestroyAfter(lasting);
+        coop.lastSignVisual = type + ":" + effect + "=" + sign.IsEffectActive(effect) + "," + second;
+        if(sign.IsEffectActive(effect) || (IsNameValid(second) && sign.IsEffectActive(second)))
+        {
+            coop.signVisualsActive += 1;
+            coop.CountSignVisual(type);
+        }
+    }
+
+    // Quen's lasting shield on the copy. From a game that sends signFx it is up exactly while the player's own is,
+    // at their S_Magic_s13 level; otherwise it goes up with the cast for as long as this game's own Quen would last.
+    private function UpdateQuenShield(cast : bool)
+    {
+        if(!ghost)
+        {
+            return;
+        }
+        if(signFx)
+        {
+            if(quenUp && !IsNameValid(quenShield))
+            {
+                ShowQuenShield(QuenShieldEffect(castQuenLevel), 0);
+            }
+            else if(!quenUp && IsNameValid(quenShield))
+            {
+                StopQuenShield();
+            }
+        }
+        else if(cast)
+        {
+            ShowQuenShield(QuenShieldEffect(LocalQuenLevel()), LocalQuenDuration());
+        }
+        else if(IsNameValid(quenShield) && theGame.GetEngineTimeAsSeconds() > quenShieldUntil)
+        {
+            StopQuenShield();
+        }
+    }
+
+    // the lasting shield by S_Magic_s13 level, as GetLastingFxName picks it
+    private function QuenShieldEffect(level : int) : name
+    {
+        CacheQuenShieldNames(NULL);
+        if(quenShieldNames.Size() < 4)
+        {
+            return '';
+        }
+        return quenShieldNames[Min(Max(level, 0), 3)];
+    }
+
+    // the names come from the sign's template; without a cast at hand, from an entity made only to read them
+    private function CacheQuenShieldNames(quen : W3QuenEntity)
+    {
+        var made : bool;
+
+        if(quenShieldNames.Size() == 4)
+        {
+            return;
+        }
+        if(!quen)
+        {
+            quen = (W3QuenEntity)theGame.CreateEntity(GetWitcherPlayer().GetSignTemplate(ST_Quen), ghost.GetWorldPosition());
+            made = true;
+        }
+        if(quen && quen.effects.Size() > 0)
+        {
+            quenShieldNames.PushBack(quen.effects[0].lastingEffectUpgNone);
+            quenShieldNames.PushBack(quen.effects[0].lastingEffectUpg1);
+            quenShieldNames.PushBack(quen.effects[0].lastingEffectUpg2);
+            quenShieldNames.PushBack(quen.effects[0].lastingEffectUpg3);
+        }
+        if(made && quen)
+        {
+            quen.Destroy();
+        }
+    }
+
+    // this game's own Geralt's Quen, for a player whose game doesn't send theirs
+    private function LocalQuenLevel() : int
+    {
+        if(thePlayer.CanUseSkill(S_Magic_s13))
+        {
+            return thePlayer.GetSkillLevel(S_Magic_s13);
+        }
+        return 0;
+    }
+
+    // as the sign's GetSignStats has it
+    private function LocalQuenDuration() : float
+    {
+        var fortified : SAbilityAttributeValue;
+        var duration : float;
+
+        duration = CalculateAttributeValue(thePlayer.GetSkillAttributeValue(S_Magic_4, 'shield_duration', true, true));
+        if(thePlayer.CanUseSkill(S_Magic_s36))
+        {
+            fortified = thePlayer.GetSkillAttributeValue(S_Magic_s36, 'duration', false, true);
+            duration *= 1 + fortified.valueMultiplicative * thePlayer.GetSkillLevel(S_Magic_s36);
+        }
+        if(duration <= 0)
+        {
+            duration = 30;
+        }
+        return duration;
+    }
+
+    // true if it went up
+    private function ShowQuenShield(effect : name, duration : float) : bool
+    {
+        var coop : r_CoopEnemies;
+
+        StopQuenShield();
+        if(!IsNameValid(effect) || !ghost.PlayEffect(effect))
+        {
+            return false;
+        }
+        quenShield = effect;
+        quenShieldUntil = theGame.GetEngineTimeAsSeconds() + duration;
+        if(!ghost.IsEffectActive(effect))
+        {
+            return false;
+        }
+        coop = theGame.r_getMultiplayerClient().getCoopEnemies();
+        coop.quenShieldsShown += 1;
+        coop.signVisualsActive += 1;
+        coop.CountSignVisual(ST_Quen);
+        return true;
+    }
+
+    private function StopQuenShield()
+    {
+        if(IsNameValid(quenShield))
+        {
+            if(ghost)
+            {
+                ghost.StopEffect(quenShield);
+            }
+            quenShield = '';
+        }
+    }
+
+    // Yrden's trap as the sign draws it (CreateTrap): rune entities on a circle and one in the middle, visuals only.
+    // Range and duration are the caster's from a game that sends signFx, otherwise this game's own Yrden's (duration
+    // with sign intensity, as GetSignStats has it).
+    private function PlaceYrdenRunes(yrden : W3YrdenEntity)
+    {
+        var settings : SYrdenEffectSettings;
+        var att : SAbilityAttributeValue;
+        var center : Vector;
+        var range, duration : float;
+        var i, j, count : int;
+
+        ClearYrdenRunes();
+        range = castYrdenRange;
+        duration = castYrdenDuration;
+        if(!signFx || range <= 0 || duration <= 0)
+        {
+            range = CalculateAttributeValue(thePlayer.GetSkillAttributeValue(S_Magic_3, 'range', false, true));
+            att = thePlayer.GetSkillAttributeValue(S_Magic_3, 'trap_duration', false, true);
+            att += thePlayer.GetTotalSignSpellPower(S_Magic_3);
+            att.valueMultiplicative -= 1;
+            duration = CalculateAttributeValue(att);
+        }
+        if(range <= 0)
+        {
+            range = 4;
+        }
+        if(duration <= 0)
+        {
+            duration = 10;
+        }
+        yrdenRunesUntil = theGame.GetEngineTimeAsSeconds() + duration;
+        center = yrden.GetWorldPosition();
+        for(i = 0; i < yrden.runeTemplates.Size(); i += 1)
+        {
+            PlaceYrdenRune(yrden.runeTemplates[i], center, range, 2 * Pi() * i / yrden.runeTemplates.Size());
+        }
+        for(i = 0; i < yrden.radialEffects.Size(); i += 1)
+        {
+            settings = yrden.radialEffects[i];
+            count = settings.count;
+            if(settings.calculateCountFromSpacing && settings.desiredSpacing > 0)
+            {
+                count = (int)((2 * Pi() * range) / settings.desiredSpacing);
+            }
+            for(j = 0; j < count; j += 1)
+            {
+                PlaceYrdenRune(settings.effectEntityTemplate, center, range * settings.rangeModifier, 2 * Pi() * j / count);
+            }
+        }
+        PlaceYrdenRune(yrden.centerRuneTemplate, center, 0, 0);
+    }
+
+    private function PlaceYrdenRune(template : CEntityTemplate, center : Vector, range : float, angle : float)
+    {
+        var pos : Vector;
+        var rune : CEntity;
+        var coop : r_CoopEnemies;
+
+        if(!template)
+        {
+            return;
+        }
+        pos = center;
+        pos.X += range * CosF(angle);
+        pos.Y += range * SinF(angle);
+        pos = TraceFloor(pos);
+        pos.Z += 0.05;
+        rune = theGame.CreateEntity(template, pos, ghost.GetWorldRotation());
+        if(rune)
+        {
+            yrdenRunes.PushBack(rune);
+            coop = theGame.r_getMultiplayerClient().getCoopEnemies();
+            coop.yrdenRunesShown += 1;
+        }
+    }
+
+    // fades out like the sign's own trap
+    private function ClearYrdenRunes()
+    {
+        var i : int;
+
+        for(i = 0; i < yrdenRunes.Size(); i += 1)
+        {
+            if(yrdenRunes[i])
+            {
+                yrdenRunes[i].StopAllEffects();
+                yrdenRunes[i].DestroyAfter(5.0);
+            }
+        }
+        yrdenRunes.Clear();
+    }
+
+    private function updateGeraltAnims()
+    {
+        var anim : r_Anim;
+        var ids : array<SItemUniqueId>;
+        var inv : CInventoryComponent;
+        var rand : int;
+        var coop : r_CoopEnemies;
+        var castType : ESignType;
+
+        if(signVisualAt > 0 && theGame.GetEngineTimeAsSeconds() >= signVisualAt)
+        {
+            signVisualAt = 0;
+            PlaySignVisual(signVisualType);
+        }
+        UpdateQuenShield(false);
+        if(signFx && ghost)
+        {
+            // the player's Quen played its hit burst (a hit on the shield, or the one that broke it) or its impulse
+            if(prevQuenBurstSeq >= 0 && quenBurstSeq != prevQuenBurstSeq && ghost.PlayEffect('quen_lasting_shield_hit'))
+            {
+                coop = theGame.r_getMultiplayerClient().getCoopEnemies();
+                coop.quenHitsShown += 1;
+            }
+            if(prevQuenImpulseSeq >= 0 && quenImpulseSeq != prevQuenImpulseSeq)
+            {
+                ghost.PlayEffect('lasting_shield_impulse');
+            }
+            prevQuenBurstSeq = quenBurstSeq;
+            prevQuenImpulseSeq = quenImpulseSeq;
+        }
+        if(yrdenRunes.Size() > 0 && theGame.GetEngineTimeAsSeconds() > yrdenRunesUntil)
+        {
+            ClearYrdenRunes();
+        }
+
+        if(!initSmooth)
+        {
+            if(heldItem == "silver" || heldItem == "steel")
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('combat_locomotion_man_geralt_ex_idle', 5.25, 0.4, 0, 'sword_movement_idle', true);
+                }
+                else
+                {
+                    queueAnim('combat_locomotion_man_geralt_ex_idle', 2.67, 0.4, 0, 'sword_movement_idle', true);
+                }
+            }
+            else
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('locomotion_idle', 5.27, 0.4, 0, 'movement_idle', true);
+                }
+                else
+                {
+                    queueAnim('locomotion_idle', 5.00, 0.4, 0, 'movement_idle', true);
+                }
+            }
+            initSmooth = true;
+        }
+
+        if((theGame.GetEngineTimeAsSeconds() - theGame.r_getMultiplayerClient().getSpawnTime()) < 2)
+        {
+            return;
+        }
+
+        if(isMounted || isSailing)
+        {
+            return;
+        }
+
+        if(lastChillOut || chillOutAnim != '')
+        {
+            lastIdleAnim = theGame.GetEngineTimeAsSeconds();
+            return;
+        }
+
+        inv = ghost.GetInventory();
+
+        bombActive = (currentState == 'AimThrow' && bombSelected);
+
+        if(currentType == 'emote')
+        {
+            lastIdleAnim = theGame.GetEngineTimeAsSeconds();
+        }
+        
+        // default anims
+        if(!holdingTorch && !lastLadder && isAlive && animQueue.Size() == 0 && !isAnimPlaying)
+        {
+            if(heldItem == "silver" || heldItem == "steel")
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    if(lastAnim == 'combat_locomotion_man_geralt_ex_idle')
+                    {
+                        queueAnim('combat_locomotion_man_geralt_ex_idle', 5.25, 0.0, 0, 'sword_movement_idle');
+                    }
+                    else
+                    {
+                        queueAnim('combat_locomotion_man_geralt_ex_idle', 5.25, 0.4, 0, 'sword_movement_idle');
+                    }
+                }
+                else
+                {
+                    if(lastAnim == 'combat_locomotion_man_geralt_ex_idle')
+                    {
+                        queueAnim('combat_locomotion_man_geralt_ex_idle', 2.67, 0, 0, 'sword_movement_idle');
+                    }
+                    else
+                    {
+                        queueAnim('combat_locomotion_man_geralt_ex_idle', 2.67, 0.4, 0, 'sword_movement_idle');
+                    }
+                }
+            }
+            else
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    if(lastAnim == 'locomotion_idle')
+                    {
+                        queueAnim('locomotion_idle', 5.27, 0, 0, 'movement_idle');
+                    }
+                    else
+                    {
+                        queueAnim('locomotion_idle', 5.27, 0.4, 0, 'movement_idle');
+                    }
+                }
+                else
+                {
+                    if(lastAnim == 'locomotion_idle')
+                    {
+                        queueAnim('locomotion_idle', 5.00, 0, 0, 'movement_idle');
+                    }
+                    else
+                    {
+                        queueAnim('locomotion_idle', 5.00, 0.4, 0, 'movement_idle');
+                    }
+                }
+            }
+        }
+
+        // idle anims
+        if(((theGame.GetEngineTimeAsSeconds() - lastIdleAnim) > 13) && lastIdle && !inCombat && !lastLadder && !isMounted && !isFalling && !isSailing && !aimingCrossbow && !bombActive && !holdingTorch && isAlive && currentState != 'AimThrow' && curState == 'Idle' && !isJumping && !swirling && !rend && !channeling)
+        {
+            if(heldItem == "silver" || heldItem == "steel")
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                }
+                else
+                {
+                    rand = RandDifferent(lastIdleRand, 3);
+
+                    if(rand == 0)
+                    {
+                        queueAnim('inventory_sword_check1', 6.23, 0.4, 0, 'afk', true);
+                    }
+                    else if(rand == 1)
+                    {
+                        queueAnim('inventory_sword_check2', 6.67, 0.4, 0, 'afk', true);
+                    }
+                    else if(rand == 2)
+                    {
+                        queueAnim('inventory_heavy_melee_check1', 5.6, 0.4, 0, 'afk', true);
+                    }
+                }
+            }
+            else
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                }
+                else
+                {
+                    if(rand == 0)
+                    {
+                        rand = RandDifferent(lastIdleRand, 6);
+
+                        if(rand == 0)
+                        {
+                            queueAnim('inventory_noequipment_armor', 4.17, 0.4, 0, 'afk', true);
+                        }
+                        else if(rand == 1)
+                        {
+                            queueAnim('inventory_noequipment_armor_flex1', 6.33, 0.4, 0, 'afk', true);
+                        }
+                        else if(rand == 2)
+                        {
+                            queueAnim('inventory_noequipment_armor_flex2', 5.03, 0.4, 0, 'afk', true);
+                        }
+                        else if(rand == 3)
+                        {
+                            queueAnim('inventory_noequipment_boots', 4.9, 0.4, 0, 'afk', true);
+                        }
+                        else if(rand == 4)
+                        {
+                            queueAnim('inventory_noequipment_gloves', 5.67, 0.4, 0, 'afk', true);
+                        }
+                        else if(rand == 5)
+                        {
+                            queueAnim('inventory_noequipment_pants', 5.27, 0.4, 0, 'afk', true);
+                        }
+                    }
+                }
+            }   
+
+            lastIdleRand = rand;
+            smoothDelayedNext = true;
+            lastIdleAnim = theGame.GetEngineTimeAsSeconds();
+        }
+
+        if(speed != 0)
+        {
+            lastIdle = false;
+        }
+
+        // woman complete
+        if(!inCombat && !isMounted && !isFalling && !isSailing && !aimingCrossbow && !bombActive && !holdingTorch && isAlive && currentState != 'AimThrow' && curState == 'Idle' && !isJumping && !swirling && !rend && !channeling)
+        {
+            if(heldItem == "silver" || heldItem == "steel")
+            {
+                if(speed == 0)
+                {
+                    if(!lastIdle)
+                    {
+                        lastIdleAnim = theGame.GetEngineTimeAsSeconds();
+                        lastIdle = true;
+                    }
+
+                    if(lastMoveDirAlt != 'none')
+                    {
+                        // ghost still moving
+                        if(lastMovementType == 'sword_sprint')
+                        {
+                            queueAnim('combat_locomotion_sprint_cycle_forward', 0.60, 0, 0, 'sword_movement_sprint');
+                        }
+                        else if(lastMovementType == 'sword_run')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                queueAnim('combat_locomotion_run_cycle_fast_forward_triple_01', 1.8, 0, 0, 'sword_movement_run');
+                            }
+                            else
+                            {
+                                queueAnim('combat_locomotion_run_cycle_fast_forward', 2.0, 0, 0, 'sword_movement_run');
+                            }
+                        }
+                        else if(lastMovementType == 'sword_slow_walk')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                queueAnim('combat_locomotion_walk_cycle_slow_forward_triple_01', 3, 0, 0, 'sword_movement_slow_walk');
+                            }
+                            else
+                            {
+                                queueAnim('combat_locomotion_walk_cycle_slow_forward_triple_01', 3.7, 0, 0, 'sword_movement_slow_walk');
+                            }
+                        }
+                        else if(lastMovementType != 'sword_idle')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                queueAnim('combat_locomotion_walk_cycle_fast_forward_triple_01', 2.6, 0, 0, 'sword_movement_walk');
+                            }
+                            else
+                            {
+                                queueAnim('combat_locomotion_walk_cycle_fast_forward_triple_01', 3.00, 0, 0, 'sword_movement_walk');
+                            }
+                        }
+                        return;
+                    }
+
+                    if(lastAnim == 'dialogue_jump_idle' || smoothNext || isLastNonSwordMovement())
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_man_geralt_ex_idle', 5.25, 0.4, 0, 'sword_movement_idle', true);
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_man_geralt_ex_idle', 2.67, 0.4, 0, 'sword_movement_idle', true);
+                        }
+                        lastMovementType = 'sword_idle';
+                        smoothNext = false;
+                        return;
+                    }
+
+                    if(smoothDelayedNext)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_man_geralt_ex_idle', 5.25, 0.4, 0, 'sword_movement_idle');
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_man_geralt_ex_idle', 2.67, 0.4, 0, 'sword_movement_idle');
+                        }
+                        
+                        lastMovementType = 'sword_idle';
+                        smoothDelayedNext = false;
+                        return;
+                    }
+
+                    if(lastMovementType == 'sword_sprint')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_sprint_rightforward_to_idle', 1.9, 0.2, 0, 'none', true);
+                            queueAnim('combat_locomotion_man_geralt_ex_idle', 5.25, 0.7, 0, 'sword_movement_idle');
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_sprint_rightforward_to_idle', 2.17, 0.2, 0, 'none', true);
+                            queueAnim('combat_locomotion_man_geralt_ex_idle', 2.67, 0.7, 0, 'sword_movement_idle');
+                        }
+                    }
+                    else if(lastMovementType == 'sword_walk' || lastMovementType == 'sword_slow_walk')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_walk_rightup_to_idle', 1.5, 0.2, 0, 'none', true);
+                            queueAnim('combat_locomotion_man_geralt_ex_idle', 5.25, 0.7, 0, 'sword_movement_idle');
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_walk_rightup_to_idle', 1.5, 0.2, 0, 'none', true);
+                            queueAnim('combat_locomotion_man_geralt_ex_idle', 2.67, 0.7, 0, 'sword_movement_idle');
+                        }
+                        
+                    }
+                    else if(lastMovementType == 'sword_run')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_run_rightup_to_idle', 1.1, 0.2, 0, 'none', true);
+                            queueAnim('combat_locomotion_man_geralt_ex_idle', 5.25, 0.7, 0, 'sword_movement_idle');
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_run_rightup_to_idle', 1.1, 0.2, 0, 'none', true);
+                            queueAnim('combat_locomotion_man_geralt_ex_idle', 2.67, 0.7, 0, 'sword_movement_idle');
+                        }
+                        
+                    }
+                    else
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_man_geralt_ex_idle', 5.25, 0, 0, 'sword_movement_idle');
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_man_geralt_ex_idle', 2.67, 0, 0, 'sword_movement_idle');
+                        }
+                    }
+                    lastMovementType = 'sword_idle';
+                }
+                else if(speed <= 0.4)
+                {
+                    if(lastAnim == 'dialogue_jump_idle' || smoothNext || isLastNonSwordMovement())
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_walk_cycle_slow_forward_triple_01', 3, 0.4, 0, 'sword_movement_slow_walk', true);
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_walk_cycle_slow_forward_triple_01', 3.7, 0.4, 0, 'sword_movement_slow_walk', true);
+                        }
+                        lastMovementType = 'sword_slow_walk';
+                        smoothNext = false;
+                        return;
+                    }
+
+                    if(smoothDelayedNext)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_walk_cycle_slow_forward_triple_01', 3, 0.4, 0, 'sword_movement_slow_walk');
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_walk_cycle_slow_forward_triple_01', 3.7, 0.4, 0, 'sword_movement_slow_walk');
+                        }
+                        
+                        lastMovementType = 'sword_slow_walk';
+                        smoothDelayedNext = false;
+                        return;
+                    }
+
+                    if(lastMovementType == 'sword_run' || lastMovementType == 'sword_sprint' ||lastMovementType == 'sword_idle' || lastMovementType == 'sword_walk' || lastAnim == 'dialogue_jump_idle')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_walk_cycle_slow_forward_triple_01', 3, 0.4, 0, 'sword_movement_slow_walk');
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_walk_cycle_slow_forward_triple_01', 3.7, 0.4, 0, 'sword_movement_slow_walk');
+                        }
+                    }
+                    else
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_walk_cycle_slow_forward_triple_01', 3, 0, 0, 'sword_movement_slow_walk');
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_walk_cycle_slow_forward_triple_01', 3.7, 0, 0, 'sword_movement_slow_walk');
+                        }
+                    }
+
+                    lastMovementType = 'sword_slow_walk';
+                }
+                else if(speed <= 0.7)
+                {
+                    if(lastAnim == 'dialogue_jump_idle' || smoothNext || isLastNonSwordMovement())
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_walk_cycle_fast_forward_triple_01', 2.6, 0.4, 0, 'sword_movement_walk', true);
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_walk_cycle_fast_forward_triple_01', 3.00, 0.4, 0, 'sword_movement_walk', true);
+                        }
+                        lastMovementType = 'sword_walk';
+                        smoothNext = false;
+                        return;
+                    }
+
+                    if(smoothDelayedNext)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_walk_cycle_fast_forward_triple_01', 2.6, 0.4, 0, 'sword_movement_walk');
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_walk_cycle_fast_forward_triple_01', 3.00, 0.4, 0, 'sword_movement_walk');
+                        }
+                        
+                        lastMovementType = 'sword_walk';
+                        smoothDelayedNext = false;
+                        return;
+                    }
+
+                    if(lastMovementType == 'sword_sprint')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_walk_cycle_fast_forward_triple_01', 2.6, 0.4, 0, 'sword_movement_walk');
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_walk_cycle_fast_forward_triple_01', 3.00, 0.4, 0, 'sword_movement_walk');
+                        }
+                    }
+                    else if(lastMovementType == 'sword_run')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_run_cycle_slow_forward', 1, 0.2, 0, 'none', true);
+                            queueAnim('combat_locomotion_walk_cycle_fast_forward_triple_01', 2.6, 0.4, 0, 'sword_movement_walk');
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_run_cycle_slow_forward', 0.8, 0.2, 0, 'none', true);
+                            queueAnim('combat_locomotion_walk_cycle_fast_forward_triple_01', 3.00, 0.4, 0, 'sword_movement_walk');
+                        }
+                    }
+                    else if(lastMovementType == 'sword_idle' || lastMovementType == 'sword_slow_walk' || lastAnim == 'dialogue_jump_idle')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_walk_cycle_fast_forward_triple_01', 2.6, 0.7, 0, 'sword_movement_walk');
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_walk_cycle_fast_forward_triple_01', 3.00, 0.7, 0, 'sword_movement_walk');
+                        }
+                    }
+                    else
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_walk_cycle_fast_forward_triple_01', 2.6, 0, 0, 'sword_movement_walk');
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_walk_cycle_fast_forward_triple_01', 3.00, 0, 0, 'sword_movement_walk');
+                        }
+                    }
+
+                    lastMovementType = 'sword_walk';
+                }
+                else if(speed <= 1)
+                {
+                    if(lastAnim == 'dialogue_jump_idle' || smoothNext || isLastNonSwordMovement())
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_run_cycle_fast_forward_triple_01', 1.8, 0.4, 0, 'sword_movement_run', true);
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_run_cycle_fast_forward', 2.0, 0.4, 0, 'sword_movement_run', true);
+                        }
+                        
+                        lastMovementType = 'sword_run';
+                        smoothNext = false;
+                        return;
+                    }
+
+                    if(smoothDelayedNext)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_run_cycle_fast_forward_triple_01', 1.8, 0.4, 0, 'sword_movement_run');
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_run_cycle_fast_forward', 2.0, 0.4, 0, 'sword_movement_run');
+                        }
+                        
+                        lastMovementType = 'sword_run';
+                        smoothDelayedNext = false;
+                        return;
+                    }
+
+                    if(lastMovementType == 'sword_idle')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_run_cycle_fast_forward_triple_01', 1.8, 0.8, 0, 'sword_movement_run');
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_run_cycle_fast_forward', 2.0, 0.8, 0, 'sword_movement_run');
+                        }
+                    }
+                    else if(lastMovementType == 'sword_sprint')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_run_cycle_fast_forward_triple_01', 1.8, 0.4, 0, 'sword_movement_run');
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_run_cycle_fast_forward', 2.0, 0.4, 0, 'sword_movement_run');
+                        }
+                    }
+                    else if(lastMovementType == 'sword_walk' || lastMovementType == 'sword_slow_walk' || lastAnim == 'dialogue_jump_idle')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_run_cycle_fast_forward_triple_01', 1.8, 0.6, 0, 'sword_movement_run');
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_run_cycle_fast_forward', 2.0, 0.6, 0, 'sword_movement_run');
+                        }
+                    }
+                    else
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('combat_locomotion_run_cycle_fast_forward_triple_01', 1.8, 0, 0, 'sword_movement_run');
+                        }
+                        else
+                        {
+                            queueAnim('combat_locomotion_run_cycle_fast_forward', 2.0, 0, 0, 'sword_movement_run');
+                        }
+                    }
+
+                    lastMovementType = 'sword_run';
+                }
+                else
+                {
+                    if(lastAnim == 'dialogue_jump_idle' || smoothNext || isLastNonSwordMovement())
+                    {
+                        queueAnim('combat_locomotion_sprint_cycle_forward', 0.60, 0.3, 0, 'sword_movement_sprint', true);
+                        lastMovementType = 'sword_sprint';
+                        smoothNext = false;
+                        return;
+                    }
+
+                    if(smoothDelayedNext)
+                    {
+                        queueAnim('combat_locomotion_sprint_cycle_forward', 0.60, 0.3, 0, 'sword_movement_sprint');
+                        lastMovementType = 'sword_sprint';
+                        smoothDelayedNext = false;
+                        return;
+                    }
+
+                    if(lastMovementType == 'sword_idle')
+                    {
+                        queueAnim('combat_locomotion_sprint_cycle_forward', 0.60, 0.8, 0, 'sword_movement_sprint');
+                    }
+                    else if(lastMovementType == 'sword_walk' || lastMovementType == 'sword_slow_walk' || lastMovementType == 'sword_run' || lastAnim == 'dialogue_jump_idle')
+                    {
+                        queueAnim('combat_locomotion_sprint_cycle_forward', 0.60, 0.3, 0, 'sword_movement_sprint');
+                    }
+                    else
+                    {
+                        queueAnim('combat_locomotion_sprint_cycle_forward', 0.60, 0, 0, 'sword_movement_sprint');
+                    }
+
+                    lastMovementType = 'sword_sprint';
+                }
+            }
+            else
+            {
+                if(speed == 0)
+                {
+                    if(!lastIdle)
+                    {
+                        lastIdleAnim = theGame.GetEngineTimeAsSeconds();
+                        lastIdle = true;
+                    }
+
+                    if(lastMoveDirAlt != 'none')
+                    {
+                        // ghost still moving
+                        if(lastMovementType == 'sprint')
+                        {
+                            queueAnim('locomotion_sprint_cycle_forward', 0.60, 0, 0, 'movement_sprint');
+                        }
+                        else if(lastMovementType == 'run')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                queueAnim('locomotion_run_cycle_fast_forward', 0.6, 0, 0, 'movement_run');
+                            }
+                            else
+                            {
+                                queueAnim('locomotion_run_cycle_fast_forward', 0.67, 0, 0, 'movement_run');
+                            }
+                        }
+                        else if(lastMovementType == 'slow_walk')
+                        {
+                            //
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                queueAnim('locomotion_walk_cycle_slow_forward_triple_01', 3, 0, 0, 'movement_slow_walk');
+                            }
+                            else
+                            {
+                                queueAnim('locomotion_walk_cycle_slow_forward_triple_01', 3.7, 0, 0, 'movement_slow_walk');
+                            }
+                        }
+                        else if(lastMovementType != 'idle')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                queueAnim('walk', 0.97, 0, 0, 'movement_walk');
+                            }
+                            else
+                            {
+                                queueAnim('walk', 1.00, 0, 0, 'movement_walk');
+                            }
+                        }
+                        return;
+                    }
+                    if(lastAnim == 'dialogue_jump_idle' || smoothNext || isLastSwordMovement())
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('locomotion_idle', 5.27, 0.4, 0, 'movement_idle', true);
+                        }
+                        else
+                        {
+                            queueAnim('locomotion_idle', 5.00, 0.4, 0, 'movement_idle', true);
+                        }
+                        lastMovementType = 'idle';
+                        smoothNext = false;
+                        return;
+                    }
+
+                    if(smoothDelayedNext)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('locomotion_idle', 5.27, 0.4, 0, 'movement_idle');
+                        }
+                        else
+                        {
+                            queueAnim('locomotion_idle', 5.00, 0.4, 0, 'movement_idle');
+                        }
+                        lastMovementType = 'idle';
+                        smoothDelayedNext = false;
+                        return;
+                    }
+
+                    if(lastMovementType == 'sprint')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('locomotion_sprint_rightforward_to_idle', 1.9, 0.2, 0, 'none', true);
+                            queueAnim('locomotion_idle', 5.27, 0.7, 0, 'movement_idle');
+                        }
+                        else
+                        {
+                            queueAnim('locomotion_sprint_rightforward_to_idle', 2.57, 0.2, 0, 'none', true);
+                            queueAnim('locomotion_idle', 5.00, 0.7, 0, 'movement_idle');
+                        }
+                    }
+                    else if(lastMovementType == 'walk' || lastMovementType == 'slow_walk')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('locomotion_walk_rightup_to_idle', 1.5, 0.2, 0, 'none', true);
+                            queueAnim('locomotion_idle', 5.27, 0.7, 0, 'movement_idle');
+                        }
+                        else
+                        {
+                            queueAnim('locomotion_walk_rightup_to_idle', 1.5, 0.2, 0, 'none', true);
+                            queueAnim('locomotion_idle', 5.00, 0.7, 0, 'movement_idle');
+                        }
+                    }
+                    else if(lastMovementType == 'run')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('locomotion_run_rightup_to_idle', 1.23, 0.2, 0, 'none', true);
+                            queueAnim('locomotion_idle', 5.27, 0.7, 0, 'movement_idle');
+                        }
+                        else
+                        {
+                            queueAnim('locomotion_run_rightup_to_idle_02', 1.53, 0.2, 0, 'none', true);
+                            queueAnim('locomotion_idle', 5.00, 0.7, 0, 'movement_idle');
+                        }
+                    }
+                    else
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('locomotion_idle', 5.27, 0, 0, 'movement_idle');
+                        }
+                        else
+                        {
+                            queueAnim('locomotion_idle', 5.00, 0, 0, 'movement_idle');
+                        }
+                    }
+                    lastMovementType = 'idle';
+                }
+                else if(speed <= 0.4)
+                {
+                    if(lastAnim == 'dialogue_jump_idle' || smoothNext || isLastSwordMovement())
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('locomotion_walk_cycle_slow_forward_triple_01', 3, 0.4, 0, 'movement_slow_walk', true);
+                        }
+                        else
+                        {
+                            queueAnim('locomotion_walk_cycle_slow_forward_triple_01', 3.7, 0.4, 0, 'movement_slow_walk', true);
+                        }
+                        
+                        lastMovementType = 'slow_walk';
+                        smoothNext = false;
+                        return;
+                    }
+
+                    if(smoothDelayedNext)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('locomotion_walk_cycle_slow_forward_triple_01', 3, 0.4, 0, 'movement_slow_walk');
+                        }
+                        else
+                        {
+                            queueAnim('locomotion_walk_cycle_slow_forward_triple_01', 3.7, 0.4, 0, 'movement_slow_walk');
+                        }
+                        lastMovementType = 'slow_walk';
+                        smoothDelayedNext = false;
+                        return;
+                    }
+
+                    if(lastMovementType == 'sprint' || lastMovementType == 'run' || lastMovementType == 'idle' || lastMovementType == 'walk' || lastAnim == 'dialogue_jump_idle')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('locomotion_walk_cycle_slow_forward_triple_01', 3, 0.4, 0, 'movement_slow_walk');
+                        }
+                        else
+                        {
+                            queueAnim('locomotion_walk_cycle_slow_forward_triple_01', 3.7, 0.4, 0, 'movement_slow_walk');
+                        }
+                    }
+                    else
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('locomotion_walk_cycle_slow_forward_triple_01', 3, 0, 0, 'movement_slow_walk');
+                        }
+                        else
+                        {
+                            queueAnim('locomotion_walk_cycle_slow_forward_triple_01', 3.7, 0, 0, 'movement_slow_walk');
+                        }
+                    }
+
+                    lastMovementType = 'slow_walk';
+                }
+                else if(speed <= 0.7)
+                {
+                    if(lastAnim == 'dialogue_jump_idle' || smoothNext || isLastSwordMovement())
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('walk', 0.97, 0.7, 0, 'movement_walk', true);
+                        }
+                        else
+                        {
+                            queueAnim('walk', 1.00, 0.7, 0, 'movement_walk', true);
+                        }
+                        lastMovementType = 'walk';
+                        smoothNext = false;
+                        return;
+                    }
+
+                    if(smoothDelayedNext)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('walk', 0.97, 0.7, 0, 'movement_walk');
+                        }
+                        else
+                        {
+                            queueAnim('walk', 1.00, 0.7, 0, 'movement_walk');
+                        }
+                        lastMovementType = 'walk';
+                        smoothDelayedNext = false;
+                        return;
+                    }
+
+                    if(lastMovementType == 'sprint')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('walk', 0.97, 0.4, 0, 'movement_walk');
+                        }
+                        else
+                        {
+                            queueAnim('walk', 1.00, 0.4, 0, 'movement_walk');
+                        }
+                    }
+                    else if(lastMovementType == 'run')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('locomotion_run_cycle_slow_forward', 1.0, 0.2, 0, 'none', true);
+                            queueAnim('walk', 0.97, 0.4, 0, 'movement_walk');
+                        }
+                        else
+                        {
+                            queueAnim('locomotion_run_cycle_slow_forward', 0.8, 0.2, 0, 'none', true);
+                            queueAnim('walk', 1.00, 0.4, 0, 'movement_walk');
+                        }
+                    }
+                    else if(lastMovementType == 'idle' || lastMovementType == 'slow_walk'|| lastAnim == 'dialogue_jump_idle')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('walk', 0.97, 0.7, 0, 'movement_walk');
+                        }
+                        else
+                        {
+                            queueAnim('walk', 1.00, 0.7, 0, 'movement_walk');
+                        }
+                        
+                    }
+                    else
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('walk', 0.97, 0, 0, 'movement_walk');
+                        }
+                        else
+                        {
+                            queueAnim('walk', 1.00, 0, 0, 'movement_walk');
+                        }
+                    }
+
+                    lastMovementType = 'walk';
+                }
+                else if(speed <= 1)
+                {
+                    if(lastAnim == 'dialogue_jump_idle' || smoothNext || isLastSwordMovement())
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('locomotion_run_cycle_fast_forward', 0.6, 0.4, 0, 'movement_run', true);
+                        }
+                        else
+                        {
+                            queueAnim('locomotion_run_cycle_fast_forward', 0.67, 0.4, 0, 'movement_run', true);
+                        }
+                        lastMovementType = 'run';
+                        smoothNext = false;
+                        return;
+                    }
+
+                    if(smoothDelayedNext)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('locomotion_run_cycle_fast_forward', 0.6, 0.4, 0, 'movement_run');
+                        }
+                        else
+                        {
+                            queueAnim('locomotion_run_cycle_fast_forward', 0.67, 0.4, 0, 'movement_run');
+                        }
+                        lastMovementType = 'run';
+                        smoothDelayedNext = false;
+                        return;
+                    }
+
+                    if(lastMovementType == 'idle')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('locomotion_run_cycle_fast_forward', 0.6, 0.8, 0, 'movement_run');
+                        }
+                        else
+                        {
+                            queueAnim('locomotion_run_cycle_fast_forward', 0.67, 0.8, 0, 'movement_run');
+                        }
+                    }
+                    else if(lastMovementType == 'sprint' || lastMovementType == 'walk' || lastMovementType == 'slow_walk' || lastAnim == 'dialogue_jump_idle')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('locomotion_run_cycle_fast_forward', 0.6, 0.4, 0, 'movement_run');
+                        }
+                        else
+                        {
+                            queueAnim('locomotion_run_cycle_fast_forward', 0.67, 0.4, 0, 'movement_run');
+                        }
+                    }
+                    else
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('locomotion_run_cycle_fast_forward', 0.6, 0, 0, 'movement_run');
+                        }
+                        else
+                        {
+                            queueAnim('locomotion_run_cycle_fast_forward', 0.67, 0, 0, 'movement_run');
+                        }
+                    }
+
+                    lastMovementType = 'run';
+                }
+                else
+                {
+                    if(lastAnim == 'dialogue_jump_idle' || smoothNext || isLastSwordMovement())
+                    {
+                        queueAnim('locomotion_sprint_cycle_forward', 0.60, 0.3, 0, 'movement_sprint', true);
+                        lastMovementType = 'sprint';
+                        smoothNext = false;
+                        return;
+                    }
+
+                    if(smoothDelayedNext)
+                    {
+                        queueAnim('locomotion_sprint_cycle_forward', 0.60, 0.3, 0, 'movement_sprint');
+                        lastMovementType = 'sprint';
+                        smoothDelayedNext = false;
+                        return;
+                    }
+
+                    if(lastMovementType == 'idle')
+                    {
+                        queueAnim('locomotion_sprint_cycle_forward', 0.60, 0.8, 0, 'movement_sprint');
+                    }
+                    else if(lastMovementType == 'walk' || lastMovementType == 'slow_walk' || lastMovementType == 'run' || lastAnim == 'dialogue_jump_idle')
+                    {
+                        queueAnim('locomotion_sprint_cycle_forward', 0.60, 0.3, 0, 'movement_sprint');
+                    }
+                    else
+                    {
+                        queueAnim('locomotion_sprint_cycle_forward', 0.60, 0, 0, 'movement_sprint');
+                    }
+
+                    lastMovementType = 'sprint';
+                }
+            }
+
+            lastMovement = true;
+        }
+        else
+        {
+            if(lastMovement)
+            {
+                smoothNext = true;
+                lastMovement = false;
+            }
+        }
+
+        if(swirling && (heldItem == "silver" || heldItem == "steel"))
+        {
+            if(!lastSwirling)
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('man_geralt_sword_special_fast_attack_loop_1', 2.53, 0.2, 0, 'swirl', true);
+                }
+                else
+                {
+                    queueAnim('man_geralt_sword_special_fast_attack_loop_1', 2.5, 0.2, 0, 'swirl', true);
+                }
+                lastSwirling = true;
+            }
+
+            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+            {
+                queueAnim('man_geralt_sword_special_fast_attack_loop_1', 2.53, 0, 0, 'swirl');
+            }
+            else
+            {
+                queueAnim('man_geralt_sword_special_fast_attack_loop_1', 2.5, 0, 0, 'swirl');
+            }
+        }
+        else
+        {
+            if(lastSwirling)
+            {
+                lastSwirling = false;
+            }
+        }
+
+        if(rend && (heldItem == "silver" || heldItem == "steel"))
+        {
+            if(!lastRend)
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('man_geralt_sword_attack_heavy_special_rp_start', 2.17, 0.2, 0, 'rend', true);
+                    queueAnim('man_geralt_sword_attack_heavy_special_rp_end', 1.7, 0, 0, 'rend');
+                }
+                else
+                {
+                    queueAnim('man_geralt_sword_attack_heavy_special_rp_start', 2.12, 0.2, 0, 'rend', true);
+                    queueAnim('man_geralt_sword_attack_heavy_special_rp_end', 1.67, 0, 0, 'rend');
+                }
+                lastRend = true;
+            }
+        }
+        else
+        {
+            if(lastRend)
+            {
+                lastRend = false;
+            }
+        }
+
+        // woman complete
+        if(curState == 'Slide')
+        {
+            if(!lastSliding)
+            {
+                queueAnim('slide_right_45degrees', 2.46, 0.4, 0, 'slide');
+            }
+
+            queueAnim('slide_right_45degrees', 2.46, 0, 0, 'slide');
+
+            lastSliding = true;
+            smoothNext = true;
+        }
+        else
+        {
+            if(lastSliding)
+            {
+                lastSliding = false;
+            }
+        }
+
+        // woman complete
+        if(bombActive)
+        {
+            if(!lastBombSelected)
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('man_geralt_petard_aim_start_rp', 0.73, 0.2, 0, 'none', true);
+                }
+                else
+                {
+                    queueAnim('man_geralt_petard_aim_start_rp', 0.7, 0.2, 0, 'none', true);
+                }
+            }
+
+            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+            {
+                queueAnim('man_geralt_petard_aim_idle_rp', 1.03, 0, 0, 'bomb');
+            }
+            else
+            {
+                queueAnim('man_geralt_petard_aim_idle_rp', 1, 0, 0, 'bomb');
+            }
+            
+
+            lastBombSelected = true;
+        }
+        else
+        {
+            if(lastBombSelected)
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('man_geralt_petard_aim_shoot_rp', 1.03, 0, 0, 'none', true);
+                }
+                else
+                {
+                    queueAnim('man_geralt_petard_aim_shoot_rp', 1, 0, 0, 'none', true);
+                }
+                
+                lastBombSelected = false;
+                smoothDelayedNext = true;
+            }
+        }
+
+        // woman complete
+        if(!isAlive)
+        {
+            if(!lastAlive)
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('man_ger_sword_death_1', 2.4, 0.2, 0, 'none', true);
+                }
+                else
+                {
+                    queueAnim('man_ger_sword_death_1', 2.37, 0.2, 0, 'none', true);
+                }
+            }
+
+            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+            {
+                queueAnim('q704_syanna_dead_pose', 5.0, 0, 0, 'dead');
+            }
+            else
+            {
+                queueAnim('low_lying_dead_idle', 5.0, 0, 0, 'dead');
+            }
+            
+            lastAlive = true;
+        }
+        else
+        {
+            if(lastAlive)
+            {
+                lastAlive = false;
+                smoothNext = true;
+            }
+        }
+
+        // woman complete
+        if (isLadder)
+        {
+            if ((lastVerticalMoveDir == 'up' || lastVerticalMoveDir == 'down'))
+            {
+                if (lastVerticalMoveDir != lastFiredDir || theGame.GetEngineTimeAsSeconds() >= lastLadderTick)
+                {
+                    if (lastVerticalMoveDir == 'up')
+                    {
+                        if (!lastLeftLadder)
+                        {
+                            queueAnim('ladder_left_up_40', 0.43, 0.2, 0, 'ladder_up');
+                        }
+                        else
+                        {
+                            queueAnim('ladder_right_up_40', 0.43, 0.2, 0, 'ladder_up');
+                        }
+                    }
+                    else
+                    {
+                        if (!lastLeftLadder)
+                        {
+                            queueAnim('ladder_left_down_40', 0.43, 0.2, 0, 'ladder_down');
+                        }
+                        else
+                        {
+                            queueAnim('ladder_right_down_40', 0.43, 0.2, 0, 'ladder_down');
+                        }
+                    }
+
+                    lastLeftLadder = !lastLeftLadder;
+                    lastFiredDir = lastVerticalMoveDir;
+                    lastLadderTick = theGame.GetEngineTimeAsSeconds() + 0.43;
+                }
+            }
+            else
+            {
+                if(lastFiredDir != 'none' || !lastLadder)
+                {
+                    if (!lastLeftLadder)
+                    {
+                        queueAnim('ladder_left_up_40', 0, 0.2, 0, 'none');
+                    }
+                    else
+                    {
+                        queueAnim('ladder_right_up_40', 0, 0.2, 0, 'none');
+                    }
+
+                    lastLastFiredDir = lastFiredDir;
+                }
+
+                lastFiredDir = 'none';
+                lastLadderTick = 0.0;
+
+                if (!lastLeftLadder)
+                {
+                    if(lastLastFiredDir == 'up')
+                    {
+                        queueAnim('ladder_left_up_40', 0, 0, 0, 'none');
+                    }
+                    else
+                    {
+                        queueAnim('ladder_left_down_40', 0, 0, 0, 'none');
+                    }
+                }
+                else
+                {
+                    if(lastLastFiredDir == 'up')
+                    {
+                        queueAnim('ladder_right_up_40', 0, 0, 0, 'none');
+                    }
+                    else
+                    {
+                        queueAnim('ladder_right_down_40', 0, 0, 0, 'none');
+                    }
+                }
+            }
+
+            lastLadder = true;
+        }
+        else
+        {
+            if(lastLadder)
+            {
+                lastLadder = false;
+            }
+        }
+
+        // woman complete
+        if(curState == 'Jump' && lastJumpType == EJT_ToWater)
+        {
+            if(!lastDiving)
+            {
+                queueAnim('jump_run_lf_to_water', 1.33, 0.2, 0, 'jump', true);
+                lastDiving = true;
+            }
+            else
+            {
+                queueAnim('jump_to_water_loop', 0.7, 0, 0, 'jump');
+            }
+            
+        }
+        else if(curState == 'Jump' && !isFalling && lastJumpTime != prevJumpTime)
+        {
+            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+            {
+                queueAnim('dialogue_jump_idle', 2, 0.2, 0, 'jump', true);
+            }
+            else
+            {
+                queueAnim('dialogue_jump_idle', 1.98, 0.2, 0, 'jump', true);
+            }
+            prevJumpTime = lastJumpTime;
+            prevRollTime = lastRollTime;
+            isJumping = true;
+        }
+        else
+        {
+            if(isJumping)
+            {
+                smoothNext = true;
+                isJumping = false;
+            }
+        }
+
+        if(curState != 'Jump' || lastJumpType != EJT_ToWater)
+        {
+            lastDiving = false;
+        }
+        
+        // woman complete
+        if(curState == 'Climb')
+        {
+            if(!isClimbing)
+            {
+                if(lastClimbType == ECHT_Step)
+                {                    
+                    queueAnim('climb_idle_30', 2.00, 0.2, 0, 'climb', true);
+                    isClimbing = true;
+                }
+                else if(lastClimbType == ECHT_VerySmall)
+                {
+                    queueAnim('climb_idle_100', 2.00, 0.2, 0, 'climb', true);
+                    isClimbing = true;
+                }
+                else if(lastClimbType == ECHT_Small)
+                {
+                    queueAnim('climb_idle_150', 2.63, 0.2, 0, 'climb', true);
+                    isClimbing = true;
+                }
+                else if(lastClimbType == ECHT_Medium)
+                {
+                    queueAnim('climb_idle_200', 2.77, 0.2, 0, 'climb', true);
+                    isClimbing = true;
+                }
+                else if(lastClimbType == ECHT_High)
+                {
+                    queueAnim('climb_idle_250', 2.63, 0.2, 0, 'climb', true);
+                    isClimbing = true;
+                }
+                else if(lastClimbType == ECHT_VeryHigh)
+                {
+                    if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                    {
+                        queueAnim('climb_idle_300', 4.67, 0.2, 0, 'climb', true);
+                    }
+                    else
+                    {
+                        queueAnim('climb_idle_300', 3.37, 0.2, 0, 'climb', true);
+                    }
+                    isClimbing = true;
+                } 
+            }
+        }
+        else
+        {
+            if(isClimbing)
+            {
+                prevClimbTime = theGame.GetEngineTimeAsSeconds();
+                smoothNext = true;
+                isClimbing = false;
+            }
+        }
+
+        // woman complete
+        if(curState == 'Roll')
+        {
+            if(!lastRoll)
+            {
+                queueAnim('ex_jump_land_roll_walk', 1.47, 0.2, 0, 'roll', true);
+                lastRoll = true;
+            }
+        }
+        else
+        {
+            lastRoll = false;
+        }
+
+        // woman complete
+        if(isFalling && !lastDiving && (curState != 'Swim' && curState != 'Climb'))
+        {
+            if(!isJumping && (theGame.GetEngineTimeAsSeconds() - prevJumpTime) > 2.2 && (theGame.GetEngineTimeAsSeconds() - prevClimbTime) > 0.5)
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('jump_falling_loop_c', 1.0, 0.2, 0, 'falling');
+                }
+                else
+                {
+                    queueAnim('jump_falling_loop_c', 0.70, 0.2, 0, 'falling');
+                }
+            }
+        }
+        
+        swim();
+        
+        // woman complete
+        if(aimingCrossbow)
+        {
+            if(!lastAimingCrossbow)
+            {
+                ids = inv.GetItemsByName(eq_crossbow);
+                if (ids.Size() > 0)
+                {
+                    inv.MountItem(ids[0], true);
+                }
+
+                if(curState == 'Swim' && speed == 0)
+                {
+                    if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                    {
+                        queueAnim('man_geralt_gabriel_swim_idle_aim_start_lp', 0.77, 0.2, 0, 'none', true);
+                    }
+                    else
+                    {
+                        queueAnim('man_geralt_gabriel_swim_idle_aim_start_lp', 0.73, 0.2, 0, 'none', true);
+                    }
+                }
+                else
+                {
+                    if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                    {
+                        queueAnim('man_geralt_gabriel_aim_start_rp', 0.57, 0.2, 0, 'none', true);
+                    }
+                    else
+                    {
+                        queueAnim('man_geralt_gabriel_aim_start_rp', 0.53, 0.2, 0, 'none', true);
+                    }
+                }
+            }
+
+            if(curState == 'Swim' && speed == 0)
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('man_geralt_gabriel_swim_aimpose_aim_cycle', 1.53, 0.2, 0, 'swim_crossbow_idle');
+                }
+                else
+                {
+                    queueAnim('man_geralt_gabriel_swim_aimpose_aim_cycle', 1.5, 0.2, 0, 'swim_crossbow_idle');
+                }
+                lastAimingCrossbow = true;
+                return;
+            }
+
+            if(lastMoveDir == 'forward')
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('man_geralt_gabriel_strafe_f', 1.37, 0.2, 0, 'crossbow_forward');
+                }
+                else
+                {
+                    queueAnim('man_geralt_gabriel_strafe_f', 1.33, 0.2, 0, 'crossbow_forward');
+                }
+            }
+            else if(lastMoveDir == 'backward')
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('man_geralt_gabriel_strafe_b', 1.37, 0.2, 0, 'crossbow_backward');
+                }
+                else
+                {
+                    queueAnim('man_geralt_gabriel_strafe_b', 1.33, 0.2, 0, 'crossbow_backward');
+                }
+            }
+            else if(lastMoveDir == 'left')
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('man_geralt_gabriel_strafe_b_45l', 1.37, 0.2, 0, 'crossbow_left');
+                }
+                else
+                {
+                    queueAnim('man_geralt_gabriel_strafe_b_45l', 1.33, 0.2, 0, 'crossbow_left');
+                }
+            }
+            else if(lastMoveDir == 'right')
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('man_geralt_gabriel_strafe_b_45r', 1.37, 0.2, 0, 'crossbow_right');
+                }
+                else
+                {
+                    queueAnim('man_geralt_gabriel_strafe_b_45r', 1.33, 0.2, 0, 'crossbow_right');
+                }
+            }
+            else
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    queueAnim('man_geralt_gabriel_aim_idle_rp', 1.07, 0.2, 0, 'crossbow_idle');
+                }
+                else
+                {
+                    queueAnim('man_geralt_gabriel_aim_idle_rp', 1.03, 0.2, 0, 'crossbow_idle');
+                }
+            }
+
+            lastAimingCrossbow = true;
+
+            return;
+        }
+        else
+        {
+            if(lastAimingCrossbow)
+            {
+                ids = inv.GetItemsByName(eq_crossbow);
+                if (ids.Size() > 0)
+                {
+                    ghost.EquipItem(ids[0]);
+                    inv.UnmountItem(ids[0], true);
+
+                    ghost.EquipItem(ids[0]);
+                }
+
+                if(curState == 'Swim' && speed == 0)
+                {
+                    if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                    {
+                        queueAnim('man_geralt_gabriel_swim_idle_aim_end_rp', 1.03, 0.2, 0.5, 'none', true);
+                    }
+                    else
+                    {
+                        queueAnim('man_geralt_gabriel_swim_idle_aim_end_rp', 1, 0.2, 0.5, 'none', true);
+                    }
+                }
+                else
+                {
+                    if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                    {
+                        queueAnim('man_geralt_gabriel_aim_end_rp', 0.73, 0.2, 0.5, 'none', true);
+                    }
+                    else
+                    {
+                        queueAnim('man_geralt_gabriel_aim_end_rp', 0.7, 0.2, 0.5, 'none', true);
+                    }
+                }
+                lastAimingCrossbow = false;
+                smoothNext = true;
+            }
+        }
+        
+        // woman complete*
+        if (prevLightTime < 0.0f)
+        {
+            prevLightTime = lastLightAttackTime;
+        }
+        else if (lastLightAttackTime != prevLightTime)
+        {   
+            if(heldItem == "silver" || heldItem == "steel")
+            {
+                anim = theGame.r_getMultiplayerClient().getRandLightAnim();
+                queueAnim(anim.anim, anim.duration, 0.2, 0, 'attack', true);
+            }
+            else if(heldItem == "none")
+            {
+                anim = theGame.r_getMultiplayerClient().getRandLightFistAnim();
+                queueAnim(anim.anim, anim.duration, 0.2, 0, 'attack', true);
+            }
+
+            prevLightTime = lastLightAttackTime;
+        }
+
+        if (prevHeavyTime < 0.0f)
+        {
+            prevHeavyTime = lastHeavyAttackTime;
+        }
+        else if (lastHeavyAttackTime != prevHeavyTime)
+        {
+            if(heldItem == "silver" || heldItem == "steel")
+            {
+                anim = theGame.r_getMultiplayerClient().getRandHeavyAnim();
+                queueAnim(anim.anim, anim.duration, 0.2, 0, 'attack', true);
+            }
+            else if(heldItem == "none")
+            {
+                anim = theGame.r_getMultiplayerClient().getRandHeavyFistAnim();
+                queueAnim(anim.anim, anim.duration, 0.2, 0, 'attack', true);
+            }
+
+            prevHeavyTime = lastHeavyAttackTime;
+        }
+        
+        // woman complete
+        if (prevDodgeTime < 0.0f)
+        {
+            prevDodgeTime = lastDodgeTime;
+        }
+        else if (lastDodgeTime != prevDodgeTime)
+        {
+            if(heldItem == "silver" || heldItem == "steel")
+            {
+                if(lastMoveDir == 'forward')
+                {
+                    anim = theGame.r_getMultiplayerClient().getRandSwordForwardDodgeAnim();
+
+                    if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                    {
+                        queueAnim(anim.anim, anim.duration + 0.03, 0.4, 0, 'dodge', true);
+                    }
+                    else
+                    {
+                        queueAnim(anim.anim, anim.duration, 0.4, 0, 'dodge', true);
+                    }
+                }
+                else if(lastMoveDir == 'backward')
+                {
+                    anim = theGame.r_getMultiplayerClient().getRandSwordBackDodgeAnim();
+
+                    if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                    {
+                        queueAnim(anim.anim, anim.duration + 0.03, 0.4, 0, 'dodge', true);
+                    }
+                    else
+                    {
+                        queueAnim(anim.anim, anim.duration, 0.4, 0, 'dodge', true);
+                    }
+                }
+                else if(lastMoveDir == 'left')
+                {
+                    anim = theGame.r_getMultiplayerClient().getRandSwordLeftDodgeAnim();
+
+                    if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                    {
+                        queueAnim(anim.anim, anim.duration + 0.03, 0.4, 0, 'dodge', true);
+                    }
+                    else
+                    {
+                        queueAnim(anim.anim, anim.duration, 0.4, 0, 'dodge', true);
+                    }
+                }
+                else if(lastMoveDir == 'right')
+                {
+                    anim = theGame.r_getMultiplayerClient().getRandSwordRightDodgeAnim();
+
+                    if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                    {
+                        queueAnim(anim.anim, anim.duration + 0.03, 0.4, 0, 'dodge', true);
+                    }
+                    else
+                    {
+                        queueAnim(anim.anim, anim.duration, 0.4, 0, 'dodge', true);
+                    }
+                }
+                else
+                {
+                    anim = theGame.r_getMultiplayerClient().getRandSwordBackDodgeAnim();
+                    if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                    {
+                        queueAnim(anim.anim, anim.duration + 0.03, 0.4, 0, 'dodge', true);
+                    }
+                    else
+                    {
+                        queueAnim(anim.anim, anim.duration, 0.4, 0, 'dodge', true);
+                    }
+                }
+                
+            }
+            else if(heldItem == "none")
+            {
+                if(lastMoveDir == 'forward')
+                {
+                    anim = theGame.r_getMultiplayerClient().getRandFistForwardDodgeAnim();
+
+                    if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                    {
+                        queueAnim(anim.anim, 1.53, 0.4, 0, 'dodge', true);
+                    }
+                    else
+                    {
+                        queueAnim(anim.anim, anim.duration, 0.4, 0, 'dodge', true);
+                    }
+                }
+                else if(lastMoveDir == 'backward')
+                {
+                    anim = theGame.r_getMultiplayerClient().getRandFistBackDodgeAnim();
+
+                    if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                    {
+                        queueAnim(anim.anim, 1.53, 0.4, 0, 'dodge', true);
+                    }
+                    else
+                    {
+                        queueAnim(anim.anim, anim.duration, 0.4, 0, 'dodge', true);
+                    }
+                }
+                else if(lastMoveDir == 'left')
+                {
+                    anim = theGame.r_getMultiplayerClient().getRandFistLeftDodgeAnim();
+
+                    if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                    {
+                        queueAnim(anim.anim, 1.53, 0.4, 0, 'dodge', true);
+                    }
+                    else
+                    {
+                        queueAnim(anim.anim, anim.duration, 0.4, 0, 'dodge', true);
+                    }
+                }
+                else if(lastMoveDir == 'right')
+                {
+                    anim = theGame.r_getMultiplayerClient().getRandFistRightDodgeAnim();
+
+                    if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                    {
+                        queueAnim(anim.anim, 1.53, 0.4, 0, 'dodge', true);
+                    }
+                    else
+                    {
+                        queueAnim(anim.anim, anim.duration, 0.4, 0, 'dodge', true);
+                    }
+                }
+                else
+                {
+                    anim = theGame.r_getMultiplayerClient().getRandFistBackDodgeAnim();
+
+                    if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                    {
+                        queueAnim(anim.anim, 1.53, 0.4, 0, 'dodge', true);
+                    }
+                    else
+                    {
+                        queueAnim(anim.anim, anim.duration, 0.4, 0, 'dodge', true);
+                    }
+                }
+            }
+
+            smoothNext = true;
+            prevDodgeTime = lastDodgeTime;
+        } 
+
+        // woman complete*
+        if (prevRollTime < 0.0f)
+        {
+            prevRollTime = lastRollTime;
+        }
+        else if ((lastRollTime != prevRollTime) && !isClimbing)
+        {
+            if(heldItem == "silver" || heldItem == "steel")
+            {
+                if(lastMoveDir == 'forward')
+                {
+                    queueAnim('man_geralt_sword_dodge_roll_rp_f_01', 1.33, 0.4, 0, 'roll', true);
+                }
+                else if(lastMoveDir == 'backward')
+                {
+                    queueAnim('man_geralt_sword_dodge_roll_rp_b_01', 1.33, 0.4, 0, 'roll', true);
+                }
+                else if(lastMoveDir == 'left')
+                {
+                    queueAnim('man_ger_sword_roll_start_l', 0.57, 0.4, 0, 'roll', true);
+                    queueAnim('man_ger_sword_roll_end_l', 0.87, 0, 0, 'roll', false);
+                }
+                else if(lastMoveDir == 'right')
+                {
+                    queueAnim('man_ger_sword_roll_start_r', 0.57, 0.4, 0, 'roll', true);
+                    queueAnim('man_ger_sword_roll_end_r', 0.86, 0, 0, 'roll', false);
+                }
+                else
+                {
+                    queueAnim('man_geralt_sword_dodge_roll_rp_b_01', 1.33, 0.4, 0, 'roll', true);
+                }
+            }
+            else if(heldItem == "none")
+            {
+                if(lastMoveDir == 'forward')
+                {
+                    queueAnim('man_geralt_sword_dodge_roll_rp_f_01_fist', 1.33, 0.4, 0, 'roll', true);
+                }
+                else if(lastMoveDir == 'backward')
+                {
+                    queueAnim('man_geralt_sword_dodge_roll_rp_b_01_fist', 1.33, 0.4, 0, 'roll', true);
+                }
+                else if(lastMoveDir == 'left')
+                {
+                    queueAnim('man_geralt_sword_dodge_roll_rp_f_01_fist', 1.33, 0.4, 0, 'roll', true);
+                }
+                else if(lastMoveDir == 'right')
+                {
+                    queueAnim('man_geralt_sword_dodge_roll_rp_f_01_fist', 1.33, 0.4, 0, 'roll', true);
+                }
+                else
+                {
+                    queueAnim('man_geralt_sword_dodge_roll_rp_b_01_fist', 1.33, 0.4, 0, 'roll', true);
+                }
+            }
+
+            smoothNext = true;
+            prevRollTime = lastRollTime;
+        }
+
+        // woman complete
+        if(channeling)
+        {
+            if(signType == ST_Igni)
+            {
+                if(!lastChanneling)
+                {
+                    if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                    {
+                        queueAnim('man_ger_sword_ignii_start_rp', 0.73, 0.2, 0, 'sign', true);
+                    }
+                    else
+                    {
+                        queueAnim('man_ger_sword_ignii_start_rp', 0.7, 0.2, 0, 'sign', true);
+                    }
+                    lastChanneling = true;
+                }
+
+                if(speed > 0)
+                {
+                    if(lastMoveDir == 'forward')
+                    {
+                        if(lastAnim != 'man_geralt_sword_strafe_f_igni')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                queueAnim('man_geralt_sword_strafe_f_igni', 1.37, 0.3, 0, 'forward', true);
+                            }
+                            else
+                            {
+                                queueAnim('man_geralt_sword_strafe_f_igni', 1.33, 0.3, 0, 'forward', true);
+                            }
+                        }
+
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_geralt_sword_strafe_f_igni', 1.37, 0, 0, 'forward');
+                        }
+                        else
+                        {
+                            queueAnim('man_geralt_sword_strafe_f_igni', 1.33, 0, 0, 'forward');
+                        }
+                    }
+                    else if(lastMoveDir == 'left')
+                    {
+                        if(lastAnim != 'man_geralt_sword_strafe_f_45l_igni')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                queueAnim('man_geralt_sword_strafe_f_45l_igni', 1.37, 0.3, 0, 'left', true);
+                            }
+                            else
+                            {
+                                queueAnim('man_geralt_sword_strafe_f_45l_igni', 1.33, 0.3, 0, 'left', true);
+                            }   
+                        }
+
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_geralt_sword_strafe_f_45l_igni', 1.37, 0, 0, 'left');
+                        }
+                        else
+                        {
+                            queueAnim('man_geralt_sword_strafe_f_45l_igni', 1.33, 0, 0, 'left');
+                        }
+                    }
+                    else if(lastMoveDir == 'right')
+                    {
+                        if(lastAnim != 'man_geralt_sword_strafe_f_45r_igni')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                queueAnim('man_geralt_sword_strafe_f_45r_igni', 1.37, 0.3, 0, 'right', true);
+                            }
+                            else
+                            {
+                                queueAnim('man_geralt_sword_strafe_f_45r_igni', 1.33, 0.3, 0, 'right', true);
+                            }
+                        }
+
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_geralt_sword_strafe_f_45r_igni', 1.37, 0, 0, 'right');
+                        }
+                        else
+                        {
+                            queueAnim('man_geralt_sword_strafe_f_45r_igni', 1.33, 0, 0, 'right');
+                        }
+                    }
+                    else
+                    {
+                        if(lastAnim != 'man_geralt_sword_strafe_b_igni')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                queueAnim('man_geralt_sword_strafe_b_igni', 1.37, 0.3, 0, 'backward', true);
+                            }
+                            else
+                            {
+                                queueAnim('man_geralt_sword_strafe_b_igni', 1.33, 0.3, 0, 'backward', true);
+                            }
+                        }
+
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_geralt_sword_strafe_b_igni', 1.37, 0, 0, 'backward');
+                        }
+                        else
+                        {
+                            queueAnim('man_geralt_sword_strafe_b_igni', 1.33, 0, 0, 'backward');
+                        }
+                    }
+                }
+                else
+                {
+                    if(lastAnim != 'man_ger_sword_ignii_loop_rp')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_ger_sword_ignii_loop_rp', 2.27, 0.3, 0, 'swordidle');
+                        }
+                        else
+                        {
+                            queueAnim('man_ger_sword_ignii_loop_rp', 2.23, 0.3, 0, 'swordidle');
+                        }
+                    }
+
+                    if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                    {
+                        queueAnim('man_ger_sword_ignii_loop_rp', 2.27, 0, 0, 'swordidle');
+                    }
+                    else
+                    {
+                        queueAnim('man_ger_sword_ignii_loop_rp', 2.23, 0, 0, 'swordidle');
+                    }
+                }
+            }
+            else if(signType == ST_Quen)
+            {
+                if(!lastChanneling)
+                {
+                    if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                    {
+                        queueAnim('man_ger_sword_quen_start_rp', 0.73, 0.2, 0, 'sign', true);
+                    }
+                    else
+                    {
+                        queueAnim('man_ger_sword_quen_start_rp', 0.7, 0.2, 0, 'sign', true);
+                    }
+                    lastChanneling = true;
+                }
+
+                if(speed > 0)
+                {
+                    if(lastMoveDir == 'forward')
+                    {
+                        if(lastAnim != 'man_geralt_sword_strafe_f_quen')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                queueAnim('man_geralt_sword_strafe_f_quen', 1.37, 0.3, 0, 'forward', true);
+                            }
+                            else
+                            {
+                                queueAnim('man_geralt_sword_strafe_f_quen', 1.33, 0.3, 0, 'forward', true);
+                            }
+                        }
+
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_geralt_sword_strafe_f_quen', 1.37, 0, 0, 'forward');
+                        }
+                        else
+                        {
+                            queueAnim('man_geralt_sword_strafe_f_quen', 1.33, 0, 0, 'forward');
+                        }
+                    }
+                    else if(lastMoveDir == 'left')
+                    {
+                        if(lastAnim != 'man_geralt_sword_strafe_f_45l_quen')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                queueAnim('man_geralt_sword_strafe_f_45l_quen', 1.37, 0.3, 0, 'left', true);
+                            }
+                            else
+                            {
+                                queueAnim('man_geralt_sword_strafe_f_45l_quen', 1.33, 0.3, 0, 'left', true);
+                            }
+                        }
+
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_geralt_sword_strafe_f_45l_quen', 1.37, 0, 0, 'left');
+                        }
+                        else
+                        {
+                            queueAnim('man_geralt_sword_strafe_f_45l_quen', 1.33, 0, 0, 'left');
+                        }
+                    }
+                    else if(lastMoveDir == 'right')
+                    {
+                        if(lastAnim != 'man_geralt_sword_strafe_f_45r_quen')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                queueAnim('man_geralt_sword_strafe_f_45r_quen', 1.37, 0.3, 0, 'right', true);
+                            }
+                            else
+                            {
+                                queueAnim('man_geralt_sword_strafe_f_45r_quen', 1.33, 0.3, 0, 'right', true);
+                            }
+                        }
+
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_geralt_sword_strafe_f_45r_quen', 1.37, 0, 0, 'right');
+                        }
+                        else
+                        {
+                            queueAnim('man_geralt_sword_strafe_f_45r_quen', 1.33, 0, 0, 'right');
+                        }
+                    }
+                    else
+                    {
+                        if(lastAnim != 'man_geralt_sword_strafe_b_quen')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                queueAnim('man_geralt_sword_strafe_b_quen', 1.37, 0.3, 0, 'backward', true);
+                            }
+                            else
+                            {
+                                queueAnim('man_geralt_sword_strafe_b_quen', 1.33, 0.3, 0, 'backward', true);
+                            }
+                        }
+
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_geralt_sword_strafe_b_quen', 1.37, 0, 0, 'backward');
+                        }
+                        else
+                        {
+                            queueAnim('man_geralt_sword_strafe_b_quen', 1.33, 0, 0, 'backward');
+                        }
+                    }
+                }
+                else
+                {
+                    if(lastAnim != 'man_ger_sword_quen_loop_rp')
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_ger_sword_quen_loop_rp', 2, 0.3, 0, 'swordidle');
+                        }
+                        else
+                        {
+                            queueAnim('man_ger_sword_quen_loop_rp', 1.97, 0.3, 0, 'swordidle');
+                        }
+                    }
+
+                    if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                    {
+                        queueAnim('man_ger_sword_quen_loop_rp', 2, 0, 0, 'swordidle');
+                    }
+                    else
+                    {
+                        queueAnim('man_ger_sword_quen_loop_rp', 1.97, 0, 0, 'swordidle');
+                    }
+                }
+            }
+        }
+        else
+        {
+            if(lastChanneling)
+            {
+                animQueue.Clear();
+                smoothNext = true;
+                lastChanneling = false;
+            }
+        }
+        
+        // woman complete
+        if(inCombat && !isMounted && !swirling && !rend && !channeling)
+        {
+            if(speed > 0)
+            {
+                if(heldItem == "silver" || heldItem == "steel")
+                {
+                    if(isGuarded)
+                    {
+                        if(lastMoveDir == 'forward')
+                        {
+                            if(lastAnim != 'man_longsword_guard_strafe_walk_f_rp')
+                            {
+                                queueAnim('man_longsword_guard_strafe_walk_f_rp', 1, 0.3, 0, 'forward');
+                            }
+
+                            queueAnim('man_longsword_guard_strafe_walk_f_rp', 1, 0, 0, 'forward');
+                        }
+                        else if(lastMoveDir == 'backward')
+                        {
+                            if(lastAnim != 'man_longsword_guard_strafe_walk_b_rp')
+                            {
+                                queueAnim('man_longsword_guard_strafe_walk_b_rp', 1, 0.3, 0, 'backward');
+                            }
+
+                            queueAnim('man_longsword_guard_strafe_walk_b_rp', 1, 0, 0, 'backward');
+                        }
+                        else if(lastMoveDir == 'left')
+                        {
+                            if(lastAnim != 'man_longsword_guard_strafe_walk_fl_rp')
+                            {
+                                queueAnim('man_longsword_guard_strafe_walk_fl_rp', 1, 0.3, 0, 'left');
+                            }
+
+                            queueAnim('man_longsword_guard_strafe_walk_fl_rp', 1, 0, 0, 'left');
+                        }
+                        else if(lastMoveDir == 'right')
+                        {
+                            if(lastAnim != 'man_longsword_guard_strafe_walk_fr_rp')
+                            {
+                                queueAnim('man_longsword_guard_strafe_walk_fr_rp', 1, 0.3, 0, 'right');
+                            }
+
+                            queueAnim('man_longsword_guard_strafe_walk_fr_rp', 1, 0, 0, 'right');
+                        }
+                        else
+                        {
+                            if(lastAnim != 'man_longsword_guard_strafe_walk_b_rp')
+                            {
+                                queueAnim('man_longsword_guard_strafe_walk_b_rp', 1, 0.3, 0, 'backward');
+                            }
+
+                            queueAnim('man_longsword_guard_strafe_walk_b_rp', 1, 0, 0, 'backward');
+                        }
+                    }
+                    else
+                    {
+                        if(lastMoveDir == 'forward')
+                        {
+                            if(lastAnim != 'man_longsword_strafe_walk_f')
+                            {
+                                queueAnim('man_longsword_strafe_walk_f', 1, 0.3, 0, 'forward');
+                            }
+
+                            queueAnim('man_longsword_strafe_walk_f', 1, 0, 0, 'forward');
+                        }
+                        else if(lastMoveDir == 'backward')
+                        {
+                            if(lastAnim != 'man_longsword_strafe_walk_b')
+                            {
+                                queueAnim('man_longsword_strafe_walk_b', 1, 0.3, 0, 'backward');
+                            }
+
+                            queueAnim('man_longsword_strafe_walk_b', 1, 0, 0, 'backward');
+                        }
+                        else if(lastMoveDir == 'left')
+                        {
+                            if(lastAnim != 'man_longsword_strafe_walk_bl')
+                            {
+                                queueAnim('man_longsword_strafe_walk_bl', 1, 0.3, 0, 'left');
+                            }
+
+                            queueAnim('man_longsword_strafe_walk_bl', 1, 0, 0, 'left');
+                        }
+                        else if(lastMoveDir == 'right')
+                        {
+                            if(lastAnim != 'man_longsword_strafe_walk_br')
+                            {
+                                queueAnim('man_longsword_strafe_walk_br', 1, 0.3, 0, 'right');
+                            }
+
+                            queueAnim('man_longsword_strafe_walk_br', 1, 0, 0, 'right');
+                        }
+                        else
+                        {
+                            if(lastAnim != 'man_longsword_strafe_walk_b')
+                            {
+                                queueAnim('man_longsword_strafe_walk_b', 1, 0.3, 0, 'backward');
+                            }
+
+                            queueAnim('man_longsword_strafe_walk_b', 1, 0, 0, 'backward');
+                        }
+                    }
+                }
+                else if(heldItem == "none")
+                {
+                    if(isGuarded)
+                    {
+                        if(lastMoveDir == 'forward')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                if(lastAnim != 'man_fistfight_parry_strafe_walk_f')
+                                {
+                                    queueAnim('man_fistfight_parry_strafe_walk_f', 0.8, 0.3, 0, 'forward');
+                                }
+
+                                queueAnim('man_fistfight_parry_strafe_walk_f', 0.8, 0, 0, 'forward');
+                            }
+                            else
+                            {
+                                if(lastAnim != 'man_fistfight_parry_strafe_walk_f')
+                                {
+                                    queueAnim('man_fistfight_parry_strafe_walk_f', 0.77, 0.3, 0, 'forward');
+                                }
+
+                                queueAnim('man_fistfight_parry_strafe_walk_f', 0.77, 0, 0, 'forward');
+                            }
+                        }
+                        else if(lastMoveDir == 'backward')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                if(lastAnim != 'man_fistfight_parry_strafe_walk_b')
+                                {
+                                    queueAnim('man_fistfight_parry_strafe_walk_b', 0.8, 0.3, 0, 'backward');
+                                }
+
+                                queueAnim('man_fistfight_parry_strafe_walk_b', 0.8, 0, 0, 'backward');
+                            }
+                            else
+                            {
+                                if(lastAnim != 'man_fistfight_parry_strafe_walk_b')
+                                {
+                                    queueAnim('man_fistfight_parry_strafe_walk_b', 0.77, 0.3, 0, 'backward');
+                                }
+
+                                queueAnim('man_fistfight_parry_strafe_walk_b', 0.77, 0, 0, 'backward');
+                            }
+                        }
+                        else if(lastMoveDir == 'left')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                if(lastAnim != 'man_fistfight_parry_strafe_walk_l')
+                                {
+                                    queueAnim('man_fistfight_parry_strafe_walk_l', 0.8, 0.3, 0, 'left');
+                                }
+
+                                queueAnim('man_fistfight_parry_strafe_walk_l', 0.8, 0, 0, 'left');
+                            }
+                            else
+                            {
+                                if(lastAnim != 'man_fistfight_parry_strafe_walk_l')
+                                {
+                                    queueAnim('man_fistfight_parry_strafe_walk_l', 0.77, 0.3, 0, 'left');
+                                }
+
+                                queueAnim('man_fistfight_parry_strafe_walk_l', 0.77, 0, 0, 'left');
+                            }
+                        }
+                        else if(lastMoveDir == 'right')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                if(lastAnim != 'man_fistfight_parry_strafe_walk_r')
+                                {
+                                    queueAnim('man_fistfight_parry_strafe_walk_r', 0.8, 0.3, 0, 'right');
+                                }
+
+                                queueAnim('man_fistfight_parry_strafe_walk_r', 0.8, 0, 0, 'right');
+                            }
+                            else
+                            {
+                                if(lastAnim != 'man_fistfight_parry_strafe_walk_r')
+                                {
+                                    queueAnim('man_fistfight_parry_strafe_walk_r', 0.77, 0.3, 0, 'right');
+                                }
+
+                                queueAnim('man_fistfight_parry_strafe_walk_r', 0.77, 0, 0, 'right');
+                            }
+                        }
+                        else
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                if(lastAnim != 'man_fistfight_parry_strafe_walk_b')
+                                {
+                                    queueAnim('man_fistfight_parry_strafe_walk_b', 0.8, 0.3, 0, 'backward');
+                                }
+
+                                queueAnim('man_fistfight_parry_strafe_walk_b', 0.8, 0, 0, 'backward');
+                            }
+                            else
+                            {
+                                if(lastAnim != 'man_fistfight_parry_strafe_walk_b')
+                                {
+                                    queueAnim('man_fistfight_parry_strafe_walk_b', 0.77, 0.3, 0, 'backward');
+                                }
+
+                                queueAnim('man_fistfight_parry_strafe_walk_b', 0.77, 0, 0, 'backward');
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if(lastMoveDir == 'forward')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                if(lastAnim != 'man_fistfight_strafe_walk_f')
+                                {
+                                    queueAnim('man_fistfight_strafe_walk_f', 0.8, 0.3, 0, 'forward');
+                                }
+
+                                queueAnim('man_fistfight_strafe_walk_f', 0.8, 0, 0, 'forward');
+                            }
+                            else
+                            {
+                                if(lastAnim != 'man_fistfight_strafe_walk_f')
+                                {
+                                    queueAnim('man_fistfight_strafe_walk_f', 0.77, 0.3, 0, 'forward');
+                                }
+
+                                queueAnim('man_fistfight_strafe_walk_f', 0.77, 0, 0, 'forward');
+                            }
+                        }
+                        else if(lastMoveDir == 'backward')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                if(lastAnim != 'man_fistfight_strafe_walk_b')
+                                {
+                                    queueAnim('man_fistfight_strafe_walk_b', 0.8, 0.3, 0, 'backward');
+                                }
+
+                                queueAnim('man_fistfight_strafe_walk_b', 0.8, 0, 0, 'backward');
+                            }
+                            else
+                            {
+                                if(lastAnim != 'man_fistfight_strafe_walk_b')
+                                {
+                                    queueAnim('man_fistfight_strafe_walk_b', 0.77, 0.3, 0, 'backward');
+                                }
+
+                                queueAnim('man_fistfight_strafe_walk_b', 0.77, 0, 0, 'backward');
+                            }
+                        }
+                        else if(lastMoveDir == 'left')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                if(lastAnim != 'man_fistfight_strafe_walk_l')
+                                {
+                                    queueAnim('man_fistfight_strafe_walk_l', 0.8, 0.3, 0, 'left');
+                                }
+
+                                queueAnim('man_fistfight_strafe_walk_l', 0.8, 0, 0, 'left');
+                            }
+                            else
+                            {
+                                if(lastAnim != 'man_fistfight_strafe_walk_l')
+                                {
+                                    queueAnim('man_fistfight_strafe_walk_l', 0.77, 0.3, 0, 'left');
+                                }
+
+                                queueAnim('man_fistfight_strafe_walk_l', 0.77, 0, 0, 'left');
+                            }
+                        }
+                        else if(lastMoveDir == 'right')
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                if(lastAnim != 'man_fistfight_strafe_walk_r')
+                                {
+                                    queueAnim('man_fistfight_strafe_walk_r', 0.8, 0.3, 0, 'right');
+                                }
+
+                                queueAnim('man_fistfight_strafe_walk_r', 0.8, 0, 0, 'right');
+                            }
+                            else
+                            {
+                                if(lastAnim != 'man_fistfight_strafe_walk_r')
+                                {
+                                    queueAnim('man_fistfight_strafe_walk_r', 0.77, 0.3, 0, 'right');
+                                }
+
+                                queueAnim('man_fistfight_strafe_walk_r', 0.77, 0, 0, 'right');
+                            }
+                        }
+                        else
+                        {
+                            if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                            {
+                                if(lastAnim != 'man_fistfight_strafe_walk_b')
+                                {
+                                    queueAnim('man_fistfight_strafe_walk_b', 0.8, 0.3, 0, 'backward');
+                                }
+
+                                queueAnim('man_fistfight_strafe_walk_b', 0.8, 0, 0, 'backward');
+                            }
+                            else
+                            {
+                                if(lastAnim != 'man_fistfight_strafe_walk_b')
+                                {
+                                    queueAnim('man_fistfight_strafe_walk_b', 0.77, 0.3, 0, 'backward');
+                                }
+
+                                queueAnim('man_fistfight_strafe_walk_b', 0.77, 0, 0, 'backward');
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                if(heldItem == "silver" || heldItem == "steel")
+                {
+                    if(isGuarded)
+                    {
+                        if(lastAnim != 'man_geralt_sword_parry_idle_rp')
+                        {
+                            queueAnim('man_geralt_sword_parry_idle_rp', 1, 0.3, 0, 'parryswordidle');
+                        }
+
+                        queueAnim('man_geralt_sword_parry_idle_rp', 1, 0, 0, 'parryswordidle');
+                    }
+                    else
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            if(lastAnim != 'man_geralt_sword_alert_idle_left')
+                            {
+                                queueAnim('man_geralt_sword_alert_idle_left', 3.0, 0.3, 0, 'swordidle');
+                            }
+
+                            queueAnim('man_geralt_sword_alert_idle_left', 3.0, 0, 0, 'swordidle');
+                        }
+                        else
+                        {
+                            if(lastAnim != 'man_geralt_sword_alert_idle_left')
+                            {
+                                queueAnim('man_geralt_sword_alert_idle_left', 1.5, 0.3, 0, 'swordidle');
+                            }
+
+                            queueAnim('man_geralt_sword_alert_idle_left', 1.5, 0, 0, 'swordidle');
+                        }
+                    }
+                }
+                else if(heldItem == "none")
+                {
+                    if(isGuarded)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            if(lastAnim != 'man_fistfight_idle_guarded')
+                            {
+                                queueAnim('man_fistfight_idle_guarded', 1.1, 0.3, 0, 'parryfistidle');
+                            }
+
+                            queueAnim('man_fistfight_idle_guarded', 1.1, 0, 0, 'parryfistidle');
+                        }
+                        else
+                        {
+                            if(lastAnim != 'man_fistfight_idle_guarded')
+                            {
+                                queueAnim('man_fistfight_idle_guarded', 1.06, 0.3, 0, 'parryfistidle');
+                            }
+
+                            queueAnim('man_fistfight_idle_guarded', 1.06, 0, 0, 'parryfistidle');
+                        }
+                    }
+                    else
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            if(lastAnim != 'man_fistfight_idle')
+                            {
+                                queueAnim('man_fistfight_idle', 11.93, 0.3, 0, 'fistidle');
+                            }
+
+                            queueAnim('man_fistfight_idle', 11.93, 0.3, 0, 'fistidle');
+                        }
+                        else
+                        {
+                            if(lastAnim != 'man_fistfight_idle')
+                            {
+                                queueAnim('man_fistfight_idle', 11.92, 0.3, 0, 'fistidle');
+                            }
+
+                            queueAnim('man_fistfight_idle', 11.92, 0, 0, 'fistidle');
+                        }
+                    }
+                }
+            }  
+
+            lastCombat = true;          
+        }
+        else
+        {
+            if(lastCombat && !rend)
+            {
+                animQueue.Clear();
+                smoothNext = true;
+                lastCombat = false;
+            }
+        }
+
+        // woman complete
+        if (prevHitTime < 0.0f)
+        {
+            prevHitTime = lastHit;
+        }
+        else if (lastHit != prevHitTime)
+        {
+            if(heldItem == "silver" || heldItem == "steel")
+            {
+                anim = theGame.r_getMultiplayerClient().getRandSwordHitAnim();
+                queueAnim(anim.anim, anim.duration, 0.2, 0, 'hit', true);
+            }
+            else if(heldItem == "none")
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    anim = theGame.r_getMultiplayerClient().getRandFistHitAnim();
+                    queueAnim(anim.anim, 1.03, 0.2, 0, 'hit', true);
+                }
+                else
+                {
+                    anim = theGame.r_getMultiplayerClient().getRandFistHitAnim();
+                    queueAnim(anim.anim, anim.duration, 0.2, 0, 'hit', true);
+                }
+            }
+
+            prevHitTime = lastHit;
+        }
+
+        // woman complete
+        if (prevParryTime < 0.0f)
+        {
+            prevParryTime = lastParry;
+        }
+        else if (lastParry != prevParryTime)
+        {
+            if(heldItem == "silver" || heldItem == "steel")
+            {
+                anim = theGame.r_getMultiplayerClient().getRandSwordParryAnim();
+                queueAnim(anim.anim, anim.duration, 0.2, 0, 'parry', true);
+            }
+            else if(heldItem == "none")
+            {
+                if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    anim = theGame.r_getMultiplayerClient().getRandFistParryAnim();
+                    queueAnim(anim.anim, 1.03, 0.2, 0, 'parry', true);
+                }
+                else
+                {
+                    anim = theGame.r_getMultiplayerClient().getRandFistParryAnim();
+                    queueAnim(anim.anim, anim.duration, 0.2, 0, 'parry', true);
+                }
+            }
+
+            prevParryTime = lastParry;
+        }
+
+        // woman complete*
+        if (prevFinisherTime < 0.0f)
+        {
+            prevFinisherTime = lastFinisher;
+        }
+        else if (lastFinisher != prevFinisherTime)
+        {
+            if(heldItem == "silver" || heldItem == "steel")
+            {
+                if(finisherMonster)
+                {
+                    queueAnim('man_ger_crawl_finish', 2.3, 0.2, 0, 'finisher', true);
+                }
+                else
+                {
+                    anim = theGame.r_getMultiplayerClient().getRandFinisherAnim();
+                    queueAnim(anim.anim, anim.duration, 0.2, 0, 'finisher', true);
+                }
+            }
+
+            prevFinisherTime = lastFinisher;
+        }
+
+        // woman complete
+        if (prevSignTime < 0.0f)
+        {
+            prevSignTime = lastSign;
+        }
+        else if (lastSign != prevSignTime && !channeling)
+        {
+            // the sign of the cast itself from a game that sends it; signType is whatever was being cast when the
+            // snapshot was taken
+            castType = signType;
+            if(signFx)
+            {
+                castType = castSignType;
+            }
+            if(castType != ST_None)
+            {
+                signVisualType = castType;
+                signVisualAt = theGame.GetEngineTimeAsSeconds() + 0.4;
+            }
+            if(inCombat)
+            {
+                if(heldItem == "silver" || heldItem == "steel")
+                {
+                    if(castType == ST_Igni)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_ger_sword_ignii_front_lp', 1.73, 0.4, 0, 'sign', true);
+                        }
+                        else
+                        {
+                            queueAnim('man_ger_sword_ignii_front_lp', 1.70, 0.4, 0, 'sign', true);
+                        }
+
+                        smoothDelayedNext = true;
+                    }
+                    else if(castType == ST_Aard)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_ger_sword_aard_front_lp', 1.73, 0.4, 0, 'sign', true);
+                        }
+                        else
+                        {
+                            queueAnim('man_ger_sword_aard_front_lp', 1.70, 0.4, 0, 'sign', true);
+                        }
+
+                        smoothDelayedNext = true;
+                    }
+                    else if(castType == ST_Axii)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_ger_sword_axii_draw_lp', 1.4, 0.4, 0, 'sign', true);
+                        }
+                        else
+                        {
+                            queueAnim('man_ger_sword_axii_draw_lp', 1.37, 0.4, 0, 'sign', true);
+                        }
+
+                        smoothDelayedNext = true;
+                    }
+                    else if(castType == ST_Quen)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_ger_sword_quen_front_lp', 1.73, 0.4, 0, 'sign', true);
+                        }
+                        else
+                        {
+                            queueAnim('man_ger_sword_quen_front_lp', 1.70, 0.4, 0, 'sign', true);
+                        }
+
+                        smoothDelayedNext = true;
+                    }
+                    else if(castType == ST_Yrden)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_ger_sword_yrden_ground_lp', 1.73, 0.4, 0, 'sign', true);
+                        }
+                        else
+                        {
+                            queueAnim('man_ger_sword_yrden_ground_lp', 1.70, 0.4, 0, 'sign', true);
+                        }
+
+                        smoothDelayedNext = true;
+                    }
+                }
+                else if(heldItem == "none")
+                {
+                    if(castType == ST_Igni)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_fistfight_ignii_front', 1.73, 0.4, 0, 'sign', true);
+                        }
+                        else
+                        {
+                            queueAnim('man_fistfight_ignii_front', 1.70, 0.4, 0, 'sign', true);
+                        }
+
+                        smoothDelayedNext = true;
+                    }
+                    else if(castType == ST_Aard)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_fistfight_aard_front', 1.73, 0.4, 0, 'sign', true);
+                        }
+                        else
+                        {
+                            queueAnim('man_fistfight_aard_front', 1.70, 0.4, 0, 'sign', true);
+                        }
+
+                        smoothDelayedNext = true;
+                    }
+                    else if(castType == ST_Axii)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_fistfight_axii_release', 1.73, 0.4, 0, 'sign', true);
+                        }
+                        else
+                        {
+                            queueAnim('man_fistfight_axii_release', 1.37, 0.4, 0, 'sign', true);
+                        }
+
+                        smoothDelayedNext = true;
+                    }
+                    else if(castType == ST_Quen)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_fistfight_quen_front', 1.73, 0.4, 0, 'sign', true);
+                        }
+                        else
+                        {
+                            queueAnim('man_fistfight_quen_front', 1.70, 0.4, 0, 'sign', true);
+                        }
+
+                        smoothDelayedNext = true;
+                    }
+                    else if(castType == ST_Yrden)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_fistfight_yrden_ground', 1.73, 0.4, 0, 'sign', true);
+                        }
+                        else
+                        {
+                            queueAnim('man_fistfight_yrden_ground', 1.70, 0.4, 0, 'sign', true);
+                        }
+
+                        smoothDelayedNext = true;
+                    }
+                }
+            }
+            else
+            {
+                if(heldItem == "silver" || heldItem == "steel")
+                {
+                    if(castType == ST_Igni)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_geralt_ignii_front_sword', 1.73, 0.4, 0, 'sign', true);
+                        }
+                        else
+                        {
+                            queueAnim('man_geralt_ignii_front_sword', 1.70, 0.4, 0, 'sign', true);
+                        } 
+
+                        smoothDelayedNext = true;
+                    }
+                    else if(castType == ST_Aard)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_geralt_aard_front_sword', 1.73, 0.4, 0, 'sign', true);
+                        }
+                        else
+                        {
+                            queueAnim('man_geralt_aard_front_sword', 1.70, 0.4, 0, 'sign', true);
+                        }
+
+                        smoothDelayedNext = true;
+                    }
+                    else if(castType == ST_Axii)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_ger_sword_axii_release_lp_sword', 1.37, 0.4, 0, 'sign', true);
+                        }
+                        else
+                        {
+                            queueAnim('man_ger_sword_axii_release_lp_sword', 1.33, 0.4, 0, 'sign', true);
+                        }
+
+                        smoothDelayedNext = true;
+                    }
+                    else if(castType == ST_Quen)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_geralt_quen_front_sword', 1.73, 0.4, 0, 'sign', true); 
+                        }
+                        else
+                        {
+                           queueAnim('man_geralt_quen_front_sword', 1.70, 0.4, 0, 'sign', true); 
+                        }
+
+                        smoothDelayedNext = true;
+                    }
+                    else if(castType == ST_Yrden)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_geralt_yrden_ground_sword', 1.73, 0.4, 0, 'sign', true);
+                        }
+                        else
+                        {
+                            queueAnim('man_geralt_yrden_ground_sword', 1.70, 0.4, 0, 'sign', true);
+                        }
+
+                        smoothDelayedNext = true;
+                    }
+                }
+                else if(heldItem == "none")
+                {
+                    if(castType == ST_Igni)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_geralt_ignii_front', 1.73, 0.4, 0, 'sign', true);
+                        }
+                        else
+                        {
+                            queueAnim('man_geralt_ignii_front', 1.70, 0.4, 0, 'sign', true);
+                        }
+
+                        smoothDelayedNext = true;
+                    }
+                    else if(castType == ST_Aard)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_geralt_aard_front', 1.73, 0.4, 0, 'sign', true);
+                        }
+                        else
+                        {
+                            queueAnim('man_geralt_aard_front', 1.70, 0.4, 0, 'sign', true);
+                        }
+
+                        smoothDelayedNext = true;
+                    }
+                    else if(castType == ST_Axii)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_geralt_axii_release', 1.37, 0.4, 0, 'sign', true);
+                        }
+                        else
+                        {
+                            queueAnim('man_geralt_axii_release', 1.33, 0.4, 0, 'sign', true);
+                        }     
+
+                        smoothDelayedNext = true;
+                    }
+                    else if(castType == ST_Quen)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_geralt_quen_front', 1.73, 0.4, 0, 'sign', true);
+                        }
+                        else
+                        {
+                            queueAnim('man_geralt_quen_front', 1.70, 0.4, 0, 'sign', true);
+                        }
+
+                        smoothDelayedNext = true;
+                    }
+                    else if(castType == ST_Yrden)
+                    {
+                        if(cpcPlayerType != ENR_PlayerGeralt && cpcPlayerType != ENR_PlayerWitcher && cpcPlayerType != ENR_PlayerUnknown)
+                        {
+                            queueAnim('man_geralt_yrden_ground', 1.73, 0.4, 0, 'sign', true);
+                        }
+                        else
+                        {
+                            queueAnim('man_geralt_yrden_ground', 1.70, 0.4, 0, 'sign', true);
+                        }
+
+                        smoothDelayedNext = true;
+                    }
+                }
+            }
+            
+            prevSignTime = lastSign;
+        }
+
+        if (prevActionTime < 0.0f)
+        {
+            prevActionTime = lastActionTime;
+        }
+        else if (lastActionTime != prevActionTime)
+        {
+            if(lastAction == PEA_Meditation)
+            {
+                queueAnim('meditation_start_long', 3.7, 0.4, 0, 'emote', true);
+                queueAnim('meditation_idle01', 6.1, 0, 0, 'emote');
+                queueAnim('meditation_stop_long', 2.83, 0, 0, 'emote');
+            }
+            else if(lastAction == PEA_ExamineGround)
+            {
+                queueAnim('work_kneeling_start', 2.37, 0.4, 0, 'emote', true);
+                queueAnim('work_kneeling_loop', 3.23, 0, 0, 'emote');
+                queueAnim('work_kneeling_end', 3.0, 0, 0, 'emote');
+            }
+            else if(lastAction == PEA_ExamineEyeLevel)
+            {
+                queueAnim('finding_clues_standing_start', 1.0, 0.4, 0, 'emote', true);
+                queueAnim('finding_clues_standing_loop1', 2.0, 0, 0, 'emote');
+                queueAnim('finding_clues_standing_stop', 1.0, 0, 0, 'emote');
+            }
+            else if(lastAction == PEA_SmellHigh)
+            {
+                queueAnim('geralt_finding_clues_high_smell', 5.07, 0.4, 0, 'emote', true);
+            }
+            else if(lastAction == PEA_SmellMid)
+            {
+                queueAnim('geralt_finding_clues_mid_smell', 5.0, 0.4, 0, 'emote', true);
+            }
+            else if(lastAction == PEA_SmellLow)
+            {
+                queueAnim('geralt_finding_clues_low_start', 1.0, 0.4, 0, 'emote', true);
+                queueAnim('geralt_finding_clues_low_smell', 2.83, 0, 0, 'emote');
+                queueAnim('geralt_finding_clues_low_end', 1.0, 0, 0, 'emote');
+            }
+            else if(lastAction == PEA_InspectHigh)
+            {
+                queueAnim('geralt_finding_clues_high_loop', 2.0, 0.4, 0, 'emote', true);
+            }
+            else if(lastAction == PEA_InspectMid)
+            {
+                queueAnim('geralt_finding_clues_mid_loop', 2.93, 0.4, 0, 'emote', true);
+            }
+            else if(lastAction == PEA_InspectLow)
+            {
+                queueAnim('geralt_finding_clues_low_start', 1.0, 0.4, 0, 'emote', true);
+                queueAnim('geralt_finding_clues_low_loop', 2.0, 0, 0, 'emote');
+                queueAnim('geralt_finding_clues_low_end', 1.0, 0, 0, 'emote');
+            }
+            else if(lastAction == PEA_IgniLight)
+            {
+                queueAnim('man_ger_idle_sign_igni_light', 2.0, 0.4, 0, 'emote', true);
+            }
+            else if(lastAction == PEA_AardLight)
+            {
+                queueAnim('man_ger_idle_sign_aard_light', 2.0, 0.4, 0, 'emote', true);
+            }
+            else if(lastAction == PEA_SetBomb)
+            {
+                queueAnim('geralt_blow_up_nest_001', 3.8, 0.4, 0, 'emote', true);
+            }
+            else if(lastAction == PEA_DispelIllusion)
+            {
+                queueAnim('geralt_use_illusion_2', 6.0, 0.4, 0, 'emote', true);
+            }
+            else if(lastAction == PEA_GoToSleep)
+            {
+                queueAnim('man_bandit_sitting01_start', 5.33, 0.4, 0, 'emote', true);
+                queueAnim('man_bandit_sitting01_loop01', 11.73, 0, 0, 'emote');
+                queueAnim('man_bandit_sitting01_stop', 1.67, 0, 0, 'emote');
+            }
+
+            prevActionTime = lastActionTime;
+        }
+    }
+
+    public function setCPCPlayerType(newType : ENR_PlayerType)
+    {
+        if(cpcPlayerType == newType)
+        {
+            return;
+        }
+
+        if(this.GetCurrentStateName() == 'WO_UpdateCPC')
+        {
+            this.GotoState('WO_PlayerIdle');
+        }
+
+        cpcPlayerType = newType;
+        cpcNeedsRebuild = true;
+
+        if(ghost)
+        {
+            spawnGhost();
+        }
+    }
+
+    private function updateHeldItems()
+    {
+        var inv : CInventoryComponent;
+        var steel, silver : SItemUniqueId;
+        var ids : array<SItemUniqueId>;
+        var ids2 : array<SItemUniqueId>;
+        var i : int;
+
+        inv = ghost.GetInventory();
+
+        if(lastAnim == 'man_work_standing_performance_fire_eater_loop_01')
+        {
+            return;
+        }
+        
+        if( heldItem == "steel")
+        {
+            ids = inv.GetItemsByCategory('steelsword');
+            inv.MountItem( ids[0], true );
+        }
+        else if(heldItem == "silver")
+        {
+            ids = inv.GetItemsByCategory('silversword');
+            inv.MountItem( ids[0], true );
+        }
+        else if(heldItem == "none")
+        {
+            ids = inv.GetItemsByCategory('steelsword');
+            ids2 = inv.GetItemsByCategory('silversword');
+
+            ghost.EquipItem(ids[0]);
+            ghost.EquipItem(ids2[0]);
+        }
+
+        if(heldSecondaryItem == "torch")
+        {
+            ids = inv.GetItemsByName('Torch_work');
+
+            if(cpcPlayerType == ENR_PlayerGeralt || cpcPlayerType == ENR_PlayerWitcher)
+            {
+                inv.MountItem(ids[0], true);
+
+                if(!holdingTorch)
+                {
+                    stopAllAnims();
+                }
+                
+                holdingTorch = true;
+            }
+        }
+        else if(heldSecondaryItem == "none")
+        {
+            ids = inv.GetItemsByName('Torch_work');
+
+            for(i = 0; i < ids.Size(); i+=1)
+            {
+                if(inv.GetItemName(ids[i]) == 'Torch_work')
+                {
+                    ghost.EquipItem(ids[i]);
+                    inv.UnmountItem(ids[i], true);
+                }
+            }
+
+            holdingTorch = false;
+        }
+    }
+
+    private function setMoveType(entity:CActor, st:int)
+    {
+        ((CActor)entity).GetMovingAgentComponent().SetGameplayRelativeMoveSpeed(st);
+    }
+
+    private function moveEntity(entity:CActor , targpos:Vector)
+    {
+        var dist, verticalDist, waterLevel : float;
+        var entpos : Vector;
+        var adjustor : CMovementAdjustor; 
+        var ticket : SMovementAdjustmentRequestTicket; 
+        var entityPAC : CMovingPhysicalAgentComponent;
+        entpos = entity.GetWorldPosition();
+        dist = VecDistance(entpos, targpos);
+        adjustor = entity.GetMovingAgentComponent().GetMovementAdjustor();
+        verticalDist = AbsF(targpos.Z - entpos.Z);
+
+        if(isMounted || isRiding)
+        {
+            return;
+        }
+
+        if (dist > 0.01f)
+            lastMoveDir = ClassifyMoveDirRelativeToCamera(entpos, targpos, heading);
+        else
+            lastMoveDir = 'none';
+
+        if (dist > 0.5f)
+            lastMoveDirAlt = ClassifyMoveDirRelativeToCamera(entpos, targpos, heading);
+        else
+            lastMoveDirAlt = 'none';
+
+        if (dist > 1.0f)
+            lastMoveDirAltAlt = ClassifyMoveDirRelativeToCamera(entpos, targpos, heading);
+        else
+            lastMoveDirAltAlt = 'none';
+
+        if (verticalDist > 0.25f)
+            lastVerticalMoveDir = ClassifyVerticalMoveDir(entpos, targpos);
+        else
+            lastVerticalMoveDir = 'none';
+
+        if(isLadder)
+        {
+            if (verticalDist > 0.15f)
+                lastVerticalMoveDir = ClassifyVerticalMoveDir(entpos, targpos);
+            else
+                lastVerticalMoveDir = 'none';
+        }
+
+        setHeading(entity, targpos);
+
+        if(holdingTorch)
+        {
+            if(speed == 0)
+            {
+                setMoveType(entity, 0); 
+            }
+            else if(speed <= 0.7)
+            {
+                setMoveType(entity, 1);
+            }
+            else if(speed <= 1)
+            {
+                setMoveType(entity, 2);
+            }
+            else
+            {
+                setMoveType(entity, 4);
+            }
+        }
+        else
+        {
+            setMoveType(entity, 0);
+        }
+        
+        adjustor.Cancel(adjustor.GetRequest('w3mp_ghost'));
+        ticket = adjustor.CreateNewRequest('w3mp_ghost');
+
+        adjustor.AdjustmentDuration(ticket, npcAdjustorDelay);
+        adjustor.AdjustLocationVertically(ticket, true);
+        adjustor.ScaleAnimationLocationVertically(ticket, true);
+        adjustor.RotateTo(ticket, heading); 
+        adjustor.SlideTo(ticket, targpos);
+        
+        if(!lastDiving && dist > 200) 
+            teleport(entity, targpos);
+    }
+
+    private function setHeading(entity:CActor , targpos:Vector)
+    {
+        ((CActor)entity).GetMovingAgentComponent().SetGameplayMoveDirection(VecHeading(targpos - entity.GetWorldPosition()));
+    }
+
+    private function teleport(entity:CActor , pos:Vector)
+    {
+        ((CActor)entity).Teleport(pos);
+    }
+}
+
+state WO_PlayerIdle in r_RemotePlayer {
+  event OnEnterState(previous_state_name: name) 
+  {
+    super.OnEnterState(previous_state_name);
+  }
+}
+
+state WO_UpdateCPC in r_RemotePlayer
+{
+    event OnEnterState(prevStateName : name)
+	{
+		this.wo_updateCPCEntry();
+        this.GotoState('WO_PlayerIdle');
+	}
+
+    private function removeTemplates()
+    {
+        parent.removeTemplate(parent.cpcHairTemp);
+        parent.removeTemplate(parent.cpcBodyTemp);
+        parent.removeTemplate(parent.cpcTorsoTemp);
+        parent.removeTemplate(parent.cpcArmsTemp);
+        parent.removeTemplate(parent.cpcGlovesTemp);
+        parent.removeTemplate(parent.cpcDressTemp);
+        parent.removeTemplate(parent.cpcLegsTemp);
+        parent.removeTemplate(parent.cpcShoesTemp);
+        parent.removeTemplate(parent.cpcMiscTemp);
+        parent.removeTemplate(parent.cpcItem1Temp);
+        parent.removeTemplate(parent.cpcItem2Temp);
+        parent.removeTemplate(parent.cpcItem3Temp);
+        parent.removeTemplate(parent.cpcItem4Temp);
+        parent.removeTemplate(parent.cpcItem5Temp);
+        parent.removeTemplate(parent.cpcItem6Temp);
+        parent.removeTemplate(parent.cpcItem7Temp);
+        parent.removeTemplate(parent.cpcItem8Temp);
+        parent.removeTemplate(parent.cpcItem9Temp);
+        parent.removeTemplate(parent.cpcItem10Temp);
+        parent.hideBody = false;
+        parent.hideHair = false;
+        parent.last_eq_hair = '';
+        parent.headOverride = false;
+
+        parent.lastcpcHead = '';
+        parent.lastcpcHair = "";
+        parent.lastcpcBody = "";
+        parent.lastcpcTorso = "";
+        parent.lastcpcArms = "";
+        parent.lastcpcGloves = "";
+        parent.lastcpcDress = "";
+        parent.lastcpcLegs = "";
+        parent.lastcpcShoes = "";
+        parent.lastcpcMisc = "";
+        parent.lastcpcItem1 = "";
+        parent.lastcpcItem2 = "";
+        parent.lastcpcItem3 = "";
+        parent.lastcpcItem4 = "";
+        parent.lastcpcItem5 = "";
+        parent.lastcpcItem6 = "";
+        parent.lastcpcItem7 = "";
+        parent.lastcpcItem8 = "";
+        parent.lastcpcItem9 = "";
+        parent.lastcpcItem10 = "";
+    }
+
+    private function removeTemplatesNoHead()
+    {
+        parent.removeTemplate(parent.cpcBodyTemp);
+        parent.removeTemplate(parent.cpcTorsoTemp);
+        parent.removeTemplate(parent.cpcArmsTemp);
+        parent.removeTemplate(parent.cpcGlovesTemp);
+        parent.removeTemplate(parent.cpcDressTemp);
+        parent.removeTemplate(parent.cpcLegsTemp);
+        parent.removeTemplate(parent.cpcShoesTemp);
+        parent.removeTemplate(parent.cpcMiscTemp);
+        parent.removeTemplate(parent.cpcItem1Temp);
+        parent.removeTemplate(parent.cpcItem2Temp);
+        parent.removeTemplate(parent.cpcItem3Temp);
+        parent.removeTemplate(parent.cpcItem4Temp);
+        parent.removeTemplate(parent.cpcItem5Temp);
+        parent.removeTemplate(parent.cpcItem6Temp);
+        parent.removeTemplate(parent.cpcItem7Temp);
+        parent.removeTemplate(parent.cpcItem8Temp);
+        parent.removeTemplate(parent.cpcItem9Temp);
+        parent.removeTemplate(parent.cpcItem10Temp);
+        parent.hideBody = false;
+
+        parent.lastcpcBody = "";
+        parent.lastcpcTorso = "";
+        parent.lastcpcArms = "";
+        parent.lastcpcGloves = "";
+        parent.lastcpcDress = "";
+        parent.lastcpcLegs = "";
+        parent.lastcpcShoes = "";
+        parent.lastcpcMisc = "";
+        parent.lastcpcItem1 = "";
+        parent.lastcpcItem2 = "";
+        parent.lastcpcItem3 = "";
+        parent.lastcpcItem4 = "";
+        parent.lastcpcItem5 = "";
+        parent.lastcpcItem6 = "";
+        parent.lastcpcItem7 = "";
+        parent.lastcpcItem8 = "";
+        parent.lastcpcItem9 = "";
+        parent.lastcpcItem10 = "";
+    }
+
+    function updateHorseAppearance()
+    {
+        if(!parent.horse)
+        {
+            return;
+        }
+
+        if(parent.horseAppearance == "0")
+        {
+            if(((CActor)parent.horse).GetAppearance() != 'horse_draft_vehicle_02')
+            {
+                ((CActor)parent.horse).ApplyAppearance("horse_draft_vehicle_02");
+            }
+        }
+        else if(parent.horseAppearance == "1")
+        {
+            if(((CActor)parent.horse).GetAppearance() != '_sq101__white_stallion_02')
+            {
+                ((CActor)parent.horse).ApplyAppearance("_sq101__white_stallion_02");
+            }
+        }
+        else if(parent.horseAppearance == "2")
+        {
+            if(((CActor)parent.horse).GetAppearance() != 'horse_draft_vehicle_04')
+            {
+                ((CActor)parent.horse).ApplyAppearance("horse_draft_vehicle_04");
+            }
+        }
+        else if(parent.horseAppearance == "3")
+        {
+            if(((CActor)parent.horse).GetAppearance() != 'horse_wild_hunt_01')
+            {
+                ((CActor)parent.horse).ApplyAppearance("horse_wild_hunt_01");
+            }
+        }
+        else if(parent.horseAppearance == "4")
+        {
+            if(((CActor)parent.horse).GetAppearance() != 'player_horse_with_devil_saddle')
+            {
+                ((CActor)parent.horse).ApplyAppearance("player_horse_with_devil_saddle");
+            }
+        }
+        else if(parent.horseAppearance == "5")
+        {
+            if(((CActor)parent.horse).GetAppearance() != 'unicorn_wild_01')
+            {
+                ((CActor)parent.horse).ApplyAppearance("unicorn_wild_01");
+            }
+        }
+        else
+        {
+            if(((CActor)parent.horse).GetAppearance() != 'horse_draft_vehicle_02')
+            {
+                ((CActor)parent.horse).ApplyAppearance("horse_draft_vehicle_02");
+            }
+        }
+    }
+
+    private var lastHorseMountRequestAt : float;
+
+    latent function spawnHorse()
+    {
+        var l_aiTree : CAIHorseDoNothingAction;
+        var adjustor : CMovementAdjustor;
+        var temp_2 : CEntityTemplate;
+        var horseTag : array<name>;
+        var now : float;
+
+        if(!parent.ghost)
+        {
+            return;
+        }
+
+        if(!parent.horse)
+        {
+            temp_2 = (CEntityTemplate)LoadResourceAsync("dlc\dlc_mpmod\data\entities\horse_vehicle.w2ent", true);
+
+            if(!temp_2 || !parent.ghost)
+            {
+                return;
+            }
+
+            horseTag.Clear();
+            horseTag.PushBack('online_horse');
+            horseTag.PushBack('wo_horse');
+
+            parent.horse = (CActor)theGame.CreateEntity(temp_2, parent.ghost.GetWorldPosition(),parent.ghost.GetWorldRotation(), true, false, false, PM_DontPersist,horseTag);
+
+            if(!parent.horse)
+            {
+                return;
+            }
+
+            parent.horse.EnableCollisions(false);
+            parent.horse.EnableCharacterCollisions(false);
+            parent.horse.SetGameplayVisibility(false);
+
+            updateHorseAppearance();
+
+            adjustor = parent.ghost.GetMovingAgentComponent().GetMovementAdjustor();
+
+            adjustor.Cancel(adjustor.GetRequest('w3mp_ghost'));
+
+            l_aiTree = new CAIHorseDoNothingAction in parent.ghost;
+            l_aiTree.OnCreated();
+
+            parent.ghost.ForceAIBehavior(l_aiTree, BTAP_Emergency, 'AI_Rider_Load_Forced');
+
+            SleepOneFrame();
+
+            if(!parent.horse || !parent.ghost)
+            {
+                return;
+            }
+
+            if(!parent.horse.HasTag('wo_horse'))
+            {
+                return;
+            }
+        }
+
+        if(parent.ghost.IsUsingHorse(true))
+        {
+            lastHorseMountRequestAt = 0.0f;
+            return;
+        }
+
+        now = theGame.GetEngineTimeAsSeconds();
+
+        if(lastHorseMountRequestAt > now)
+        {
+            lastHorseMountRequestAt = 0.0f;
+        }
+
+        if(lastHorseMountRequestAt > 0.0f && now - lastHorseMountRequestAt < 0.5f)
+        {
+            return;
+        }
+
+        lastHorseMountRequestAt = now;
+
+        parent.ghost.SignalGameplayEventParamInt('RidingManagerMountHorse', MT_instant | MT_fromScript);
+    }
+
+    latent function dismountHorse()
+    {
+        ((CActor)parent.ghost).SignalGameplayEventParamInt( 'RidingManagerDismountHorse', DT_instant | DT_fromScript );
+
+        parent.ghost.EnableCollisions(false);
+        parent.ghost.EnableCharacterCollisions(false); 
+        parent.ghost.SetGameplayVisibility( false );
+    }
+
+    latent function spawnBoat()
+    {
+        var temp_2 : CEntityTemplate;
+        var horseTag : array<name>;
+
+        if(parent.boat)
+        {
+            parent.boat.Destroy();
+            parent.boat = NULL;
+        }
+
+        temp_2 = (CEntityTemplate)LoadResourceAsync("dlc\dlc_mpmod\data\entities\online_boat.w2ent", true);
+
+        horseTag.Clear();
+        horseTag.PushBack('online_horse');
+
+        parent.boat = (CActor)theGame.CreateEntity(temp_2, parent.ghost.GetWorldPosition(), parent.ghost.GetWorldRotation(), true,false,false,PM_DontPersist,horseTag);
+
+        if(!parent.boat || !temp_2)
+            return;
+
+        ((CActor)parent.boat).EnableCollisions(false);
+        ((CActor)parent.boat).EnableCharacterCollisions(false); 
+        ((CActor)parent.boat).SetGameplayVisibility( false );
+    }
+
+    latent function destroyBoat()
+    {
+        if(parent.boat)
+        {
+            parent.boat.Destroy();
+            parent.boat = NULL;
+        }
+    }
+
+    function moveHorse()
+    {
+        var adjustor : CMovementAdjustor; 
+        var ticket : SMovementAdjustmentRequestTicket; 
+        var targpos, entpos: Vector;
+        var toRide : CActor;
+
+        if(!parent.horse || !parent.ghost)
+        {
+            return;
+        }
+
+        toRide = parent.horse;
+
+        if(!toRide)
+        {
+            return;
+        }
+
+        targpos = parent.pos;
+        entpos = parent.ghost.GetWorldPosition();
+
+        adjustor = parent.horse.GetMovingAgentComponent().GetMovementAdjustor();
+        
+        adjustor.Cancel(adjustor.GetRequest('w3mp_horsesync'));
+        ticket = adjustor.CreateNewRequest('w3mp_horsesync');
+
+        adjustor.AdjustmentDuration(ticket, parent.horseAdjustorDelay);
+        adjustor.AdjustLocationVertically(ticket, true);
+        adjustor.ScaleAnimationLocationVertically(ticket, true);
+        adjustor.RotateTo(ticket, parent.heading); 
+        adjustor.SlideTo(ticket, targpos);
+
+        if(!parent.horse.GetVisibility())
+        {
+            ((CActor)parent.horse).GetMovingAgentComponent().SetGameplayRelativeMoveSpeed(0);
+            return;
+        }
+
+        if(parent.horseSpeed == 0)
+        {
+            ((CActor)parent.horse).GetMovingAgentComponent().SetGameplayRelativeMoveSpeed(0);
+        }
+        else if(parent.horseSpeed <= 2.5)
+        {
+            ((CActor)parent.horse).GetMovingAgentComponent().SetGameplayRelativeMoveSpeed(1);
+        }
+        else if(parent.horseSpeed <= 4)
+        {
+            ((CActor)parent.horse).GetMovingAgentComponent().SetGameplayRelativeMoveSpeed(2);
+        }
+        else if(parent.horseSpeed <= 9.5)
+        {
+            ((CActor)parent.horse).GetMovingAgentComponent().SetGameplayRelativeMoveSpeed(3);
+        }
+        else
+        {
+            ((CActor)parent.horse).GetMovingAgentComponent().SetGameplayRelativeMoveSpeed(4);
+        }
+    }
+
+    function moveBoat()
+    {
+        var adjustor : CMovementAdjustor; 
+        var ticket : SMovementAdjustmentRequestTicket; 
+        var targpos, entpos: Vector;
+        var toRide : CActor;
+        var speed : float;
+        var linVelocity : Vector;
+        var forwardOffset : float;
+        var rightOffset : float;
+        var forward : Vector;
+        var right : Vector;
+        var rot : EulerAngles;
+        var velo : float;
+        
+        if(!parent.boat)
+            return;
+
+        if(parent.cpcPlayerType != ENR_PlayerGeralt && parent.cpcPlayerType != ENR_PlayerWitcher && parent.cpcPlayerType != ENR_PlayerUnknown)
+        {
+            rightOffset = 0.5f;
+            forwardOffset = 3.25f;
+        }
+        else
+        {
+            rightOffset = 0.33f;
+            forwardOffset = 2.75f;
+        }
+        
+        forward = VecFromHeading( parent.heading );
+        forward.Z = 0.0f;
+        forward = VecNormalize( forward );
+
+        rot = VecToRotation( forward );
+        right = RotRight( rot );
+        right.Z = 0.0f;
+        right = VecNormalize( right );
+        
+        targpos = parent.pos + forward * forwardOffset + right * rightOffset - Vector(0, 0, 0.22);
+
+        adjustor = ((CActor)parent.boat).GetMovingAgentComponent().GetMovementAdjustor();
+        
+        adjustor.Cancel(adjustor.GetRequest('w3mp_boatsync'));
+        ticket = adjustor.CreateNewRequest('w3mp_boatsync');
+
+        adjustor.AdjustmentDuration(ticket, parent.boatAdjustorDelay);
+        adjustor.AdjustLocationVertically(ticket, true);
+        adjustor.ScaleAnimationLocationVertically(ticket, true);
+        adjustor.RotateTo(ticket, parent.heading); 
+        adjustor.SlideTo(ticket, targpos);
+
+        velo = VecLength2D(((CActor)parent.boat).GetMovingAgentComponent().GetVelocity());
+
+        if(velo > 0.5)
+        {
+            parent.boat.PlayEffectSingle( 'fake_wind_right' );
+            parent.boat.PlayEffectSingle( 'fake_wind_left' );
+            parent.boat.PlayEffectSingle( 'water_trail' );
+        }
+        else
+        {
+            parent.boat.StopEffectIfActive( 'fake_wind_right' );
+			parent.boat.StopEffectIfActive( 'fake_wind_left' );
+			parent.boat.StopEffectIfActive( 'water_trail' );
+        }
+    }
+
+    latent function spawnMorph()
+    {
+        var ent_2 : CEntity;
+        var temp_2 : CEntityTemplate;
+        var horseTag : array<name>;
+
+        if(parent.morph)
+        {
+            parent.morph.Destroy();
+        }
+
+        if (parent.morphType == 'cat') {
+            temp_2 = (CEntityTemplate)LoadResourceAsync( 'nr_transform_cat' );
+        }
+        else if (parent.morphType == 'crow') {
+            temp_2 = (CEntityTemplate)LoadResourceAsync( 'nr_transform_crow' );
+        }
+        else {
+            temp_2 = (CEntityTemplate)LoadResourceAsync( 'nr_transform_owl' );
+        }
+
+        crowBehState = '';
+        horseTag.Clear();
+        horseTag.PushBack('online_horse');
+
+        parent.morph = (CActor)theGame.CreateEntity(temp_2, parent.ghost.GetWorldPosition(), parent.ghost.GetWorldRotation(), true,false,false,PM_DontPersist,horseTag);
+
+        if(!parent.morph || !temp_2)
+            return;
+
+        if(parent.morphType == 'owl')
+        {
+            ((CActor)parent.morph).EnableCollisions(true);
+            ApplyCrowBehStateIfNew('FlyInPlace');
+        }
+        else
+        {
+            ((CActor)parent.morph).EnableCollisions(false);
+        }
+
+        ((CActor)parent.morph).EnableCharacterCollisions(false); 
+        ((CActor)parent.morph).SetGameplayVisibility( false );
+
+        updateMorphAppearance();
+    }
+
+    function updateMorphAppearance()
+    {
+        if(!parent.morph)
+            return;
+
+        if(((CActor)parent.morph).GetAppearance() != parent.morphAppearance)
+        {
+            ((CActor)parent.morph).ApplyAppearance(parent.morphAppearance);
+        }
+    }
+
+    latent function destroyMorph()
+    {
+        if(parent.morph)
+        {
+            parent.morph.Destroy();
+            parent.morph = NULL;
+        }
+    }
+
+    var cooldown : float;
+    var lastMorphPos : Vector;
+
+    function moveMorph()
+    {
+        var adjustor : CMovementAdjustor; 
+        var ticket : SMovementAdjustmentRequestTicket; 
+        var targpos : Vector;
+        var velo : float;
+        var now : float = theGame.GetEngineTimeAsSeconds();
+        var ghostPos : Vector;
+        
+        if(!parent.morph || !parent.ghost)
+            return;
+
+        targpos = parent.pos;
+
+        adjustor = ((CActor)parent.morph).GetMovingAgentComponent().GetMovementAdjustor();
+
+        if(parent.morphType == 'cat')
+        {
+            ((CActor)parent.morph).GetMovingAgentComponent().SetGameplayRelativeMoveSpeed(parent.speed);
+            ((CActor)parent.morph).SetBehaviorVariable('Editor_MovementRotation', parent.morphRotation);
+        }
+        else
+        {
+            ((CActor)parent.morph).GetMovingAgentComponent().SetGameplayRelativeMoveSpeed(0);
+        }
+
+        if(parent.morphType == 'owl' || parent.morphType == 'crow')
+        {
+            //ApplyCrowBehStateIfNew('GlideForward');
+            ghostPos = parent.ghost.GetWorldPosition();
+            if(VecDistance2D(lastMorphPos, ghostPos) < 0.03)
+            {
+                ApplyCrowBehStateIfNew('FlyInPlace');
+            }
+            else
+            {
+                ApplyCrowBehStateIfNew('FlyForward');
+            }
+
+            lastMorphPos = ghostPos;
+        }
+        
+        if(parent.morphType == 'owl')
+        {
+            parent.morph.TeleportWithRotation( parent.ghost.GetWorldPosition(), parent.ghost.GetWorldRotation() );
+        }
+        else
+        {
+            adjustor.Cancel(adjustor.GetRequest('w3mp_morphsync'));
+            ticket = adjustor.CreateNewRequest('w3mp_morphsync');
+
+            adjustor.AdjustmentDuration(ticket, parent.morphAdjustorDelay);
+            adjustor.AdjustLocationVertically(ticket, true);
+            adjustor.ScaleAnimationLocationVertically(ticket, true);
+            adjustor.RotateTo(ticket, parent.heading); 
+            adjustor.SlideTo(ticket, targpos);
+        }
+    }
+
+    var crowBehState : name;
+
+    public function ApplyCrowBehStateIfNew(newStateName : name) 
+    {
+        if(!parent.morph)
+        {
+            return;
+        }
+        
+		if (crowBehState != newStateName) 
+        {
+			if (parent.morph.GetRootAnimatedComponent().RaiseBehaviorEvent(newStateName)) 
+            {
+				crowBehState = newStateName;
+			}
+		}
+	}
+
+    private var lastSailing : bool;
+    private var lastMorph : bool;
+
+    entry function wo_updateCPCEntry()
+	{
+        while(true)
+        {
+            if(theGame.IsPaused() || theGame.GetPhotomodeEnabled() || !parent.ghost)
+            {
+                SleepOneFrame();
+                continue;
+            }
+
+            if(parent.morphActive)
+            {
+                if(!lastMorph || !parent.morph)
+                {
+                    spawnMorph();
+
+                    if(!parent.morph)
+                    {
+                        SleepOneFrame();
+                        continue;
+                    }
+
+                    lastMorph = true;
+                }
+
+                if(parent.ghost.GetVisibility())
+                {
+                    parent.ghost.SetVisibility(false);
+                }
+
+                if (!(((CAnimatedComponent)parent.ghost.GetComponentByClassName('CAnimatedComponent')).HasFrozenPose()))
+                {
+                    ((CAnimatedComponent)parent.ghost.GetComponentByClassName('CAnimatedComponent')).FreezePose();
+                }
+
+                moveMorph();
+                updateMorphAppearance();
+            }
+            else
+            {
+                if(lastMorph)
+                {
+                    // destroy morph
+                    destroyMorph();
+
+                    if(!parent.ghost.GetVisibility())
+                    {
+                        parent.ghost.SetVisibility(true);
+                    }
+
+                    if (parent.horse && (((CAnimatedComponent)parent.horse.GetComponentByClassName('CAnimatedComponent')).HasFrozenPose()))
+                    {
+                        ((CAnimatedComponent)parent.horse.GetComponentByClassName('CAnimatedComponent')).UnfreezePose();
+                    }
+
+                    lastMorph = false;
+                }
+            }
+
+            // horse
+            if(parent.isMounted)
+            {
+                if(!parent.lastMounted || !parent.horse)
+                {
+                    spawnHorse();
+
+                    if(!parent.horse)
+                    {
+                        SleepOneFrame();
+                        continue;
+                    }
+
+                    parent.horse.SetVisibility(true);
+                }
+                else if(!parent.ghost.IsUsingHorse(true))
+                {
+                    spawnHorse();
+                }
+
+                if(!parent.horse.GetVisibility())
+                {
+                    parent.horse.SetVisibility(true);
+                }
+
+                if(((CAnimatedComponent)parent.horse.GetComponentByClassName('CAnimatedComponent')).HasFrozenPose())
+                {
+                    ((CAnimatedComponent)parent.horse.GetComponentByClassName('CAnimatedComponent')).UnfreezePose();
+                }
+
+                moveHorse();
+                updateHorseAppearance();
+
+                parent.lastMounted = true;
+            }
+            else
+            {
+                if(parent.lastMounted && parent.horse)
+                {  
+                    // dismount
+                    dismountHorse();
+                    parent.horse.SetVisibility(false);
+                    parent.lastMounted = false;
+                    parent.lastIdleAnim = theGame.GetEngineTimeAsSeconds();
+                    ((CAnimatedComponent)parent.horse.GetComponentByClassName('CAnimatedComponent')).FreezePose();
+                }
+                else
+                {
+                    if(parent.horse && parent.horse.GetVisibility())
+                    {
+                        parent.horse.SetVisibility(false);
+                    }
+
+                    if (parent.horse && !(((CAnimatedComponent)parent.horse.GetComponentByClassName('CAnimatedComponent')).HasFrozenPose()))
+                    {
+                        ((CAnimatedComponent)parent.horse.GetComponentByClassName('CAnimatedComponent')).FreezePose();
+                    }
+
+                    moveHorse();
+                }
+            }
+
+            if(parent.isSailing)
+            {
+                if(!lastSailing || !parent.boat)
+                {
+                    spawnBoat();
+                }
+
+                if(parent.cpcPlayerType != ENR_PlayerGeralt && parent.cpcPlayerType != ENR_PlayerWitcher && parent.cpcPlayerType != ENR_PlayerUnknown)
+                {
+                    if(parent.lastAnim != 'boat_sail_loop')
+                    {
+                        parent.queueAnim('boat_sail_loop', 19.13, 0.5, 0, 'sailing');
+                    }
+
+                    parent.queueAnim('boat_sail_loop', 19.13, 0, 0, 'sailing');
+                }
+                else
+                {
+                    if(parent.lastAnim != 'boat_sail_idle')
+                    {
+                        parent.queueAnim('boat_sail_idle', 2.33, 0.5, 0, 'sailing');
+                    }
+
+                    parent.queueAnim('boat_sail_idle', 2.33, 0, 0, 'sailing');
+                }
+                
+                moveBoat();
+                lastSailing = true;
+            }
+            else
+            {
+                if(lastSailing)
+                {
+                    destroyBoat();
+                    lastSailing = false;
+                }
+            }
+
+            if(NR_GetPlayerManager().IsPlayerTypeChangeLocked() || theGame.IsDialogOrCutscenePlaying() || thePlayer.IsInNonGameplayCutscene() || !parent.ghost)
+            {
+                SleepOneFrame();
+                continue;
+            }
+
+            if((parent.lastcpcPlayerType != parent.cpcPlayerType) || parent.cpcNeedsRebuild)
+            {
+                removeTemplates();
+                parent.spawnGhost();
+
+                if(!parent.ghost)
+                {
+                    SleepOneFrame();
+                    continue;
+                }
+
+                if(parent.cpcPlayerType == ENR_PlayerCiri)
+                {
+                    // ciri head
+                    parent.EquipNewItem(parent.ghost.GetInventory(), parent.last_eq_head, 'nr_h_01_wa__ciri');
+                    parent.headOverride = true;
+                    
+                    parent.unmountHair();
+                    parent.hideHair = true;
+
+                    //ciri hair
+                    parent.cpcHairTemp = updateTemplate("characters/models/main_npc/ciri/c_01_wa__ciri.w2ent", parent.cpcHairTemp);
+                    parent.unmountHair();
+                    parent.hideHair = true;
+
+                    //ciri body
+                    parent.cpcBodyTemp = updateTemplate("characters/models/main_npc/ciri/body_01_wa__ciri.w2ent", parent.cpcBodyTemp);
+                    parent.hideBody = true;
+                }
+
+                parent.cpcNeedsRebuild = false;
+            }
+
+            parent.lastcpcPlayerType = parent.cpcPlayerType;
+
+            if(parent.cpcPlayerType == ENR_PlayerGeralt || parent.cpcPlayerType == ENR_PlayerCiri)
+            {
+                SleepOneFrame();
+                continue;
+            }
+
+            if(parent.lastcpcHead != parent.cpcHead && parent.cpcHead != 'none')
+            {
+                parent.EquipNewItem(parent.ghost.GetInventory(), parent.last_eq_head, parent.cpcHead);
+                parent.headOverride = true;
+                
+                parent.unmountHair();
+                parent.hideHair = true;
+            }
+
+            if(parent.lastcpcHair != parent.cpcHair && parent.cpcHair != "none")
+            {
+                parent.cpcHairTemp = updateTemplate(parent.cpcHair, parent.cpcHairTemp);
+
+                parent.unmountHair();
+                parent.hideHair = true;
+            }
+            else if(parent.cpcHair == "none")
+            {
+                parent.unmountHair();
+                parent.removeTemplate(parent.cpcHairTemp);
+                parent.hideHair = true;
+            }
+
+            if(parent.cpcItem10 == "EquipmentMode")
+            {
+                parent.lastcpcHead = parent.cpcHead;
+                parent.lastcpcHair = parent.cpcHair;
+                removeTemplatesNoHead();
+                SleepOneFrame();
+                continue;
+            }
+
+            if(parent.lastcpcBody != parent.cpcBody && parent.cpcBody != "none")
+            {
+                parent.cpcBodyTemp = updateTemplate(parent.cpcBody, parent.cpcBodyTemp);
+                parent.hideBody = true;
+            }
+            else if(parent.cpcBody == "none")
+            {
+                parent.removeTemplate(parent.cpcBodyTemp);
+            }
+
+            if(parent.lastcpcTorso != parent.cpcTorso && parent.cpcTorso != "none")
+            {
+                parent.cpcTorsoTemp = updateTemplate(parent.cpcTorso, parent.cpcTorsoTemp);
+                parent.hideBody = true;
+            }
+            else if(parent.cpcTorso == "none")
+            {
+                parent.removeTemplate(parent.cpcTorsoTemp);
+            }
+
+            if(parent.lastcpcArms != parent.cpcArms && parent.cpcArms != "none")
+            {
+                parent.cpcArmsTemp = updateTemplate(parent.cpcArms, parent.cpcArmsTemp);
+                parent.hideBody = true;
+            }
+            else if(parent.cpcArms == "none")
+            {
+                parent.removeTemplate(parent.cpcArmsTemp);
+            }
+
+            if(parent.lastcpcGloves != parent.cpcGloves && parent.cpcGloves != "none")
+            {
+                parent.cpcGlovesTemp = updateTemplate(parent.cpcGloves, parent.cpcGlovesTemp);
+                parent.hideBody = true;
+            }
+            else if(parent.cpcGloves == "none")
+            {
+                parent.removeTemplate(parent.cpcGlovesTemp);
+            }
+
+            if(parent.lastcpcDress != parent.cpcDress && parent.cpcDress != "none")
+            {
+                parent.cpcDressTemp = updateTemplate(parent.cpcDress, parent.cpcDressTemp);
+                parent.hideBody = true;
+            }
+            else if(parent.cpcDress == "none")
+            {
+                parent.removeTemplate(parent.cpcDressTemp);
+            }
+
+            if(parent.lastcpcLegs != parent.cpcLegs && parent.cpcLegs != "none")
+            {
+                parent.cpcLegsTemp = updateTemplate(parent.cpcLegs, parent.cpcLegsTemp);
+                parent.hideBody = true;
+            }
+            else if(parent.cpcLegs == "none")
+            {
+                parent.removeTemplate(parent.cpcLegsTemp);
+            }
+
+            if(parent.lastcpcShoes != parent.cpcShoes && parent.cpcShoes != "none")
+            {
+                parent.cpcShoesTemp = updateTemplate(parent.cpcShoes, parent.cpcShoesTemp);
+                parent.hideBody = true;
+            }
+            else if(parent.cpcShoes == "none")
+            {
+                parent.removeTemplate(parent.cpcShoesTemp);
+            }
+
+            if(parent.lastcpcMisc != parent.cpcMisc && parent.cpcMisc != "none")
+            {
+                parent.cpcMiscTemp = updateTemplate(parent.cpcMisc, parent.cpcMiscTemp);
+            }
+            else if(parent.cpcMisc == "none")
+            {
+                parent.removeTemplate(parent.cpcMiscTemp);
+            }
+
+            if(parent.lastcpcItem1 != parent.cpcItem1 && parent.cpcItem1 != "none")
+            {
+                parent.cpcItem1Temp = updateTemplate(parent.cpcItem1, parent.cpcItem1Temp);
+            }
+            else if(parent.cpcItem1 == "none")
+            {
+                parent.removeTemplate(parent.cpcItem1Temp);
+            }
+
+            if(parent.lastcpcItem2 != parent.cpcItem2 && parent.cpcItem2 != "none")
+            {
+                parent.cpcItem2Temp = updateTemplate(parent.cpcItem2, parent.cpcItem2Temp);
+            }
+            else if(parent.cpcItem2 == "none")
+            {
+                parent.removeTemplate(parent.cpcItem2Temp);
+            }
+
+            if(parent.lastcpcItem3 != parent.cpcItem3 && parent.cpcItem3 != "none")
+            {
+                parent.cpcItem3Temp = updateTemplate(parent.cpcItem3, parent.cpcItem3Temp);
+            }
+            else if(parent.cpcItem3 == "none")
+            {
+                parent.removeTemplate(parent.cpcItem3Temp);
+            }
+
+            if(parent.lastcpcItem4 != parent.cpcItem4 && parent.cpcItem4 != "none")
+            {
+                parent.cpcItem4Temp = updateTemplate(parent.cpcItem4, parent.cpcItem4Temp);
+            }
+            else if(parent.cpcItem4 == "none")
+            {
+                parent.removeTemplate(parent.cpcItem4Temp);
+            }
+
+            if(parent.lastcpcItem5 != parent.cpcItem5 && parent.cpcItem5 != "none")
+            {
+                parent.cpcItem5Temp = updateTemplate(parent.cpcItem5, parent.cpcItem5Temp);
+            }
+            else if(parent.cpcItem5 == "none")
+            {
+                parent.removeTemplate(parent.cpcItem5Temp);
+            }
+
+            if(parent.lastcpcItem6 != parent.cpcItem6 && parent.cpcItem6 != "none")
+            {
+                parent.cpcItem6Temp = updateTemplate(parent.cpcItem6, parent.cpcItem6Temp);
+            }
+            else if(parent.cpcItem6 == "none")
+            {
+                parent.removeTemplate(parent.cpcItem6Temp);
+            }
+
+            if(parent.lastcpcItem7 != parent.cpcItem7 && parent.cpcItem7 != "none")
+            {
+                parent.cpcItem7Temp = updateTemplate(parent.cpcItem7, parent.cpcItem7Temp);
+            }
+            else if(parent.cpcItem7 == "none")
+            {
+                parent.removeTemplate(parent.cpcItem7Temp);
+            }
+
+            if(parent.lastcpcItem8 != parent.cpcItem8 && parent.cpcItem8 != "none")
+            {
+                parent.cpcItem8Temp = updateTemplate(parent.cpcItem8, parent.cpcItem8Temp);
+            }
+            else if(parent.cpcItem8 == "none")
+            {
+                parent.removeTemplate(parent.cpcItem8Temp);
+            }
+
+            if(parent.lastcpcItem9 != parent.cpcItem9 && parent.cpcItem9 != "none")
+            {
+                parent.cpcItem9Temp = updateTemplate(parent.cpcItem9, parent.cpcItem9Temp);
+            }
+            else if(parent.cpcItem9 == "none")
+            {
+                parent.removeTemplate(parent.cpcItem9Temp);
+            }
+
+            if(parent.lastcpcItem10 != parent.cpcItem10 && parent.cpcItem10 != "none")
+            {
+                parent.cpcItem10Temp = updateTemplate(parent.cpcItem10, parent.cpcItem10Temp);
+            }
+            else if(parent.cpcItem10 == "none")
+            {
+                parent.removeTemplate(parent.cpcItem10Temp);
+            }
+
+            parent.lastcpcHead = parent.cpcHead;
+            parent.lastcpcHair = parent.cpcHair;
+            parent.lastcpcBody = parent.cpcBody;
+            parent.lastcpcTorso = parent.cpcTorso;
+            parent.lastcpcArms = parent.cpcArms;
+            parent.lastcpcGloves = parent.cpcGloves;
+            parent.lastcpcDress = parent.cpcDress;
+            parent.lastcpcLegs = parent.cpcLegs;
+            parent.lastcpcShoes = parent.cpcShoes;
+            parent.lastcpcMisc = parent.cpcMisc;
+            parent.lastcpcItem1 = parent.cpcItem1;
+            parent.lastcpcItem2 = parent.cpcItem2;
+            parent.lastcpcItem3 = parent.cpcItem3;
+            parent.lastcpcItem4 = parent.cpcItem4;
+            parent.lastcpcItem5 = parent.cpcItem5;
+            parent.lastcpcItem6 = parent.cpcItem6;
+            parent.lastcpcItem7 = parent.cpcItem7;
+            parent.lastcpcItem8 = parent.cpcItem8;
+            parent.lastcpcItem9 = parent.cpcItem9;
+            parent.lastcpcItem10 = parent.cpcItem10;
+
+            SleepOneFrame();
+        }
+	}
+
+    latent function updateTemplate(templateName : string, prevTemp : CEntityTemplate) : CEntityTemplate
+    {
+		var appearanceComponent : CAppearanceComponent;
+		var            template : CEntityTemplate;
+		var                   i : int;
+
+		if (templateName == "")
+			return template;
+
+		appearanceComponent = (CAppearanceComponent)parent.ghost.GetComponentByClassName( 'CAppearanceComponent' );
+
+        appearanceComponent.ExcludeAppearanceTemplate(prevTemp);
+
+		if (appearanceComponent) 
+        {
+			/* LOAD */
+			template = (CEntityTemplate)LoadResourceAsync( templateName, true );
+            SleepOneFrame();
+			if (template) {
+				appearanceComponent.IncludeAppearanceTemplate(template);
+			} 
+        }
+
+        return template;
+	}
+}

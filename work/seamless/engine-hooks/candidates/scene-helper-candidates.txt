@@ -1,0 +1,28 @@
+// RESEARCH ONLY. Not staged. Modifier grammar failed in the real game.
+// A plain-function replacement compiling does not prove storyscene metadata retention.
+@replaceMethod
+storyscene function AddFact_S(player : CStoryScenePlayer, factName : string, value : int, validFor : int, telemetryEvent : bool)
+{
+    if(validFor > 0)
+    {
+        FactsAdd(factName, value, validFor, telemetryEvent, player);
+        if(WNB_FactOpsActive()) WNB_FactOpsRecord("add", factName, value, validFor, telemetryEvent, theGame.GetEngineTimeAsSeconds());
+    }
+    else
+    {
+        FactsAdd(factName, value, -1, telemetryEvent, player);
+        if(WNB_FactOpsActive()) WNB_FactOpsRecord("add", factName, value, -1, telemetryEvent, theGame.GetEngineTimeAsSeconds());
+    }
+    player.DbFactAdded(factName);
+}
+
+@replaceMethod
+storyscene function RemoveFact_S(player : CStoryScenePlayer, factId : string)
+{
+    if(FactsDoesExist(factId))
+    {
+        FactsRemove(factId);
+        if(WNB_FactOpsActive()) WNB_FactOpsRecord("remove", factId, 0, 0, false, theGame.GetEngineTimeAsSeconds());
+    }
+    player.DbFactRemoved(factId);
+}

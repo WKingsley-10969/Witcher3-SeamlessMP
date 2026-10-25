@@ -1,0 +1,25 @@
+{
+  "exeSha256": "2df765398a3d1f165db418271be7200178320a4466817379f2fa0dc0001fb101",
+  "activeFunctions": [
+    "FactsSet"
+  ],
+  "unstagedResearchOnly": [
+    "AddFact_S",
+    "RemoveFact_S"
+  ],
+  "files": {
+    "game/facts.ws": {
+      "sha256": "5dac2120120657b38e346612d4de48656ba107362c413c8076d3b493bfc85fe9",
+      "functions": [
+        "FactsSet"
+      ]
+    },
+    "game/scenes/scene_functions.ws": {
+      "sha256": "c5143b52de14c13a202670d24e5fc4f0d088a44776670f25649cf52246b61814",
+      "functions": [
+        "AddFact_S",
+        "RemoveFact_S"
+      ]
+    }
+  }
+}

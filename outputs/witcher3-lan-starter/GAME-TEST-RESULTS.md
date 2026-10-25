@@ -1,0 +1,46 @@
+# Verification — game integration, 2026-10-24
+
+## Real game checks
+
+Two actual Witcher 3 clients on one PC, separate copied saves/settings, direct local UDP server and automated bots. Target: Steam build 25773555, executable resource version 5.0.0.1048522. Executable SHA-256: `2df765398a3d1f165db418271be7200178320a4466817379f2fa0dc0001fb101`.
+
+| Scenario | Result | Scope |
+|---|---|---|
+| see_each_other | PASS | Both instances create the expected remote-player ghost |
+| movement | PASS | Observer's ghost follows the mover's scripted position changes |
+| shared_enemy | PASS | Spawned monster health, member hit claims and death propagation |
+| member_combat | PASS after fixing dummy exhaustion | At least three real melee hits, one sign hit and two effects sent; host receives damage/effects |
+| quest_sync | PASS | Scripted journal objective update reaches the member |
+| facts_sync | PASS | Scripted facts set before/after joining reach the member |
+| dialog_sync | PASS | Script-driven tracking, skips and delayed dialogue-choice synchronization |
+| npc_own | PASS | Party nearby-NPC sharing: the second PC walks up to Ciri, takes her over (she reacts on its own AI), the host shows a stand-in mirroring her, and she returns to the host when the second PC walks off |
+
+**Nearby NPCs (`npc_own`, run `20261024-221254`, the exact payload in this ZIP).** On one Novigrad street with 19 shared NPCs: Ciri was shown exactly once on both screens in 64/64 one-second samples; no stand-in slid or ran in place; the one running-in-place second on each screen was the real Ciri starting to move on her own AI. While the second PC owned her, the host's stand-in stayed within 0.30 m median (0.40 m max) of her; while the host owned her, within 0.04 m median. A quest teleport by her own script right after the hand-back shows as a jump on both screens (the 10 m maximum). A previous run with the same payload failed only because the test bot could not walk away from her (a wall); ownership correctly stayed with the PC standing next to her. Not covered: two physical PCs, other regions, crowds over 24 NPCs, conversations with a shared NPC.
+
+The earlier seven scenarios are not seven complete quests. They do not establish every quest graph, cutscene, choice, expansion or a completed campaign. The first presence run used 640×360; later runs used enlarged windows, with member combat and story tests starting at 960×540.
+
+The original member-combat fixture failed: its immortal drowner reached roughly one hit point, and later melee did no effective damage. Only that test dummy now replenishes its health. Real-hit/effect thresholds were retained; ordinary enemies were unchanged. The successful run recorded four melee and two sign hits. An earlier ineffective diagnostic put the change in another helper; it was removed and is not counted as a pass.
+
+## Native helper and launchers
+
+- MSVC x64 builds succeeded for WitcherNativeBridge and the modified test/profile helper.
+- **10/10 standalone process checks passed:** three Documents APIs redirect; human profile mode works without test mode; missing, relative, nonexistent and owner paths reject; owner slash/dot aliases reject; missing imports terminate; overlong wide paths cannot fall back to the original folder.
+- A **35-second real-game human-profile startup smoke test passed**: process stayed running, all Documents hooks installed, no bot/focus/audio test behaviour. This verifies startup, not a human gameplay session.
+- Profile fixtures passed under PowerShell 7 and Windows PowerShell 5.1: bot flags cleared, endpoint correct, seed save unchanged, co-op progress preserved, modified helper rejected.
+- Packaged installer passed a disposable fixture using the verified executable: it staged an independent copy, left the source unchanged, rejected an existing destination and rejected a modified payload. This fixture was not a complete second game install or a second-PC test.
+- **15/15 server/launcher checks passed again under Windows PowerShell 5.1** with this build's server, after a fix: on this PC the console input encoding is UTF-8 with a byte order mark, so the launcher's `stop` reached the server as `﻿stop` and the server was killed after 5 s instead of stopping (the old server failed the same way). The server now ignores the mark. Earlier versions also passed under PowerShell 7.6.5. Coverage includes compatible/negative UDP probes, occupied ports, real host/join CLI paths, simulated clients, latest/late-join state, movement messages and shutdown.
+
+Redirection covers the pinned main executable's imported Documents APIs; it is not an OS sandbox for unrelated DLLs, dynamically resolved APIs or arbitrary mods.
+
+## Compiler diagnostic
+
+`-verifyscriptsandexit` returned code 3 without an error report for restored scripts. This standalone result remains unresolved and is not labeled PASS. A deliberately broken test-only script produced the expected compiler error and was removed. Subsequent real clients compiled and ran the mod/bot scripts and passed the scenarios above.
+
+## Not established
+
+- Two physical PCs over LAN/Wi-Fi, firewall traversal or real link behaviour.
+- A full campaign, natural quest sequences, boss coverage or long-session stability.
+- Travel, death/revive, reconnect, conflicting saves or crash-recovery correctness.
+- Complete enemy animation, spell/summon/status-effect parity or arbitrary patch/mod compatibility.
+
+The core multiplayer is upstream W3Coop/Witcher Online. This adaptation adds LAN tools, separate profiles, setup/package checks and harness fixes; inherited gameplay limits remain.

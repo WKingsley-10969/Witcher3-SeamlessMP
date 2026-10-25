@@ -1,0 +1,54 @@
+# Whitelist: only project source and docs are tracked. The game copy, saves, profiles,
+# identities, test runs, downloads, toolchains and build outputs stay local.
+
+# owner-only state (identities, game-slot leases, save hashes)
+/local/
+
+# build outputs and packages; the LAN package is rebuilt by work/build-lan-package.py
+/outputs/*
+!/outputs/SEAMLESS-COOP-TARGET.md
+!/outputs/witcher3-lan-starter/
+
+/work/*
+!/work/WitcherOnline/
+!/work/witcher3-coop/
+!/work/WitcherNativeBridge/
+!/work/seamless/
+!/work/research/
+!/work/native-tests/
+!/work/build-lan-package.py
+!/work/stage-test-game.py
+!/work/run-isolated-test.py
+!/work/build-online-client.cmd
+!/work/build-native.cmd
+!/work/prepare-test-copy.ps1
+!/work/profile-smoke.ps1
+!/work/test-package-install.ps1
+!/work/test-profile-launcher.ps1
+
+# upstream git data of the vendored projects (moved here from their folders)
+/work/upstream-git/
+
+# compiled files anywhere
+*.jar
+*.exe
+*.dll
+*.asi
+*.obj
+*.o
+*.lib
+# import library the native client links against (tracked upstream too)
+!/work/WitcherOnline/client/WitcherNativeBridge/lib/WitcherNativeBridge.lib
+!/work/WitcherNativeBridge/examples/*/WitcherNativeBridge/lib/WitcherNativeBridge.lib
+*.exp
+*.pdb
+*.ilk
+*.class
+*.zip
+*.log
+__pycache__/
+*.pyc
+build/
+
+# test output
+/work/seamless/test-results/
