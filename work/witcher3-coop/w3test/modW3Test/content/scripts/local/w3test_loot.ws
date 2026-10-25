@@ -67,6 +67,7 @@ function W3T_LootShare(bot : W3T_Bot, client : r_MultiplayerClient, other : r_Re
         bot.scenarioValue = crowns;
         theGame.GiveReward('mh306_final', thePlayer);
         bot.scenarioStep = 2;
+        return false;   // xp and crowns above are from before it
     }
     if(bot.scenarioStep == 2)
     {

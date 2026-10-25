@@ -176,6 +176,7 @@ class r_CoopLoot
             if(appliedLoot.Contains(sender + ":" + WO_Str(k)) || pendingLoot.Contains(sender + "|" + lootEvent)) { continue; }
             if(!ApplyLoot(sender, lootEvent))
             {
+                Record("LOOT_WAITING " + lootEvent + " from " + sender + ": " + NearestContainer(lootEvent));
                 pendingLoot.PushBack(sender + "|" + lootEvent);
                 pendingSince.PushBack(theGame.GetEngineTimeAsSeconds());
             }
@@ -227,6 +228,29 @@ class r_CoopLoot
         lastLootApplied = CoopDecode(f[5]) + " x" + Min(quantity, have) + " at " + f[1] + "," + f[2] + "," + f[3];
         Record("LOOT_APPLIED " + sender + " took " + quantity + " " + CoopDecode(f[5]) + " (" + have + " here), emptied=" + f[6] + ", empty here now=" + lastLootEmptied);
         return true;
+    }
+
+    // For the log: how far the nearest container is from where the looter's was.
+    private function NearestContainer(lootEvent : string) : string
+    {
+        var f : array<string>;
+        var entities : array<CGameplayEntity>;
+        var pos : Vector;
+        var i : int;
+        var d, best : float;
+        f = CoopSplit(lootEvent, " ");
+        if(f.Size() != 7) { return "bad event"; }
+        pos = Vector(StringToFloat(f[1], 0), StringToFloat(f[2], 0), StringToFloat(f[3], 0));
+        FindGameplayEntitiesInSphere(entities, pos, 30, 50);
+        best = -1;
+        for(i = 0; i < entities.Size(); i += 1)
+        {
+            if(!(W3Container)entities[i]) { continue; }
+            d = VecDistance(entities[i].GetWorldPosition(), pos);
+            if(best < 0 || d < best) { best = d; }
+        }
+        if(best < 0) { return "no container within 30 m of " + VecToString(pos); }
+        return "nearest container " + FloatToStringPrec(best, 3) + " m from " + VecToString(pos);
     }
 
     private function Remember(id : string)
