@@ -1580,3 +1580,207 @@ function W3T_SceneShareWalkOff(bot : W3T_Bot, trader : CNewNPC)
     bot.scenarioVec = safe;
     W3T_Log("SCENESHARE member walks off to " + W3T_VecStr(safe) + ", " + FloatToStringPrec(VecDistance(safe, trader.GetWorldPosition()), 1) + " m from the trader");
 }
+
+// travel_together: both players stand together; the host fast-travels to a discovered signpost
+// at least 300 m away (the calls the map menu makes). The second PC must travel along and end up
+// near the host. Then the second PC walks 150 m off and the host fast-travels again: this time
+// the second PC was not with the host and must stay where it is.
+function W3T_TravelTogether(bot : W3T_Bot, client : r_MultiplayerClient, other : r_RemotePlayer) : bool
+{
+    var travel : r_CoopTravel;
+    var host : bool;
+    var label : string;
+    var now, apart : float;
+    var pin : name;
+    var spot, safe : Vector;
+    var rot : EulerAngles;
+    var events : array<string>;
+    var i : int;
+    host = W3T_GetEnv("W3T_ROLE") == "mover";
+    label = "TRAVEL member";
+    if(host) { label = "TRAVEL host"; }
+    if(!host && !client.getInParty())
+    {
+        W3T_Log("PARTY join " + other.username);
+        client.joinParty(other.username);
+        return false;
+    }
+    if(host && client.getCoopEnemies().GetRole() != 1) { return false; }
+    travel = client.getCoopTravel();
+    events = travel.TakeEvents();
+    for(i = 0; i < events.Size(); i += 1) { W3T_Log(label + " " + events[i]); }
+    now = bot.ElapsedS();
+    apart = VecDistance(thePlayer.GetWorldPosition(), other.pos);
+    if(bot.scenarioStep < 0) { return false; }
+    if(bot.scenarioStep == 0)
+    {
+        W3T_TeleportNear(W3T_TalkBoard(0));
+        bot.scenarioTime = now;
+        bot.scenarioStep = 1;
+        return false;
+    }
+    if(host)
+    {
+        // travel once the second PC stands with the host
+        if(bot.scenarioStep == 1 && now - bot.scenarioTime >= 12 && apart < 20)
+        {
+            if(!W3T_TravelPin(thePlayer.GetWorldPosition(), 300, pin)) { W3T_Log(label + " FAIL no discovered signpost 300 m away"); bot.scenarioStep = -1; return false; }
+            W3T_Log(label + " fast-travels to " + NameToString(pin) + " (second PC " + FloatToStringPrec(apart, 1) + " m away)");
+            W3T_FastTravel(pin);
+            bot.scenarioTime = now;
+            bot.scenarioStep = 2;
+        }
+        // the second PC arrived, then walks off; travel again without it
+        if(bot.scenarioStep == 2 && now - bot.scenarioTime >= 10 && apart < 40)
+        {
+            W3T_Log(label + " second PC arrived " + FloatToStringPrec(apart, 1) + " m away");
+            bot.scenarioTime = now;
+            bot.scenarioStep = 3;
+        }
+        if(bot.scenarioStep == 3 && now - bot.scenarioTime >= 10 && apart > 100)
+        {
+            if(!W3T_TravelPin(thePlayer.GetWorldPosition(), 300, pin)) { W3T_Log(label + " FAIL no second signpost"); bot.scenarioStep = -1; return false; }
+            W3T_Log(label + " fast-travels alone to " + NameToString(pin) + " (second PC " + FloatToStringPrec(apart, 1) + " m away)");
+            W3T_FastTravel(pin);
+            bot.scenarioTime = now;
+            bot.scenarioStep = 4;
+        }
+        if(bot.scenarioStep == 4 && now - bot.scenarioTime >= 20) { bot.scenarioStep = 5; }
+    }
+    else
+    {
+        if(bot.scenarioStep == 1 && travel.travelsFollowed >= 1)
+        {
+            bot.scenarioTime = now;
+            bot.scenarioStep = 2;
+        }
+        // arrived next to the host: walk 150 m off
+        if(bot.scenarioStep == 2 && now - bot.scenarioTime >= 15 && apart < 40)
+        {
+            W3T_Log(label + " arrived " + FloatToStringPrec(apart, 1) + " m from the host; walks off");
+            spot = thePlayer.GetWorldPosition() + VecFromHeading(thePlayer.GetHeading()) * 150.0;
+            if(!theGame.GetWorld().NavigationFindSafeSpot(spot, 1.0, 30.0, safe)) { safe = spot; }
+            rot.Yaw = thePlayer.GetHeading();
+            thePlayer.TeleportWithRotation(safe, rot);
+            bot.scenarioVec = safe;
+            bot.scenarioTime = now;
+            bot.scenarioStep = 3;
+        }
+        if(bot.scenarioStep == 3 && travel.travelsIgnored >= 1 && now - bot.scenarioTime >= 30) { bot.scenarioStep = 4; }
+    }
+    W3T_Log(label + " step=" + bot.scenarioStep + " apart=" + FloatToStringPrec(apart, 1) + " sent=" + travel.travelsSent + " followed=" + travel.travelsFollowed
+        + " ignored=" + travel.travelsIgnored + " regionFollows=" + travel.regionFollows + " pos=" + W3T_VecStr(thePlayer.GetWorldPosition()));
+    if(host) { return bot.scenarioStep == 5 && travel.travelsSent == 2 && travel.travelsFollowed == 0; }
+    return bot.scenarioStep == 4 && travel.travelsFollowed == 1 && travel.regionFollows == 0
+        && VecDistance(thePlayer.GetWorldPosition(), bot.scenarioVec) < 5.0;
+}
+
+// A discovered land signpost in this world at least minDist from pos (the nearest such).
+function W3T_TravelPin(pos : Vector, minDist : float, out pin : name) : bool
+{
+    var pins : array<SCommonMapPinInstance>;
+    var best, d : float;
+    var i : int;
+    var found : bool;
+    pins = theGame.GetCommonMapManager().GetMapPinInstances(theGame.GetWorld().GetDepotPath());
+    for(i = 0; i < pins.Size(); i += 1)
+    {
+        if(pins[i].type != 'RoadSign' || !pins[i].isDiscovered || pins[i].isDisabled) { continue; }
+        d = VecDistance(pins[i].position, pos);
+        if(d < minDist) { continue; }
+        if(!found || d < best)
+        {
+            found = true;
+            best = d;
+            pin = pins[i].tag;
+        }
+    }
+    return found;
+}
+
+// What the map menu does for a fast travel within this region.
+function W3T_FastTravel(pin : name)
+{
+    var manager : CCommonMapManager;
+    manager = theGame.GetCommonMapManager();
+    manager.UseMapPin(pin, true);
+    manager.PerformLocalFastTravelTeleport(pin);
+}
+
+// travel_region: both stand together in Novigrad; the host fast-travels to a discovered signpost
+// on Ard Skellig (another world: a full load). The second PC must travel along and arrive in the
+// same region near the host.
+function W3T_TravelRegion(bot : W3T_Bot, client : r_MultiplayerClient, other : r_RemotePlayer) : bool
+{
+    var travel : r_CoopTravel;
+    var manager : CCommonMapManager;
+    var host : bool;
+    var label, worldPath : string;
+    var now, apart : float;
+    var pin : name;
+    var events : array<string>;
+    var i : int;
+    host = W3T_GetEnv("W3T_ROLE") == "mover";
+    label = "REGION member";
+    if(host) { label = "REGION host"; }
+    if(!host && !client.getInParty())
+    {
+        W3T_Log("PARTY join " + other.username);
+        client.joinParty(other.username);
+        return false;
+    }
+    if(host && client.getCoopEnemies().GetRole() != 1) { return false; }
+    travel = client.getCoopTravel();
+    events = travel.TakeEvents();
+    for(i = 0; i < events.Size(); i += 1) { W3T_Log(label + " " + events[i]); }
+    now = bot.ElapsedS();
+    apart = VecDistance(thePlayer.GetWorldPosition(), other.pos);
+    if(bot.scenarioStep < 0) { return false; }
+    if(bot.scenarioStep == 0)
+    {
+        W3T_TeleportNear(W3T_TalkBoard(0));
+        bot.scenarioTime = now;
+        bot.scenarioStep = 1;
+        return false;
+    }
+    if(host && bot.scenarioStep == 1 && now - bot.scenarioTime >= 12 && apart < 20)
+    {
+        manager = theGame.GetCommonMapManager();
+        worldPath = manager.GetWorldPathFromAreaType('AN_Skellige_ArdSkellig');
+        if(!W3T_TravelPinIn(worldPath, pin)) { W3T_Log(label + " FAIL no discovered signpost in " + worldPath); bot.scenarioStep = -1; return false; }
+        W3T_Log(label + " fast-travels to Skellige: " + NameToString(pin) + " (" + worldPath + ")");
+        manager.UseMapPin(pin, true);
+        manager.PerformGlobalFastTravelTeleport('AN_Skellige_ArdSkellig', pin);
+        bot.scenarioTime = now;
+        bot.scenarioStep = 2;
+    }
+    if(!host && bot.scenarioStep == 1 && travel.travelsFollowed >= 1) { bot.scenarioStep = 2; }
+    if(bot.scenarioStep == 2 && WO_CurrentAreaCode() == WO_AreaToCode('AN_Skellige_ArdSkellig') && other.area == WO_CurrentAreaCode() && apart < 40)
+    {
+        W3T_Log(label + " both on Ard Skellig, " + FloatToStringPrec(apart, 1) + " m apart");
+        bot.scenarioStep = 3;
+    }
+    W3T_Log(label + " step=" + bot.scenarioStep + " area=" + WO_CurrentAreaCode() + " otherArea=" + other.area + " apart=" + FloatToStringPrec(apart, 1)
+        + " sent=" + travel.travelsSent + " followed=" + travel.travelsFollowed + " ignored=" + travel.travelsIgnored + " regionFollows=" + travel.regionFollows
+        + " pos=" + W3T_VecStr(thePlayer.GetWorldPosition()));
+    if(host) { return bot.scenarioStep == 3 && travel.travelsSent == 1; }
+    return bot.scenarioStep == 3 && travel.travelsFollowed == 1 && travel.regionFollows == 0;
+}
+
+// A discovered land signpost in another world (the first one listed).
+function W3T_TravelPinIn(worldPath : string, out pin : name) : bool
+{
+    var pins : array<SCommonMapPinInstance>;
+    var i : int;
+    pins = theGame.GetCommonMapManager().GetMapPinInstances(worldPath);
+    W3T_Log("REGION " + pins.Size() + " map pins listed for " + worldPath);
+    for(i = 0; i < pins.Size(); i += 1)
+    {
+        if(pins[i].type == 'RoadSign' && pins[i].isDiscovered && !pins[i].isDisabled)
+        {
+            pin = pins[i].tag;
+            return true;
+        }
+    }
+    return false;
+}
