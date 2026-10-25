@@ -40,14 +40,15 @@ try {
         if (-not $NoSessionSave) {
             try {
                 $session = Copy-W3LanSessionSave -Address $Address -Port ($Port + 1) -SaveDirectory $saves
+                # the game waits in the main menu's co-op lobby until the host starts, also without a save
+                $info.EnvironmentVariables['W3LAN_SESSION_ROLE'] = 'join'
+                $info.EnvironmentVariables['W3LAN_SESSION_HOST'] = $session.Host
+                $joinsHostSave = $true
                 if ($session.Save) {
-                    $info.EnvironmentVariables['W3LAN_SESSION_ROLE'] = 'join'
                     $info.EnvironmentVariables['W3LAN_SESSION_SAVE'] = $session.Save
-                    $info.EnvironmentVariables['W3LAN_SESSION_HOST'] = $session.Host
-                    $joinsHostSave = $true
-                    Write-Host "Downloaded $($session.Host)'s save $($session.Save): the game loads it and joins their party."
+                    Write-Host "Downloaded $($session.Host)'s save $($session.Save): the game waits in the co-op lobby, then loads the save the host starts with and joins their party."
                 } else {
-                    Write-Warning 'The host has no co-op save yet: load your own save and meet in game.'
+                    Write-Host "$($session.Host) has no co-op save yet: the game waits in the co-op lobby until the host starts a new game or saves."
                 }
             } catch {
                 Write-Warning "Could not download the host's save ($($_.Exception.Message)): load your own save and meet in game."

@@ -254,6 +254,7 @@ statemachine class r_MultiplayerClient
     private var coopTalk : r_CoopTalk;
     private var coopRevive : r_CoopRevive;
     private var coopSession : r_CoopSession;
+    private var coopLobby : r_CoopLobby;
     private var coopTravel : r_CoopTravel;
     private var seamlessCampaign : r_SeamlessCampaign;
 
@@ -294,6 +295,15 @@ statemachine class r_MultiplayerClient
             coopTalk = new r_CoopTalk in this;
         }
         return coopTalk;
+    }
+
+    public function getCoopLobby() : r_CoopLobby
+    {
+        if(!coopLobby)
+        {
+            coopLobby = new r_CoopLobby in this;
+        }
+        return coopLobby;
     }
 
     public function getCoopSession() : r_CoopSession

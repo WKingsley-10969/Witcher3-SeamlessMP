@@ -437,3 +437,32 @@ Branch rebased onto `8c920f9` before publication, preserving Claude's additional
   - The launcher downloads the save before the game starts. Picking a save, or starting together from a menu, is step 2 (the Co-op lobby).
   - A joining player's own co-op progress is replaced by the host's save in that session (their older co-op saves stay in the folder).
   - Not tested on two physical PCs.
+
+**25 October 2026 — Claude Code: co-op lobby in the main menu.** Branch `feature/coop-lobby` (from `feature/coop-session`). Step 2 of the co-op lobby.
+
+- **Before:** the launcher downloaded the host's newest save before the game started, and a joining player's game loaded it at once. Starting together, or starting a new game together, was not possible.
+- **Server** (`CoopLobby.java`, new; attached to `SaveShare` on the game port + 1):
+  - `GET /lobby?name=NAME` checks a waiting player in, and describes the lobby: host, state (`open`/`started`), start number, mode (`save`/`new`), save, new-game options, seconds since the start, the host's newest save, and the players seen in the last 6 s.
+  - `GET /lobby/start?mode=save[&save=NAME]` or `?mode=new&options=N` starts the session; `GET /lobby/open` reopens the lobby. Both are refused (403) unless they come from the host's own PC (loopback).
+- **Native** (`NativeBridge.cpp`):
+  - `WO_LobbyRequest(path)` / `WO_LobbyResult()`: lobby requests over WinHTTP on one worker thread, so a slow or missing host never stalls the game. Replies come back with lines joined by `|` (scripts have no newline escape).
+  - `WO_LobbyFetchSave(name)` / `WO_LobbyFetchState()`: downloads one of the host's saves (and its thumbnail) into this player's co-op `gamesaves` through a `.download` file.
+  - `WO_SessionConfig("player")`: this player's name from `WO_USERNAME`. The client only learns its name once in game, and the lobby runs before that.
+- **Game** (`coopLobby.ws`, new):
+  - In the main menu, a host or joining player gets a **Co-op lobby** popup, and a **Co-op lobby** entry first in the main menu reopens it.
+  - The host's popup lists the players waiting. OK starts with the host's newest save: the host loads it and every waiting player follows. New Game in the main menu starts a new game for everyone waiting, with the host's options.
+  - A joining player waits in the lobby. When the host starts, their game downloads the host's save if it lacks it, loads it, and the co-op session then joins the party beside the host. On a new-game start it starts the same new game. OK stops waiting.
+  - With no lobby on the host's server within 8 s, a joining player's game loads the save the launcher downloaded, as before.
+  - A host who loads or continues a game some other way starts the session with its newest save, so waiting players follow.
+- **Launcher:** `Play-LAN.ps1 -Mode Join` now marks the game as joining whenever the host's save server answers, also when the host has no save yet, so the game waits in the lobby for a new game. Before, a host without a save meant playing the old way.
+- **The main menu pauses the game.** The lobby's clock is real time (`GetLocalTimeAsMilliseconds`): engine time stands still in the menu, which first stopped the polling after two requests. The lobby popup is a progress dialog whose progress requests also drive the lobby.
+- **Saves the game did not list at start:** after a download the game lists the new save only after `RefreshCrossProgressionSavesList()` (what the Load menu calls). The lobby calls it and waits up to 10 s for the save (3.7 s in the test).
+- **Tests:**
+  - `CoopLobbyTest` (server, 14 assertions, including the 403 from a LAN address). `SaveShareTest` now clears its folder, so it passes twice in a row.
+  - Game test `lobby_save` (new): the second PC started with no save. The host's lobby listed it, and the host started with its save. The second PC downloaded the save, loaded it, joined the host's party and stood 1.5 m from the host.
+  - Game test `lobby_new` (new): neither PC had a save. The host started a new game from the lobby, and the second PC started the same new game.
+  - On the final code, merged with `main` (#10, party menu): `lobby_save` (run `20261025-163647`), `session_join` (`20261025-163839`) and `party_revive` (`20261025-164013`) passed.
+- **Limits:**
+  - The **Co-op lobby** main-menu entry is not covered by the bots, which open the lobby directly.
+  - In `lobby_new` both games start the prologue; joining the party then depends on the session's auto-party, which this test does not check.
+  - Not tested on two physical PCs.

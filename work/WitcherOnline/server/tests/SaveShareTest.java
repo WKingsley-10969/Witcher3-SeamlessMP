@@ -18,7 +18,8 @@ public final class SaveShareTest
 
     public static void main(String[] args) throws Exception
     {
-        Path root = Files.createDirectories(Paths.get(args.length > 0 ? args[0] : ".", "save-share"));
+        Path root = Paths.get(args.length > 0 ? args[0] : ".", "save-share");
+        clear(root);   // a fresh folder: an earlier run's saves would be offered
         Path saves = Files.createDirectories(root.resolve("gamesaves"));
         Files.write(root.resolve("secret.sav"), "outside".getBytes(StandardCharsets.UTF_8));
         Files.write(saves.resolve("notes.txt"), "not a save".getBytes(StandardCharsets.UTF_8));
@@ -81,6 +82,15 @@ public final class SaveShareTest
         }
         response.body = new String(response.bytes, StandardCharsets.UTF_8);
         return response;
+    }
+
+    static void clear(Path folder) throws IOException
+    {
+        if (!Files.exists(folder)) return;
+        try (java.util.stream.Stream<Path> paths = Files.walk(folder))
+        {
+            for (Path path : (Iterable<Path>) paths.sorted(java.util.Comparator.reverseOrder())::iterator) Files.delete(path);
+        }
     }
 
     private static byte[] bytes(int size, int seed)
