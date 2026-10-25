@@ -302,6 +302,9 @@ class r_CoopEnemies
     private var corpseKeys : array<string>;
     private var corpseNpcs : array<CNewNPC>;
     private var corpseTimes : array<float>;
+    // copies killed in flight, falling to the ground (as btTaskFalling), and since when
+    private var fallingCopies : array<CNewNPC>;
+    private var fallingSince : array<float>;
 
     // journal entries (quests, objectives) whose status changed this session, latest status per tag
     private var journalTags : array<name>;
@@ -340,6 +343,7 @@ class r_CoopEnemies
     public var puppetsSpawned : int;
     public var puppetsKilled : int;  // puppets that died with the leader's monster
     public var puppetFlights : int;  // puppets that took off with the leader's monster
+    public var copiesPutDown : int;  // copies killed in flight that did not fall by themselves
     public var twinsBound : int;
     public var spawnFailures : int;
     public var lastError : string;
@@ -467,6 +471,7 @@ class r_CoopEnemies
         EnsureIds();
         now = theGame.GetEngineTimeAsSeconds();
         RetryFactsBaseline(now);
+        LandFallingCopies(now);
         role = GetRole();
 
         if(role == 1)
@@ -2227,12 +2232,60 @@ class r_CoopEnemies
         }
     }
 
+    // As btTaskFalling: on the ground (within 0.5 m) it snaps back to the navmesh; one still up after 4 s is put
+    // down where it is (a dead actor's physics may not carry it).
+    private function LandFallingCopies(now : float)
+    {
+        var mac : CMovingPhysicalAgentComponent;
+        var npc : CNewNPC;
+        var pos : Vector;
+        var height : float;
+        var i : int;
+
+        for(i = fallingCopies.Size() - 1; i >= 0; i -= 1)
+        {
+            npc = fallingCopies[i];
+            if(npc)
+            {
+                height = npc.GetDistanceFromGround(50);
+                if(height > 0.5 && now - fallingSince[i] < 4.0)
+                {
+                    continue;
+                }
+                if(height > 0.5)
+                {
+                    pos = npc.GetWorldPosition();
+                    pos.Z -= height;
+                    npc.Teleport(pos);
+                    copiesPutDown += 1;
+                }
+                mac = (CMovingPhysicalAgentComponent)npc.GetMovingAgentComponent();
+                if(mac)
+                {
+                    mac.SnapToNavigableSpace(true);
+                }
+                npc.EnablePhysicalMovement(false);
+            }
+            fallingCopies.Erase(i);
+            fallingSince.Erase(i);
+        }
+    }
+
     private function KillPuppet(p : r_CoopPuppet)
     {
-        // a monster killed in flight falls, as the leader's does
+        var mac : CMovingPhysicalAgentComponent;
+
+        // a monster killed in flight falls, as the leader's does: gravity on, physical movement until it lands
         if(p.flying)
         {
-            SetPuppetFlying(p, false);
+            p.flying = false;
+            mac = (CMovingPhysicalAgentComponent)p.npc.GetMovingAgentComponent();
+            if(mac)
+            {
+                mac.SetGravity(true);
+            }
+            fallingCopies.PushBack(p.npc);
+            fallingSince.PushBack(theGame.GetEngineTimeAsSeconds());
         }
         p.alive = false;
         puppetsKilled += 1;

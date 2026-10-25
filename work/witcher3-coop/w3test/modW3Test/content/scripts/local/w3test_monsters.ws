@@ -211,9 +211,9 @@ function W3T_SurveyNote(bot : W3T_Bot, side : string, label : string, kind : str
 }
 
 // monster_flight: a flying monster flies on the second PC too. The leader spawns W3T_MONSTER (a griffin unless
-// set) 10 m above the ground ahead of both players: it starts in flight. After 50 s the leader kills it.
-// The second PC's copy must fly too (its flying stance, over 3 m above the ground) and, once dead, fall to the
-// ground (under 1.5 m within 15 s).
+// set) 10 m above the ground ahead of both players: it starts in flight. After 50 s the leader kills it by
+// damage, as a fight does. The second PC's copy must fly too (its flying stance, over 3 m above the ground)
+// and, once dead, lie on the ground (under 1.5 m within 15 s).
 function W3T_FlightMonster() : string
 {
     if(W3T_GetEnv("W3T_MONSTER") != "") { return W3T_GetEnv("W3T_MONSTER"); }
@@ -225,6 +225,7 @@ function W3T_FlightLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     var template : CEntityTemplate;
     var monster : CNewNPC;
     var pos : Vector;
+    var action : W3DamageAction;
     var height : float;
     var now : float;
     now = bot.ElapsedS();
@@ -254,8 +255,13 @@ function W3T_FlightLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     if(bot.scenarioStep == 1 && now - bot.scenarioTime > 50)
     {
         if(!bot.scenarioFlag) { W3T_Log("FLIGHT leader FAIL its monster never flew: nothing to compare"); bot.scenarioStep = -1; return false; }
-        W3T_Log("FLIGHT leader kills it");
-        monster.Kill('W3T', true);
+        W3T_Log("FLIGHT leader kills it by damage");
+        action = new W3DamageAction in theGame.damageMgr;
+        action.Initialize(thePlayer, monster, thePlayer, "W3T", EHRT_Heavy, CPS_Undefined, true, false, false, false);
+        action.AddDamage(theGame.params.DAMAGE_NAME_DIRECT, 2 * monster.GetMaxHealth());
+        theGame.damageMgr.ProcessAction(action);
+        delete action;
+        if(monster.IsAlive()) { W3T_Log("FLIGHT leader damage did not kill it: Kill()"); monster.Kill('W3T', true); }
         bot.scenarioStep = 2;
         bot.scenarioTime = now;
     }
@@ -291,7 +297,7 @@ function W3T_FlightMember(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
     height = copy.GetDistanceFromGround(50);
     i = bot.scenarioCount - 1;
     W3T_Log("FLIGHT copy step=" + bot.scenarioStep + " flyingHere=" + (i < coop.PuppetCount() && coop.PuppetFlying(i)) + " stance=" + (int)copy.GetCurrentStance()
-        + " height=" + FloatToStringPrec(height, 1) + " alive=" + copy.IsAlive() + " flights=" + coop.puppetFlights + " pos=" + W3T_VecStr(copy.GetWorldPosition()));
+        + " height=" + FloatToStringPrec(height, 1) + " alive=" + copy.IsAlive() + " flights=" + coop.puppetFlights + " putDown=" + coop.copiesPutDown + " pos=" + W3T_VecStr(copy.GetWorldPosition()));
     if(bot.scenarioStep == 0 && copy.IsFlying() && height > 3)
     {
         W3T_Log("FLIGHT copy flies here too, " + FloatToStringPrec(height, 1) + " m up");
