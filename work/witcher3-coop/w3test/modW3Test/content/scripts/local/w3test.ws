@@ -319,6 +319,8 @@ statemachine class W3T_Bot
     public var scenarioFarSince : float; // since when its target has been out of reach
     public var scenarioPos : Vector;     // where it stood when it last moved (stuck checks)
     public var scenarioValue : float;
+    public var labelSceneChecks : int;   // scene_share: ticks seen inside a scene that hides labels
+    public var labelSceneShown : int;    // ... with a player label still on screen
     public var scenarioName : name;
 
     public var scenario : string;        // the one running (empty in a session until the harness says go)
