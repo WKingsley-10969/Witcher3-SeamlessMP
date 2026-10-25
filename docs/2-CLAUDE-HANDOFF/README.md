@@ -531,3 +531,15 @@ Branch rebased onto `8c920f9` before publication, preserving Claude's additional
 - **Test:** `loot_share` (new), passed (run `20261025-175147`). The host was given contract reward `mh306_final`. The second PC got its 300 XP and no crowns; its own `mh306_final` then gave 267 crowns and no XP. The host emptied the nearest container; the second PC's copy of it, given an extra item first, ended up empty.
 - **Limits:** corpses (positions differ per PC) are not matched; money or items a quest hands over outside the reward table are not shared; tested with two clients on one PC.
 - This replaces "loot is per player" in the own-characters entry above for containers. Quest items picked up are still the world's.
+
+**25 October 2026 — Claude Code: own characters, part 2.** Branch `feature/characters-part2` (from `main`).
+
+- **Now also the character's** (`coopCharacter.ws`, record lines):
+  - **Mutations** (Blood and Wine): `mutations;<system on>;<equipped>` and one `mutation;<type>;<red>;<blue>;<green>;<skill points>;<progress>` line per mutation with research progress. Restored before skills (mutations unlock skill slots) with `CoopSetMutations`: reset, research progress, fully researched ones unlocked, the equipped one equipped.
+  - **The stash and the horse's gear**: one inventory, the horse manager's. `stash;...` lines as `item;...`, the slot being the horse slot when equipped. The restore unequips the host's horse gear, clears the host's personal stash items, adds the recorded ones and equips the horse gear.
+  - **Gwent cards**: items tagged `GwintCard` are personal (unless quest items). Decks are native to the Gwent manager and come with the save.
+- `W3HorseManager.EquipItem` returns the item it replaced (invalid for an empty slot), not the one equipped; the restore checks `IsItemEquipped` instead.
+- **Durability:** the owner plays with Accessibility > Disable item durability on, under which the game ignores every durability change (even `SetItemDurability`); the test copy inherits the setting. Durability is still recorded and restored for players who turn it off, but this is not tested and not a goal.
+- **Test:** `player_character` extended (passed, run `20261025-180909`). On top of part 1 the second PC develops and equips Mutation 1, puts a sword in the stash, equips Horse Saddle 1 on the horse and gives away a Gwent card. After the reload of the host's save the character recorded again matched the stored one line for line, with 0 problems.
+- This covers the "Not covered yet" items of the own-characters entry above.
+
