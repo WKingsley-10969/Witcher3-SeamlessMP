@@ -52,3 +52,4 @@ build/
 
 # test output
 /work/seamless/test-results/
+/outputs/witcher3-lan-starter/tests/install-fixtures/

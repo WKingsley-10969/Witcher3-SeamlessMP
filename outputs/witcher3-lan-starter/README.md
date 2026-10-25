@@ -6,19 +6,37 @@ The full development ZIP contains the native mod, its DLC/templates, Java server
 
 ## On this development PC
 
-An isolated game copy is already prepared by this chat. Use **Play Host LAN.cmd** to host it and choose a player name. The approved portable JDK is found in this workspace's `work/tooling` directory while the package stays in its current location.
+Run **Manage Mod.cmd** and choose your existing game folder, then **1 — Install or update**. You can also select an existing isolated development copy. The installer backs up only files it replaces; it does not copy the whole game. Close all Witcher 3 instances and host consoles before changing the installation. Use **Play Host LAN.cmd** afterwards. The existing portable JDK is found in this workspace's `work/tooling` directory while the package stays in its current location; an extracted package elsewhere can use `JAVA_HOME`.
 
 ## Prepare the other PC
 
 1. Extract the complete LAN development ZIP into a short, writable path. Keep its folders together.
-2. With the matching Steam game installed and closed, run **Setup LAN.cmd**. The default Steam folder is supported. Setup creates a separate `game-copy` beside the launcher and needs about **70 GB of extra space**, plus headroom. It does not patch the registered Steam install.
-3. For other locations, use:
+2. With the matching Steam game installed and closed, run **Setup LAN.cmd** or **Manage Mod.cmd**. Select the existing Steam game folder and choose **1 — Install or update**. The original game executable is checked but never replaced. Extra space is needed only for the mod, touched-file backups and temporary staging, rather than another 70 GB game copy.
+3. For installation or updates from PowerShell:
 
 ```powershell
-.\Install-LAN.ps1 -SourceGameDir 'D:\SteamLibrary\steamapps\common\The Witcher 3' -Destination 'D:\W3LAN\game-copy'
+.\Install-LAN.ps1 -GameDir 'D:\SteamLibrary\steamapps\common\The Witcher 3'
 ```
 
-The payload is hash-checked. Existing destinations are refused; replaced files in the new copy are backed up. Setup writes `launcher.settings.json` locally. Do not include that file, the game copy or personal saves in a public release.
+The payload is hash-checked before installation. First backups remain unchanged across updates. An update replaces changed mod files and restores/removes files dropped by the new version. Setup writes `launcher.settings.json` locally. Keep the package separate from the game folder. Do not publish local settings, the game's `.w3lan-install` restore data or personal saves.
+
+## Update or remove the mod
+
+For updates, extract the newer complete package, run **Manage Mod.cmd**, choose the same game folder and select **1**. The restore record lives in that game folder, so updates keep the first backups even when you use a different extracted package directory. For **older/manual installations**, the first managed install treats the files currently present as its baseline; it cannot reconstruct vanilla files that were already overwritten before these backups existed.
+
+To remove, run **Remove Mod.cmd**, or choose **2 — Remove** in **Manage Mod.cmd**. Original file contents are restored, and files newly added by this installer are removed. Co-op saves, original backups and any preserved outside edits are retained. Uninstall does not undo quest progress in a save. Reinstalling in the same folder reuses the co-op save identity and creates fresh original-backup entries.
+
+If another mod, Steam or a manual edit changed a managed file, the operation stops before modifying game files. Manage Mod can offer to keep those changed files under `.w3lan-install/preserved` and continue. It does not merge competing mods. Corrupt/missing originals stop restoration. Keep `.w3lan-install` until you are finished with rollback; deleting it loses the restore history.
+
+Failed writes roll back the operation. An interrupted operation retains its journal and verified pre-operation snapshots; the next install/remove recovers it before proceeding. Launchers refuse a pending transaction. If interrupted files were changed again externally, automatic recovery stops and retains the evidence instead of overwriting those changes. Temporary transaction data is cleaned after success; original/preserved backups stay.
+
+Folders that require elevated write access may need **Run as administrator** for installation/removal. Game launch itself need not run as administrator. Use the supplied **Play** launchers for isolated co-op saves. While installed, the mod files also exist for Steam/direct launches; remove the mod before launching an unmodded solo game.
+
+A separate full copy remains optional for development:
+
+```powershell
+.\Install-LAN.ps1 -Mode Copy -SourceGameDir 'D:\SteamLibrary\steamapps\common\The Witcher 3' -Destination 'D:\W3LAN\game-copy'
+```
 
 ## Play over LAN
 
@@ -38,7 +56,7 @@ Only the host needs Java 21+. On another host, use `JAVA_HOME`, put a portable J
 
 ## Saves, settings and controls
 
-Each player gets a separate `<game-copy>/.w3lan-profiles/<name>/The Witcher 3` profile. First use copies existing solo saves/settings; later launches preserve co-op progress. Originals are read for seeding and are not the game's save destination.
+Managed in-place installations use `%LOCALAPPDATA%\W3LAN\profiles\<installation-id>\<name>\The Witcher 3`. Existing isolated-copy installations keep `<game-copy>/.w3lan-profiles/<name>/The Witcher 3`. First use copies existing solo saves/settings; later launches preserve co-op progress. Originals are read for seeding and are not the supplied launcher's save destination. Removing the mod retains these profiles.
 
 The native helper redirects three imported Documents APIs and stops on invalid/missing hooks or paths resolving to the original Documents/save folder. Human mode does not activate bots, choose dialogue, mute audio or change focus/input. Launch arguments request 960×540. Normal menu/startup prompts remain yours to answer.
 
@@ -69,7 +87,7 @@ Shared-progress limits: only quest facts and quest-log states travel, so a quest
 
 Inherited limits include the roughly 60 m shared-enemy range, independently started scenes, incomplete enemy animation/spell/summon cases and per-player loot. This adaptation does not remove them. The server has no enforced two-player cap or authenticated LAN session; use it on your trusted home network.
 
-To remove the development installation, close its game/server and remove the separate copy and launcher folders. Keep desired co-op saves first. The normal Steam installation stays in place.
+To remove the managed mod, close the game/server and use **Remove Mod.cmd**. To discard a separate development copy instead, keep desired co-op saves first, then remove that separate folder. The installer never deletes a game installation or co-op saves.
 
 ## Credits and source
 
