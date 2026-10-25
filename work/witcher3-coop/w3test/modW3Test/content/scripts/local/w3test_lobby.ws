@@ -33,3 +33,29 @@ function W3T_Lobby(bot : W3T_Bot, client : r_MultiplayerClient, other : r_Remote
     if(host) { return lobby.starts == 1 && client.getCoopEnemies().GetRole() == 1 && apart >= 0 && apart < 4.0; }
     return lobby.fetches == 1 && lobby.loads == 1 && client.getInParty() && session.placements >= 1 && apart >= 0 && apart < 4.0;
 }
+
+// lobby_rejoin: the second PC joins through the lobby (as lobby_save), then goes back to the main
+// menu ("Quit to main menu") and must come back by itself: the lobby downloads and loads the host's
+// save again, and the session joins the party and steps in beside the host, without restarting.
+function W3T_LobbyRejoin(bot : W3T_Bot, client : r_MultiplayerClient, other : r_RemotePlayer) : bool
+{
+    var lobby : r_CoopLobby;
+    var session : r_CoopSession;
+    var joined : bool;
+    var apart : float;
+    lobby = client.getCoopLobby();
+    session = client.getCoopSession();
+    joined = W3T_Lobby(bot, client, other, false);
+    if(W3T_GetEnv("W3T_ROLE") == "mover") { return joined; }
+    if(lobby.testMenuReturns == 0)
+    {
+        if(!joined) { return false; }
+        lobby.testMenuReturns = 1;
+        W3T_Log("LOBBY member joined; going back to the main menu (placements=" + session.placements + ")");
+        theGame.RequestEndGame();
+        return false;
+    }
+    apart = VecDistance(thePlayer.GetWorldPosition(), other.pos);
+    return lobby.loads >= 2 && lobby.fetches >= 2 && client.getInParty() && session.placements >= 2 && session.InHostWorld() && apart < 4.0;
+}
+

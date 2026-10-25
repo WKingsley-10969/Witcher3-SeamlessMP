@@ -44,6 +44,7 @@ statemachine class r_CoopLobby
     public var starts : int;
     public var loads : int;
     public var fetches : int;
+    public var testMenuReturns : int;   // bot tests (lobby_rejoin): times the bot went back to the main menu
     public var newGames : int;
     public var autoStartWhenJoined : bool;   // bot tests: the host starts with its save once someone waits
     public var autoNewGameOptions : int;     // bot tests: the host starts this new game once someone waits (0: no)
@@ -80,11 +81,9 @@ statemachine class r_CoopLobby
         reachable = false;
         Record("MENU role=" + Session().Role());
         if(Session().Role() == "host") { WO_LobbyRequest("/lobby/open"); }   // back in the main menu: waiting again
-        if(Session().Role() == "join")
-        {
-            waiting = true;
-            ShowDialog();
-        }
+        if(Session().Role() == "join") { waiting = true; }
+        // the popup opens by itself for both (the host closes it to use New Game or Load)
+        ShowDialog();
         if(GetCurrentStateName() != 'CoopLobbyPolling') { GotoState('CoopLobbyPolling'); }
     }
 
@@ -244,9 +243,10 @@ statemachine class r_CoopLobby
             StartNewGame(options);
             return;
         }
-        // a save, or a new game this player joins late: the host's newest save
-        saveName = save;
-        if(mode != "save" || age > 120) { saveName = newest; }
+        // the host's newest save: the one it started with, or a later one when this player comes back
+        // (from the main menu, or late)
+        saveName = newest;
+        if(saveName == "" && mode == "save") { saveName = save; }
         if(saveName == "")
         {
             Record("FOLLOW_WAIT the host has no save yet");
@@ -363,6 +363,7 @@ statemachine class r_CoopLobby
             if(players == "") { text += "nobody yet"; } else { text += StrReplaceAll(players, ",", ", "); }
             if(newest == "") { text += "<br><br>You have no co-op save yet: choose New Game, and everyone waiting starts it with you."; }
             else { text += "<br><br>OK: start with your newest save (" + newest + "). Everyone waiting loads it.<br>New Game: everyone waiting starts the same new game with you."; }
+            text += "<br>Close this to use the menu; Co-op lobby (first in the menu) opens it again.";
             return text;
         }
         text = "Waiting for " + host + " to start the co-op game.";
@@ -451,7 +452,9 @@ function PopulateMenuData() : CScriptedFlashArray
     var i : int;
     items = wrappedMethod();
     if(!parentMenu.isMainMenu || theGame.r_getMultiplayerClient().getCoopSession().Role() == "") { return items; }
-    lobbyEntry = CreateMenuItem("coop_lobby", "coop_lobby", NameToFlashUInt('CoopLobby'), IGMActionType_Button, false);
+    // a leaf entry like Continue or Options (an empty child list): without one the menu treats it as
+    // an empty sub-menu and the click never reaches OnItemActivated
+    lobbyEntry = CreateMenuItem("coop_lobby", "coop_lobby", NameToFlashUInt('CoopLobby'), IGMActionType_Button, true);
     lobbyEntry.SetMemberFlashString("label", "Co-op lobby");
     lobbyEntry.SetMemberFlashString("listTitle", "Co-op lobby");
     items.PushBackFlashObject(lobbyEntry);
