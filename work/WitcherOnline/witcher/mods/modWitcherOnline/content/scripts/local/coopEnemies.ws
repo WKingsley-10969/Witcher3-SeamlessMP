@@ -3216,5 +3216,5 @@ function OnQuestObjectiveEvent(journalQuest : CJournalQuest, journalObjective : 
 function CoopFactShared(id : string) : bool
 {
     return id != "game_is_loaded" && StrFindFirst(id, "tutorial") != 0 && StrFindFirst(id, "Tutorial") != 0
-        && id != "RemasterSkillResetAndRefund";
+        && id != "RemasterSkillResetAndRefund" && StrFindFirst(id, "coop_rw_") != 0;
 }
