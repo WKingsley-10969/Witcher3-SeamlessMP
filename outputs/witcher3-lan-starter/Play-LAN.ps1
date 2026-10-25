@@ -31,7 +31,7 @@ try {
         $probe = Test-W3LanEndpoint -Address $Address -Port $Port
         if (-not $probe.Reachable) { throw "Host did not answer the UDP check: $($probe.Reply)." }
     }
-    Write-Host 'Launching the isolated modded copy with a separate save/settings profile.'
+    Write-Host 'Launching Witcher 3 with the LAN mod and a separate co-op save/settings profile.'
     Write-Host 'Load matching saves in the same region. In game, interact with the host character and join its party.'
     $game = [Diagnostics.Process]::Start($info)
     $game.WaitForExit()
