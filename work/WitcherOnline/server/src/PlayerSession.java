@@ -19,6 +19,7 @@ public class PlayerSession
 
     // co-op state by channel (first field): latest value, rebroadcast like the updates above
     public final Map<String, List<String>> coopFields = new ConcurrentHashMap<>();
+    public volatile boolean coopChannelRefused;   // logged once
 
     public PlayerSession(int playerId, String username, ClientEndpoint endpoint, long lastSeen)
     {

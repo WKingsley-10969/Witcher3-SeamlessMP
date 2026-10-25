@@ -15,6 +15,13 @@
 // An event whose container is not loaded on the other PC is retried for 10 minutes.
 //   "coop lt count (id x y z quantity name emptied)..."   this player's last loot events
 //
+// Corpses of shared enemies (coopEnemies.ws) lie in a different spot on each PC, so they are matched by
+// the enemy instead, "<leader epoch>.<netId>" (x "c", y that key, z 0 in a loot event). Their loot is the
+// party leader's game's roll: the leader sends what its corpse holds once its loot dropped, and a member's
+// game puts exactly that in its own corpse (its own roll is emptied: one corpse, one loot). From then on a
+// take on either PC is taken on the other, as for containers.
+//   "coop lc count (key items (name quantity)...)..."   the leader's last corpses' loot
+//
 // Channel messages are state (only the newest one per channel arrives), so each carries the last
 // few events and receivers skip what they applied before.
 
@@ -31,6 +38,13 @@ class r_CoopLoot
     private var lastRetry : float;
     private var applyingRemote : bool;           // this game is removing a party member's loot
     private var rewardsHad : array<string>;      // a joining player's rewards, for the character record
+    private var corpsesSentKeys : array<string>; // leader: corpses whose loot was sent
+    private var corpseMessages : array<string>;  // leader: "key items (name quantity)...", the newest last
+    private var corpseFilled : array<string>;    // member: corpses holding the leader's loot here
+    private var corpseBags : array<W3ActorRemains>; // member: the remains holding it, by corpseFilled
+    private var corpseWaiting : array<string>;   // member: leader loot whose corpse is not ready here
+    private var corpseWaitingSince : array<float>;
+    private var lastCorpseScan : float;
 
     public var rewardsShared : int;      // rewards announced
     public var rewardsReceived : int;    // XP given for a party member's reward
@@ -40,6 +54,12 @@ class r_CoopLoot
     public var lootMissed : int;         // given up after 10 minutes
     public var lastLootApplied : string;
     public var lastLootEmptied : bool;   // the last applied event's container is empty here now
+    public var corpsesSent : int;        // leader: corpse loot sent
+    public var corpsesFilled : int;      // member: corpses given the leader's loot
+    public var corpsesCleared : int;     // member: own rolls emptied
+    public var corpseBagsMade : int;     // member: no remains here, a loot bag made for the leader's loot
+    public var corpsesMissed : int;
+    public var lastCorpseFilled : string;
 
     public function TakeEvents() : array<string>
     {
@@ -145,22 +165,33 @@ class r_CoopLoot
 
     public function OnContainerTaken(container : W3Container, itemName : name, quantity : int, questItem : bool, emptied : bool)
     {
-        var text, itemText : string;
+        var text, itemText, where, key : string;
         var pos : Vector;
         var i : int;
         if(applyingRemote || !container || quantity <= 0 || questItem || !InParty()) { return; }
         itemText = NameToString(itemName);
         if(!CoopSafeField(itemText)) { return; }
+        key = CorpseKey(container);
+        if(key != "")
+        {
+            // the leader's corpse loot not sent yet: what it sends will not have this item. A member's
+            // corpse without the leader's loot yet holds nothing to share (its own roll is emptied).
+            if(!corpsesSentKeys.Contains(key) && !corpseFilled.Contains(key)) { return; }
+            where = "c " + key + " 0";
+        }
+        else
+        {
+            pos = container.GetWorldPosition();
+            where = FloatToStringPrec(pos.X, 2) + " " + FloatToStringPrec(pos.Y, 2) + " " + FloatToStringPrec(pos.Z, 2);
+        }
         if(epoch == "") { epoch = IntToString(theGame.GetLocalTimeAsMilliseconds() % 1000000); }
         lootCounter += 1;
-        pos = container.GetWorldPosition();
-        lootEvents.PushBack(epoch + "-" + lootCounter + " " + FloatToStringPrec(pos.X, 2) + " " + FloatToStringPrec(pos.Y, 2) + " " + FloatToStringPrec(pos.Z, 2)
-            + " " + quantity + " " + CoopEncode(itemText) + " " + CoopBit(emptied));
+        lootEvents.PushBack(epoch + "-" + lootCounter + " " + where + " " + quantity + " " + CoopEncode(itemText) + " " + CoopBit(emptied));
         if(lootEvents.Size() > 6) { lootEvents.Erase(0); }
         text = "coop lt " + lootEvents.Size();
         for(i = 0; i < lootEvents.Size(); i += 1) { text += " " + lootEvents[i]; }
         lootSent += 1;
-        Record("LOOT_SENT " + quantity + " " + itemText + " at " + FloatToStringPrec(pos.X, 1) + "," + FloatToStringPrec(pos.Y, 1));
+        Record("LOOT_SENT " + quantity + " " + itemText + " at " + where);
         WO_Send(text);
     }
 
@@ -197,14 +228,23 @@ class r_CoopLoot
         var i, quantity, have : int;
         f = CoopSplit(lootEvent, " ");
         if(f.Size() != 7) { Record("LOOT_BAD_EVENT " + lootEvent); return true; }
-        pos = Vector(StringToFloat(f[1], 0), StringToFloat(f[2], 0), StringToFloat(f[3], 0));
         quantity = StringToInt(f[4], 0);
         itemName = WO_ToName(CoopDecode(f[5]));
-        FindGameplayEntitiesInSphere(entities, pos, 0.75, 8);
-        for(i = 0; i < entities.Size() && !container; i += 1)
+        if(f[1] == "c")
         {
-            container = (W3Container)entities[i];
-            if(container && VecDistance(container.GetWorldPosition(), pos) > 0.05) { container = NULL; }
+            // a member applies takes on a corpse only once it holds the leader's loot
+            if(Coop().GetRole() == 2 && !corpseFilled.Contains(f[2])) { return false; }
+            container = CorpseRemains(f[2]);
+        }
+        else
+        {
+            pos = Vector(StringToFloat(f[1], 0), StringToFloat(f[2], 0), StringToFloat(f[3], 0));
+            FindGameplayEntitiesInSphere(entities, pos, 0.75, 8);
+            for(i = 0; i < entities.Size() && !container; i += 1)
+            {
+                container = (W3Container)entities[i];
+                if(container && VecDistance(container.GetWorldPosition(), pos) > 0.05) { container = NULL; }
+            }
         }
         if(!container) { return false; }
         Remember(sender + ":" + f[0]);
@@ -242,6 +282,12 @@ class r_CoopLoot
         var d, best : float;
         f = CoopSplit(lootEvent, " ");
         if(f.Size() != 7) { return "bad event"; }
+        if(f[1] == "c")
+        {
+            if(!Coop().CorpseOfKey(f[2])) { return "no corpse " + f[2] + " here"; }
+            if(Coop().GetRole() == 2 && !corpseFilled.Contains(f[2])) { return "corpse " + f[2] + " without the leader's loot yet"; }
+            return "corpse " + f[2] + " has no remains here";
+        }
         pos = Vector(StringToFloat(f[1], 0), StringToFloat(f[2], 0), StringToFloat(f[3], 0));
         FindGameplayEntitiesInSphere(entities, pos, 30, 50);
         best = -1;
@@ -262,6 +308,256 @@ class r_CoopLoot
         if(appliedLoot.Size() > 200) { appliedLoot.Erase(0); }
     }
 
+    // ------------------------------------------------------------ corpses
+
+    private function Coop() : r_CoopEnemies { return theGame.r_getMultiplayerClient().getCoopEnemies(); }
+
+    // The key of a shared enemy's corpse this container holds the loot of, "" for any other container.
+    private function CorpseKey(container : W3Container) : string
+    {
+        var remains : W3ActorRemains;
+        remains = (W3ActorRemains)container;
+        if(!remains || !remains.GetOwner()) { return ""; }
+        return Coop().CorpseKeyOf(remains.GetOwner());
+    }
+
+    // Every remains in this world holding the loot of this dead NPC.
+    private function RemainsOf(npc : CNewNPC) : array<W3ActorRemains>
+    {
+        var entities : array<CGameplayEntity>;
+        var found : array<W3ActorRemains>;
+        var remains : W3ActorRemains;
+        var i : int;
+        if(!npc) { return found; }
+        FindGameplayEntitiesInSphere(entities, npc.GetWorldPosition(), 6.0, 32);
+        for(i = 0; i < entities.Size(); i += 1)
+        {
+            remains = (W3ActorRemains)entities[i];
+            if(remains && remains.GetOwner() == (CActor)npc) { found.PushBack(remains); }
+        }
+        return found;
+    }
+
+    // The corpse's loot here: on a member the remains given the leader's loot, on the leader its own.
+    private function CorpseRemains(key : string) : W3ActorRemains
+    {
+        var found : array<W3ActorRemains>;
+        var i : int;
+        i = corpseFilled.FindFirst(key);
+        if(i >= 0 && corpseBags[i]) { return corpseBags[i]; }
+        found = RemainsOf(Coop().CorpseOfKey(key));
+        if(found.Size() == 0) { return NULL; }
+        return found[0];
+    }
+
+    // What a corpse holds for a player to take: "count (name quantity)...", names encoded.
+    private function LootOf(remains : W3ActorRemains) : string
+    {
+        var inv : CInventoryComponent;
+        var ids : array<SItemUniqueId>;
+        var names : array<string>;
+        var quantities : array<int>;
+        var itemText, text : string;
+        var i, k : int;
+        if(remains) { inv = remains.GetInventory(); }
+        if(inv) { inv.GetAllItems(ids); }
+        for(i = 0; i < ids.Size(); i += 1)
+        {
+            if(!Shareable(inv, ids[i])) { continue; }
+            itemText = NameToString(inv.GetItemName(ids[i]));
+            if(!CoopSafeField(itemText)) { continue; }
+            k = names.FindFirst(itemText);
+            if(k < 0)
+            {
+                if(names.Size() >= 16) { continue; }
+                names.PushBack(itemText);
+                quantities.PushBack(0);
+                k = names.Size() - 1;
+            }
+            quantities[k] += inv.GetItemQuantity(ids[i]);
+        }
+        text = IntToString(names.Size());
+        for(i = 0; i < names.Size(); i += 1) { text += " " + CoopEncode(names[i]) + " " + quantities[i]; }
+        return text;
+    }
+
+    // Loot a player can take and that is the same everywhere (quest items are each game's own).
+    private function Shareable(inv : CInventoryComponent, id : SItemUniqueId) : bool
+    {
+        return !inv.ItemHasTag(id, 'Quest') && !inv.ItemHasTag(id, 'NoDrop') && !inv.ItemHasTag(id, theGame.params.TAG_DONT_SHOW);
+    }
+
+    // Leader: every corpse's loot once it has dropped (or after 10 s without any: nothing to loot).
+    private function SendCorpses(now : float)
+    {
+        var coop : r_CoopEnemies;
+        var found : array<W3ActorRemains>;
+        var remains : W3ActorRemains;
+        var key, text : string;
+        var i, sent : int;
+        coop = Coop();
+        for(i = 0; i < coop.CorpseCount(); i += 1)
+        {
+            key = coop.CorpseKeyAt(i);
+            if(corpsesSentKeys.Contains(key) || now - coop.CorpseDiedAt(i) > 120) { continue; }
+            found = RemainsOf(coop.CorpseNpcAt(i));
+            remains = NULL;
+            if(found.Size() > 0) { remains = found[0]; }
+            if(!remains && now - coop.CorpseDiedAt(i) < 10) { continue; }
+            corpsesSentKeys.PushBack(key);
+            if(corpsesSentKeys.Size() > 64) { corpsesSentKeys.Erase(0); }
+            corpseMessages.PushBack(key + " " + LootOf(remains));
+            if(corpseMessages.Size() > 4) { corpseMessages.Erase(0); }
+            corpsesSent += 1;
+            sent += 1;
+            Record("CORPSE_SENT " + key + " " + LootOf(remains));
+        }
+        if(sent == 0) { return; }
+        text = "coop lc " + corpseMessages.Size();
+        for(i = 0; i < corpseMessages.Size(); i += 1) { text += " " + corpseMessages[i]; }
+        WO_Send(text);
+    }
+
+    private function OnCorpses(sender : string, count : int)
+    {
+        var n, i, k, items, j : int;
+        var entry, key : string;
+        if(Coop().GetRole() != 2 || sender != theGame.r_getMultiplayerClient().getJoinedParty()) { return; }
+        n = StringToInt(WO_Str(1), 0);
+        k = 2;
+        for(i = 0; i < n && k + 1 < count; i += 1)
+        {
+            key = WO_Str(k);
+            items = StringToInt(WO_Str(k + 1), 0);
+            if(k + 2 + items * 2 > count) { return; }
+            // the native side has turned the names' '*' back into spaces: encode them again
+            entry = key + " " + items;
+            for(j = 0; j < items; j += 1) { entry += " " + CoopEncode(WO_Str(k + 2 + j * 2)) + " " + WO_Str(k + 3 + j * 2); }
+            k += 2 + items * 2;
+            if(corpseFilled.Contains(key) || corpseWaiting.Contains(entry)) { continue; }
+            if(!FillCorpse(entry))
+            {
+                corpseWaiting.PushBack(entry);
+                corpseWaitingSince.PushBack(theGame.GetEngineTimeAsSeconds());
+            }
+        }
+    }
+
+    // Member: the leader's loot into this game's corpse of the same enemy, instead of its own roll. False
+    // while that corpse is not here yet (the leader's game saw the death first) or has no remains yet.
+    private function FillCorpse(entry : string) : bool
+    {
+        var f : array<string>;
+        var npc : CNewNPC;
+        var found : array<W3ActorRemains>;
+        var remains : W3ActorRemains;
+        var inv : CInventoryComponent;
+        var template : CEntityTemplate;
+        var tags : array<name>;
+        var i, items : int;
+        var died : float;
+        f = CoopSplit(entry, " ");
+        if(f.Size() < 2) { return true; }
+        items = StringToInt(f[1], 0);
+        npc = Coop().CorpseOfKey(f[0]);
+        if(!npc) { return false; }
+        died = -1;
+        for(i = 0; i < Coop().CorpseCount(); i += 1) { if(Coop().CorpseKeyAt(i) == f[0]) { died = Coop().CorpseDiedAt(i); } }
+        found = RemainsOf(npc);
+        if(found.Size() > 0) { remains = found[0]; }
+        if(!remains)
+        {
+            // its own death dropped nothing (yet): give it 5 s, then bring a bag for the leader's loot
+            if(items == 0) { corpseFilled.PushBack(f[0]); corpseBags.PushBack(NULL); return true; }
+            if(theGame.GetEngineTimeAsSeconds() - died < 5.0) { return false; }
+            template = (CEntityTemplate)LoadResource("lootbag");
+            tags.PushBack('lootbag');
+            if(template) { remains = (W3ActorRemains)theGame.CreateEntity(template, npc.GetWorldPosition(), npc.GetWorldRotation(), true, false, false, PM_DontPersist, tags); }
+            if(!remains) { Record("CORPSE_NO_BAG " + f[0]); return false; }
+            remains.LootDropped(npc);
+            corpseBagsMade += 1;
+        }
+        inv = remains.GetInventory();
+        if(!inv) { return false; }
+        applyingRemote = true;
+        ClearLoot(remains);
+        for(i = 0; i < items && 3 + i * 2 < f.Size(); i += 1) { inv.AddAnItem(WO_ToName(CoopDecode(f[2 + i * 2])), StringToInt(f[3 + i * 2], 1)); }
+        applyingRemote = false;
+        remains.RequestUpdateContainer();
+        corpseFilled.PushBack(f[0]);
+        corpseBags.PushBack(remains);
+        if(corpseFilled.Size() > 64) { corpseFilled.Erase(0); corpseBags.Erase(0); }
+        corpsesFilled += 1;
+        lastCorpseFilled = f[0] + " " + LootOf(remains);
+        Record("CORPSE_FILLED " + lastCorpseFilled);
+        return true;
+    }
+
+    private function ClearLoot(remains : W3ActorRemains)
+    {
+        var inv : CInventoryComponent;
+        var ids : array<SItemUniqueId>;
+        var i : int;
+        inv = remains.GetInventory();
+        if(!inv) { return; }
+        inv.GetAllItems(ids);
+        for(i = 0; i < ids.Size(); i += 1)
+        {
+            if(Shareable(inv, ids[i])) { inv.RemoveItem(ids[i], inv.GetItemQuantity(ids[i])); }
+        }
+    }
+
+    // Member: a shared enemy's corpse drops this game's own roll; it holds only the leader's loot, so
+    // every other remains of it here is emptied (before the leader's loot arrives as well as after).
+    private function ClearOwnRolls(now : float)
+    {
+        var coop : r_CoopEnemies;
+        var found : array<W3ActorRemains>;
+        var key : string;
+        var i, j, k : int;
+        coop = Coop();
+        for(i = 0; i < coop.CorpseCount(); i += 1)
+        {
+            if(now - coop.CorpseDiedAt(i) > 60) { continue; }
+            key = coop.CorpseKeyAt(i);
+            k = corpseFilled.FindFirst(key);
+            found = RemainsOf(coop.CorpseNpcAt(i));
+            for(j = 0; j < found.Size(); j += 1)
+            {
+                if((k >= 0 && found[j] == corpseBags[k]) || found[j].IsEmpty()) { continue; }
+                applyingRemote = true;
+                ClearLoot(found[j]);
+                applyingRemote = false;
+                found[j].RequestUpdateContainer();
+                corpsesCleared += 1;
+                Record("CORPSE_OWN_ROLL_EMPTIED " + key);
+            }
+        }
+    }
+
+    private function CorpseTick(now : float)
+    {
+        var i, role : int;
+        if(now - lastCorpseScan < 0.5) { return; }
+        lastCorpseScan = now;
+        role = Coop().GetRole();
+        if(role == 1) { SendCorpses(now); }
+        if(role != 2) { return; }
+        ClearOwnRolls(now);
+        for(i = corpseWaiting.Size() - 1; i >= 0; i -= 1)
+        {
+            if(FillCorpse(corpseWaiting[i])) { }
+            else if(now - corpseWaitingSince[i] < 120 && now >= corpseWaitingSince[i]) { continue; }
+            else
+            {
+                corpsesMissed += 1;
+                Record("CORPSE_MISSED " + corpseWaiting[i]);
+            }
+            corpseWaiting.Erase(i);
+            corpseWaitingSince.Erase(i);
+        }
+    }
+
     // ------------------------------------------------------------ network and clock
 
     public function OnMessage()
@@ -273,6 +569,7 @@ class r_CoopLoot
         if(count < 2 || sender == Me() || !CoopSameParty(sender)) { return; }
         if(WO_Str(0) == "rw") { OnRewards(sender, count); }
         else if(WO_Str(0) == "lt") { OnLoot(sender, count); }
+        else if(WO_Str(0) == "lc") { OnCorpses(sender, count); }
     }
 
     public function Tick()
@@ -281,6 +578,7 @@ class r_CoopLoot
         var i : int;
         var parts : array<string>;
         now = theGame.GetEngineTimeAsSeconds();
+        CorpseTick(now);
         if(pendingLoot.Size() == 0 || now - lastRetry < 5.0) { return; }
         lastRetry = now;
         for(i = pendingLoot.Size() - 1; i >= 0; i -= 1)

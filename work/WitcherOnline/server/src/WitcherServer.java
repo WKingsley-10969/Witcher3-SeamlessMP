@@ -50,10 +50,10 @@ public class WitcherServer
     private static final long PLAYER_TIMEOUT_NANOS = 5_000_000_000L;
     private static final long USERNAME_HOLD_NANOS = 60_000_000_000L;
     private static final long BROADCAST_HEARTBEAT_NANOS = 60_000_000_000L;
-    // Latest message kept per channel and player. A party leader uses en, hurt, jr, fx, np and cv,
-    // a member hit, jr, fx, nq and cv (plus sc in campaign mode); a channel over the limit is
-    // dropped silently, so the limit leaves room to spare.
-    private static final int MAX_COOP_CHANNELS = 12;
+    // Latest message kept per channel and player. A party leader uses en, hurt, jr, fx, np, nq, cv,
+    // dn, tr, ss, lt, lc and rw, a member hit and most of the others (plus sc in campaign mode); a
+    // channel over the limit is dropped (logged once per player), so the limit leaves room to spare.
+    private static final int MAX_COOP_CHANNELS = 32;
 
     private static final int DEFAULT_PORT = 40000;
     private static final DateTimeFormatter LOG_TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
@@ -778,6 +778,12 @@ public class WitcherServer
                     && (current.coopFields.containsKey(channel) || current.coopFields.size() < MAX_COOP_CHANNELS))
             {
                 current.coopFields.put(channel, frozenFields);
+            }
+            else if (!channel.isEmpty() && !current.coopChannelRefused)
+            {
+                current.coopChannelRefused = true;
+                dbg("Refused co-op channel '%s' from %s: %d channels in use (limit %d)\n",
+                        channel, current.username, current.coopFields.size(), MAX_COOP_CHANNELS);
             }
             return;
         }
