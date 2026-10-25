@@ -491,3 +491,11 @@ Branch rebased onto `8c920f9` before publication, preserving Claude's additional
   - Loot is per player. A container the second PC emptied is full again in the host's next save, and quest items the second PC picked up are the world's (the host's save decides).
   - Only joining players have own characters; the host's Geralt is the save's.
   - Not tested on two physical PCs.
+
+**25 October 2026 — Claude Code: player name labels hidden in scenes.** Branch `fix/name-labels` (from `main`).
+
+- **Before:** other players' name and status labels stayed on screen during conversations and cutscenes, over the subtitles. The players' figures were already hidden there.
+- **Cause:** the labels' render loop (`MP_Render` in `sharedutils/oneliners`) does not run while a scene plays, so the labels stayed as last drawn. An earlier attempt hid them in that loop, so it never took effect. The test showed the hide condition true while the labels were still on screen.
+- **Now:** the game's HUD ticks its one-liners module every frame, scenes included. A wrapper on `CR4HudModuleOneliners.OnTick` hides the labels while a dialogue or cutscene plays, unless the "show players in cutscenes" option is on. The render loop hides them too.
+- **Test:** `scene_share` now fails if a label is on screen during a scene. Passed (run `20261025-172957`): 83 scene checks on the host and 70 on the second PC, with no label shown.
+
