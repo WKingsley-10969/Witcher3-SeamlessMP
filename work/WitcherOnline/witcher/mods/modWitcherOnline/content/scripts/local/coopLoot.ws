@@ -172,7 +172,8 @@ class r_CoopLoot
         for(i = 0; i < n && 2 + i * 7 + 6 < count; i += 1)
         {
             k = 2 + i * 7;
-            lootEvent = WO_Str(k) + " " + WO_Str(k + 1) + " " + WO_Str(k + 2) + " " + WO_Str(k + 3) + " " + WO_Str(k + 4) + " " + WO_Str(k + 5) + " " + WO_Str(k + 6);
+            // the native side has turned the name's '*' back into spaces: encode it again for the event
+            lootEvent = WO_Str(k) + " " + WO_Str(k + 1) + " " + WO_Str(k + 2) + " " + WO_Str(k + 3) + " " + WO_Str(k + 4) + " " + CoopEncode(WO_Str(k + 5)) + " " + WO_Str(k + 6);
             if(appliedLoot.Contains(sender + ":" + WO_Str(k)) || pendingLoot.Contains(sender + "|" + lootEvent)) { continue; }
             if(!ApplyLoot(sender, lootEvent))
             {
@@ -195,7 +196,7 @@ class r_CoopLoot
         var ids : array<SItemUniqueId>;
         var i, quantity, have : int;
         f = CoopSplit(lootEvent, " ");
-        if(f.Size() != 7) { return true; }
+        if(f.Size() != 7) { Record("LOOT_BAD_EVENT " + lootEvent); return true; }
         pos = Vector(StringToFloat(f[1], 0), StringToFloat(f[2], 0), StringToFloat(f[3], 0));
         quantity = StringToInt(f[4], 0);
         itemName = WO_ToName(CoopDecode(f[5]));
