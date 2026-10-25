@@ -1556,15 +1556,26 @@ function W3T_SceneShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_
             bot.scenarioStep = 4;
         }
     }
+    // player labels must not cover the subtitles: none on screen while a scene plays
+    if(theGame.IsDialogOrCutscenePlaying() && MP_SUOL_hiddenForScene())
+    {
+        bot.labelSceneChecks += 1;
+        if(MP_SUOL_getManager().shownCount() > 0)
+        {
+            bot.labelSceneShown += 1;
+            W3T_Log(label + " LABELS shown during a scene: " + MP_SUOL_getManager().describeLabels());
+        }
+    }
     W3T_Log(label + " step=" + bot.scenarioStep + " triggers=" + bot.scenarioCount + " dist=" + FloatToStringPrec(dist, 1) + " inScene=" + talk.InScene()
         + " listening=" + talk.IsListening() + " listeners=" + talk.ListenerCount() + " autoOpens=" + talk.autoOpens + " autoJoins=" + talk.autoJoins
         + " autoMissed=" + talk.autoMissed + " handovers=" + talk.handovers + " mismatches=" + talk.sceneMismatches + " picksSent=" + talk.picksSent
         + " picksApplied=" + talk.picksApplied + " votesSent=" + talk.votesSent + " votesReceived=" + talk.votesReceived + " menusClosed=" + talk.menusClosed
-        + " flag=" + bot.scenarioFlag);
-    if(host) { return bot.scenarioStep == 6 && bot.scenarioFlag && talk.votesReceived >= 1 && talk.handovers == 0; }
+        + " flag=" + bot.scenarioFlag + " labelChecks=" + bot.labelSceneChecks + " labelsShown=" + bot.labelSceneShown);
+    if(bot.labelSceneShown > 0) { return false; }
+    if(host) { return bot.scenarioStep == 6 && bot.scenarioFlag && talk.votesReceived >= 1 && talk.handovers == 0 && bot.labelSceneChecks > 0; }
     // put back where it stood when the scene was offered: the host's scene starting can nudge it a
     // few metres first (run 20261025-110932: 2.7 m before the offer arrived), hence 5 m
-    return bot.scenarioStep == 4 && !bot.scenarioFlag && talk.sceneMismatches == 0 && talk.menusClosed >= 1 && talk.votesSent >= 1
+    return bot.scenarioStep == 4 && !bot.scenarioFlag && talk.sceneMismatches == 0 && talk.menusClosed >= 1 && talk.votesSent >= 1 && bot.labelSceneChecks > 0
         && VecDistance(thePlayer.GetWorldPosition(), bot.scenarioVec) < 5.0;
 }
 
@@ -1783,4 +1794,82 @@ function W3T_TravelPinIn(worldPath : string, out pin : name) : bool
         }
     }
     return false;
+}
+
+// watch_skip: the Watch / Skip prompt. The second PC talks to the general-store trader twice.
+// The host answers Skip to the first prompt (the bot's dialog hook): it must not be brought over
+// or join. It leaves the second prompt unanswered: when that conversation ends the prompt must
+// close by itself (and the host must keep running while it is up).
+function W3T_WatchSkip(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_RemotePlayer) : bool
+{
+    var talk : r_CoopTalk;
+    var target : CNewNPC;
+    var module : CR4HudModuleDialog;
+    var host : bool;
+    var label : string;
+    var now, moved : float;
+    host = W3T_GetEnv("W3T_ROLE") == "mover";
+    label = "WATCHSKIP member";
+    if(host) { label = "WATCHSKIP host"; }
+    if(!host && !client.getInParty())
+    {
+        W3T_Log("PARTY join " + leader.username);
+        client.joinParty(leader.username);
+        return false;
+    }
+    if(host && client.getCoopEnemies().GetRole() != 1) { return false; }
+    talk = client.getCoopTalk();
+    W3T_TalkLogEvents(talk, label);
+    now = bot.ElapsedS();
+    if(bot.scenarioStep < 0) { return false; }
+    if(bot.scenarioStep == 0)
+    {
+        W3T_TeleportNear(W3T_TalkBoard(0));
+        bot.scenarioTime = now;
+        bot.scenarioStep = 1;
+        return false;
+    }
+    if(bot.scenarioStep == 1 && now - bot.scenarioTime >= 10)
+    {
+        target = W3T_TalkMerchant();
+        if(!target) { W3T_Log(label + " FAIL no merchant by board 0"); bot.scenarioStep = -1; return false; }
+        bot.scenarioEntity = target;
+        if(!host) { W3T_TeleportInFront(target); }
+        bot.scenarioVec = thePlayer.GetWorldPosition();
+        bot.scenarioTime = now;
+        bot.scenarioStep = 2;
+        return false;
+    }
+    if(bot.scenarioStep < 2) { return false; }
+    target = (CNewNPC)bot.scenarioEntity;
+    module = W3T_DialogModule();
+    moved = VecDistance(thePlayer.GetWorldPosition(), bot.scenarioVec);
+    if(!host)
+    {
+        // scenarioCount: conversations started; each ends with Farewell
+        if(!talk.InScene() && bot.scenarioCount < 2 && now - bot.scenarioTime >= 6)
+        {
+            W3T_Log(label + " presses Talk (" + (bot.scenarioCount + 1) + ")");
+            target.OnInteraction("Talk", thePlayer);
+            bot.scenarioCount += 1;
+            bot.scenarioTime = now;
+        }
+        if(talk.InScene() && client.hasActiveDialogChoices() && talk.ChoicesAge() > 3)
+        {
+            W3T_Log(label + " says farewell");
+            module.OnDialogOptionSelected(talk.LastChoiceCount() - 1);
+            module.OnDialogOptionAccepted(talk.LastChoiceCount() - 1);
+            bot.scenarioTime = now;
+        }
+        if(bot.scenarioCount == 2 && !talk.InScene() && now - bot.scenarioTime >= 8) { bot.scenarioStep = 3; }
+    }
+    else if(talk.offersGone >= 1 && talk.offersSkipped >= 1)
+    {
+        bot.scenarioStep = 3;
+    }
+    W3T_Log(label + " step=" + bot.scenarioStep + " talks=" + bot.scenarioCount + " inScene=" + talk.InScene() + " listening=" + talk.IsListening()
+        + " joins=" + talk.joins + " offersShown=" + talk.offersShown + " skipped=" + talk.offersSkipped + " gone=" + talk.offersGone
+        + " listeners=" + talk.ListenerCount() + " moved=" + FloatToStringPrec(moved, 1) + " mode=" + COOP_WATCH_MODE());
+    if(host) { return bot.scenarioStep == 3 && talk.offersShown == 2 && talk.joins == 0 && !talk.InScene() && moved < 1.0; }
+    return bot.scenarioStep == 3 && talk.ListenerCount() == 0;
 }

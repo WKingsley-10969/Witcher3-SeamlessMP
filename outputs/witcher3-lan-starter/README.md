@@ -56,6 +56,8 @@ A separate full copy remains optional for development:
    - meet the host;
    - interact with the host character and choose **Join party**.
 
+   If you leave the host's party (interact with the host → Leave party), your game stops joining it again by itself until you join it yourself.
+
    To keep your own co-op save instead of the host's, start with `.\Play-LAN.ps1 -Mode Join -GameDir '<game folder>' -NoSessionSave`.
 
 **Co-op lobby (new).** The game starts in a **Co-op lobby** popup in the main menu (also the first main-menu entry).

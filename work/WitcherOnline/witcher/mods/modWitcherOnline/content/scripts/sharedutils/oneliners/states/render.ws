@@ -20,6 +20,7 @@ state MP_Render in MP_SUOL_Manager {
 
 		var player_position: Vector;
 		var screen_position: Vector;
+		var in_scene: bool;
 		screen_position = thePlayer.GetWorldPosition();
 		player_position = thePlayer.GetWorldPosition();
 
@@ -31,12 +32,13 @@ state MP_Render in MP_SUOL_Manager {
 			}
 
 			player_position = thePlayer.GetWorldPosition();
+			in_scene = MP_SUOL_hiddenForScene();
 
 			for (i = 0; i < oneliners_count; i += 1) {
 				oneliner = parent.oneliners[i];
 				sprite = parent.module_flash.GetChildFlashSprite("mcOneliner" + oneliner.id);
 
-				if (!oneliner.getVisible(player_position)) {
+				if (in_scene || !oneliner.getVisible(player_position)) {
 					sprite.SetVisible(false);
 					continue;	
 				}
@@ -55,6 +57,12 @@ state MP_Render in MP_SUOL_Manager {
 	}
 }
 
+/// Labels (player names, statuses) are hidden during dialogue and cutscenes, like the players'
+/// figures (client.ws), so they do not cover the subtitles; the same setting shows both.
+function MP_SUOL_hiddenForScene(): bool {
+	return theGame.IsDialogOrCutscenePlaying() && !theGame.GetInGameConfigWrapper().GetVarValue('MPGhosts_Main', 'MPGhosts_ShowInCutscene');
+}
+
 /// The function returns true if the position in visible on the screen, false if
 /// it is not.
 function MP_SUOL_worldToScreenPosition(hud: CR4ScriptedHud, world_position: Vector, out screen_position: Vector): bool {
@@ -69,5 +77,17 @@ function MP_SUOL_worldToScreenPosition(hud: CR4ScriptedHud, world_position: Vect
 	// function transforms it into non normlized screen coordinates:
 	screen_position = hud.GetScaleformPoint(screen_position.X, screen_position.Y);
 
+	return true;
+}
+
+/// The render loop above does not run while a scene plays, so labels stayed as last drawn, over
+/// the subtitles. The game's HUD ticks its one-liners module every frame, scenes included: hide
+/// the labels there.
+@wrapMethod(CR4HudModuleOneliners)
+function OnTick(timeDelta: float) {
+	wrappedMethod(timeDelta);
+	if (MP_SUOL_hiddenForScene()) {
+		MP_SUOL_getManager().hideAll();
+	}
 	return true;
 }

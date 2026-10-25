@@ -183,6 +183,21 @@ function ShowProgressDialog( messageId : int, title : string, message : string, 
         return;
     }
     if(W3T_GetEnv("W3T_SCENARIO") == "party_menu" && WO_IsPartyPrompt(messageId)) { theGame.W3T_AnswerPartyPrompt(messageId); return; }
+    // watch_skip: the host answers Skip to the first Watch / Skip prompt and leaves the second open
+    if(W3T_GetEnv("W3T_SCENARIO") == "watch_skip" && messageId == COOP_WATCH_DIALOG())
+    {
+        if(theGame.r_getMultiplayerClient().getCoopTalk().offersShown <= 1)
+        {
+            UserDialogCallback(messageId, UMA_No);
+            HideUserDialog(messageId);
+            W3T_Log("DIALOG answered No (skip)");
+        }
+        else
+        {
+            W3T_Log("DIALOG left unanswered");
+        }
+        return;
+    }
 
     if(type == UDB_Ok || type == UDB_OkCancel)
     {
@@ -319,6 +334,8 @@ statemachine class W3T_Bot
     public var scenarioFarSince : float; // since when its target has been out of reach
     public var scenarioPos : Vector;     // where it stood when it last moved (stuck checks)
     public var scenarioValue : float;
+    public var labelSceneChecks : int;   // scene_share: ticks seen inside a scene that hides labels
+    public var labelSceneShown : int;    // ... with a player label still on screen
     public var scenarioName : name;
 
     public var scenario : string;        // the one running (empty in a session until the harness says go)

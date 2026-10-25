@@ -223,6 +223,42 @@ statemachine class MP_SUOL_Manager {
       }
   }
 
+  // For tests: the render state, and each label's text and whether its sprite is shown.
+  public function describeLabels(): string {
+    var text: string;
+    var i: int;
+    text = "state=" + this.GetCurrentStateName() + " labels=" + this.oneliners.Size();
+    for (i = 0; i < this.oneliners.Size(); i += 1) {
+      text += " [" + this.oneliners[i].text + " shown=" + this.module_flash.GetChildFlashSprite("mcOneliner" + this.oneliners[i].id).GetVisible() + "]";
+    }
+    return text;
+  }
+
+  // Hide every label now (the render loop shows them again when it runs).
+  public function hideAll() {
+    var i: int;
+    if (!this.module_flash) {
+      return;
+    }
+    for (i = 0; i < this.oneliners.Size(); i += 1) {
+      this.module_flash.GetChildFlashSprite("mcOneliner" + this.oneliners[i].id).SetVisible(false);
+    }
+  }
+
+  // How many labels are on screen, for tests.
+  public function shownCount(): int {
+    var i, shown: int;
+    if (!this.module_flash) {
+      return 0;
+    }
+    for (i = 0; i < this.oneliners.Size(); i += 1) {
+      if (this.module_flash.GetChildFlashSprite("mcOneliner" + this.oneliners[i].id).GetVisible()) {
+        shown += 1;
+      }
+    }
+    return shown;
+  }
+
   public function updateOneliner(oneliner: MP_SU_Oneliner) {
     this.module_flash
       .GetChildFlashSprite("mcOneliner" + oneliner.id)

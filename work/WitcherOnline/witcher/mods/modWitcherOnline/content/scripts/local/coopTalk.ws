@@ -13,6 +13,10 @@
 // the same scene there. If it does not within a few seconds, the joiner goes back where it was.
 // When both games start the same scene on their own, the leader chooses and the other listens.
 //
+// Joining is offered, not forced (COOP_WATCH_MODE): by default a Watch / Skip prompt; Skip keeps
+// playing, and the outcome still arrives through the shared quest progress. Always joins without
+// asking, Never declines every offer. Console: coopwatch ask / always / never.
+//
 // "cv open id scene voice tpl app x y z px py pz": the starter (NPC at x y z, starter at p); an
 // empty voice and template mark a scene the quest started (x y z is then the starter too)
 // "cv pick id set index text" / "cv vote id set index text" / "cv joined id scene" / "cv close id"
@@ -49,6 +53,18 @@ class r_CoopTalk
     private var joinFrom : Vector;     // where this player stood before being brought over
     private var joinFromRot : EulerAngles;
     private var auto : bool;           // the starter's scene was started by the quest, not by Talk
+
+    // an offer to join a party member's conversation, waiting for this player's answer
+    private var offerOpen : bool;
+    private var offerSender : string;
+    private var offerConv : int;
+    private var offerScene : string;
+    private var offerVoice : string;
+    private var offerTpl : string;
+    private var offerApp : string;
+    private var offerNpcPos : Vector;
+    private var offerStarterPos : Vector;
+    private var offerAuto : bool;
     private var picks : array<r_CoopTalkPick>;
     private var applying : bool;
     private var applyAt : float;
@@ -73,6 +89,9 @@ class r_CoopTalk
     public var autoJoins : int;        // quest-started scenes joined
     public var autoMissed : int;       // brought over, but this game's quest started no scene
     public var handovers : int;        // both games started it: this one became the listener
+    public var offersShown : int;      // Watch / Skip prompts shown
+    public var offersSkipped : int;    // answered Skip, or declined by the Never setting
+    public var offersGone : int;       // the conversation ended before an answer
     public var lastVote : string;
 
     public function InScene() : bool { return inScene; }
@@ -277,31 +296,87 @@ class r_CoopTalk
             }
             return;
         }
-        if(role != 0 || inScene || thePlayer.IsInCombat() || thePlayer.IsUsingVehicle()) { return; }
-        npcPos = Vector(StringToFloat(WO_Str(7), 0), StringToFloat(WO_Str(8), 0), StringToFloat(WO_Str(9), 0));
-        starterPos = Vector(StringToFloat(WO_Str(10), 0), StringToFloat(WO_Str(11), 0), StringToFloat(WO_Str(12), 0));
-        if(CoopDecode(WO_Str(4)) == "" && CoopDecode(WO_Str(5)) == "")
+        if(role != 0 || inScene || offerOpen || thePlayer.IsInCombat() || thePlayer.IsUsingVehicle()) { return; }
+        offerSender = sender;
+        offerConv = StringToInt(WO_Str(2), 0);
+        offerScene = CoopDecode(WO_Str(3));
+        offerVoice = CoopDecode(WO_Str(4));
+        offerTpl = CoopDecode(WO_Str(5));
+        offerApp = CoopDecode(WO_Str(6));
+        offerNpcPos = Vector(StringToFloat(WO_Str(7), 0), StringToFloat(WO_Str(8), 0), StringToFloat(WO_Str(9), 0));
+        offerStarterPos = Vector(StringToFloat(WO_Str(10), 0), StringToFloat(WO_Str(11), 0), StringToFloat(WO_Str(12), 0));
+        offerAuto = offerVoice == "" && offerTpl == "";
+        if(offerAuto && VecDistance(thePlayer.GetWorldPosition(), offerStarterPos) > COOP_SCENE_RANGE()) { return; }
+        if(!offerAuto && VecDistance(thePlayer.GetWorldPosition(), offerNpcPos) > COOP_TALK_RANGE()) { return; }
+
+        if(COOP_WATCH_MODE() == 2)
         {
-            OnOpenAuto(sender, starterPos);
+            offersSkipped += 1;
+            Record("OFFER_DECLINED setting " + offerSender + " " + offerScene);
             return;
         }
-        if(VecDistance(thePlayer.GetWorldPosition(), npcPos) > COOP_TALK_RANGE()) { return; }
-        npc = theGame.r_getMultiplayerClient().getCoopNpcs().HoldForScene(CoopDecode(WO_Str(4)), CoopDecode(WO_Str(5)), CoopDecode(WO_Str(6)), npcPos);
+        if(COOP_WATCH_MODE() == 1)
+        {
+            AcceptOffer();
+            return;
+        }
+        npc = NULL;
+        if(!offerAuto) { npc = theGame.r_getMultiplayerClient().getCoopNpcs().FindForScene(offerVoice, offerTpl, offerApp, offerNpcPos); }
+        offerOpen = true;
+        offersShown += 1;
+        Record("OFFER " + offerSender + " " + offerScene);
+        theGame.GetGuiManager().ShowUserDialogAdv(COOP_WATCH_DIALOG(), CoopWatchTitle(), CoopWatchText(offerSender, npc, offerAuto), false, UDB_YesNo);
+    }
+
+    // The Watch / Skip prompt was answered.
+    public function OnWatchAnswer(watch : bool)
+    {
+        if(!offerOpen) { return; }
+        offerOpen = false;
+        if(!watch)
+        {
+            offersSkipped += 1;
+            Record("OFFER_SKIPPED " + offerSender);
+            return;
+        }
+        if(role != 0 || inScene || thePlayer.IsInCombat() || thePlayer.IsUsingVehicle())
+        {
+            Record("OFFER_TOO_LATE busy");
+            return;
+        }
+        Record("OFFER_WATCH " + offerSender);
+        AcceptOffer();
+    }
+
+    private function AcceptOffer()
+    {
+        if(offerAuto) { JoinAuto(); }
+        else { JoinTalk(); }
+    }
+
+    // Join a conversation started with Talk: find this world's NPC, stand beside the starter,
+    // press Talk on it.
+    private function JoinTalk()
+    {
+        var npc : CNewNPC;
+        var spot, safe : Vector;
+        var rot : EulerAngles;
+        npc = theGame.r_getMultiplayerClient().getCoopNpcs().HoldForScene(offerVoice, offerTpl, offerApp, offerNpcPos);
         if(!npc)
         {
             joinFailures += 1;
-            Record("JOIN_FAILED no copy of " + CoopDecode(WO_Str(4)));
+            Record("JOIN_FAILED no copy of " + offerVoice);
             return;
         }
-        hostName = sender;
-        hostConv = StringToInt(WO_Str(2), 0);
-        hostScene = CoopDecode(WO_Str(3));
+        hostName = offerSender;
+        hostConv = offerConv;
+        hostScene = offerScene;
         joinNpc = npc;
         picks.Clear();
         // stand beside the starter, facing the NPC, as if walking up together
-        spot = starterPos + VecFromHeading(VecHeading(npcPos - starterPos) + 90) * 1.2;
+        spot = offerStarterPos + VecFromHeading(VecHeading(offerNpcPos - offerStarterPos) + 90) * 1.2;
         if(!theGame.GetWorld().NavigationFindSafeSpot(spot, 0.5, 3.0, safe)) { safe = spot; }
-        rot.Yaw = VecHeading(npcPos - safe);
+        rot.Yaw = VecHeading(offerNpcPos - safe);
         thePlayer.TeleportWithRotation(safe, rot);
         joinTalkAt = theGame.GetEngineTimeAsSeconds() + 0.5;
         joinAuto = false;
@@ -310,14 +385,14 @@ class r_CoopTalk
     }
 
     // A scene the starter's quest started: come over and let this game's quest start it here.
-    private function OnOpenAuto(sender : string, starterPos : Vector)
+    private function JoinAuto()
     {
-        var spot, safe : Vector;
+        var spot, safe, starterPos : Vector;
         var rot : EulerAngles;
-        if(VecDistance(thePlayer.GetWorldPosition(), starterPos) > COOP_SCENE_RANGE()) { return; }
-        hostName = sender;
-        hostConv = StringToInt(WO_Str(2), 0);
-        hostScene = CoopDecode(WO_Str(3));
+        starterPos = offerStarterPos;
+        hostName = offerSender;
+        hostConv = offerConv;
+        hostScene = offerScene;
         joinNpc = NULL;
         picks.Clear();
         joinFrom = thePlayer.GetWorldPosition();
@@ -377,6 +452,13 @@ class r_CoopTalk
 
     private function OnClose(sender : string)
     {
+        if(offerOpen && sender == offerSender && StringToInt(WO_Str(2), 0) == offerConv)
+        {
+            offerOpen = false;
+            offersGone += 1;
+            Record("OFFER_GONE " + sender);
+            theGame.GetGuiManager().HideUserDialog(COOP_WATCH_DIALOG());
+        }
         if(sender != hostName || StringToInt(WO_Str(2), 0) != hostConv) { return; }
         Record("HOST_CLOSED");
         if(role == 2)  // never got in
@@ -545,6 +627,47 @@ function COOP_SCENE_HOLD_RADIUS() : float
 function COOP_SCENE_WAIT() : float
 {
     return 10.0;
+}
+
+// The Watch / Skip prompt's message id (the game's own ids are below 1000 or named).
+function COOP_WATCH_DIALOG() : int
+{
+    return 47311;
+}
+
+// 0 ask (default), 1 always join, 2 never join. Set with the console: coopwatch ask / always / never.
+function COOP_WATCH_MODE() : int
+{
+    var value : string;
+    value = theGame.GetInGameConfigWrapper().GetVarValue('MPGhosts_Main', 'MPGhosts_JoinScenes');
+    if(value == "1") { return 1; }
+    if(value == "2") { return 2; }
+    return 0;
+}
+
+exec function coopwatch(mode : string)
+{
+    var value : string;
+    value = "0";
+    if(mode == "always") { value = "1"; }
+    else if(mode == "never") { value = "2"; }
+    theGame.GetInGameConfigWrapper().SetVarValue('MPGhosts_Main', 'MPGhosts_JoinScenes', value);
+    theGame.SaveUserSettings();
+    GetWitcherPlayer().DisplayHudMessage("Join conversations: " + mode);
+}
+
+function CoopWatchTitle() : string
+{
+    return "Watch together?";
+}
+
+function CoopWatchText(sender : string, npc : CNewNPC, auto : bool) : string
+{
+    var who : string;
+    if(auto) { return sender + " is in a story scene.<br>Watch it with them? Skip to keep playing; the outcome still reaches you."; }
+    who = "someone";
+    if(npc) { who = npc.GetDisplayName(); }
+    return sender + " is talking to " + who + ".<br>Watch the conversation? Skip to keep playing; the outcome still reaches you.";
 }
 
 function CoopNpcVec3(v : Vector) : string
