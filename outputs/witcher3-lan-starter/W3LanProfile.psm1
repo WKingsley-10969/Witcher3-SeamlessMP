@@ -89,7 +89,9 @@ function New-W3LanProfileStartInfo {
     $info.FileName = $exe
     $info.WorkingDirectory = Split-Path -Parent $exe
     $info.UseShellExecute = $false
-    $info.Arguments = '-windowed -width 960 -height 540 -noraytracing'
+    # no window, resolution or ray-tracing options: the player's own graphics settings apply (the
+    # bot harness, run_test.py, sizes its side-by-side windows itself)
+    $info.Arguments = ''
     foreach ($key in @($info.EnvironmentVariables.Keys)) {
         if ($key.StartsWith('W3T_', [StringComparison]::OrdinalIgnoreCase) -or $key.StartsWith('WO_SC_', [StringComparison]::OrdinalIgnoreCase) -or $key.StartsWith('W3LAN_SESSION_', [StringComparison]::OrdinalIgnoreCase)) { $info.EnvironmentVariables.Remove($key) }
     }

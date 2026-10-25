@@ -543,3 +543,12 @@ Branch rebased onto `8c920f9` before publication, preserving Claude's additional
 - **Test:** `player_character` extended (passed, run `20261025-180909`). On top of part 1 the second PC develops and equips Mutation 1, puts a sword in the stash, equips Horse Saddle 1 on the horse and gives away a Gwent card. After the reload of the host's save the character recorded again matched the stored one line for line, with 0 problems.
 - This covers the "Not covered yet" items of the own-characters entry above.
 
+**25 October 2026 — Claude Code: the launcher remembers the player and keeps the graphics settings.** Branch `fix/launcher-remember` (from `main`). Found in the owner's first two-PC session.
+
+- **Before:** Play Host/Join LAN asked for the player name every time, and the second PC also for the host's address. The name picks the co-op save profile, so a different spelling meant other saves and no character. The game was always started with `-windowed -width 960 -height 540 -noraytracing` (the two-clients-on-one-PC test setup), which overrode the player's graphics settings on every launch.
+- **Now:**
+  - `Launch-Game.ps1` offers the last name (per mode) and host address; Enter keeps them (`Read-W3LanValue`, asking again for a name the game refuses).
+  - They are kept per Windows user in `%LOCALAPPDATA%\W3LAN\player.json` (`Get/Set-W3LanPlayerSettings`), not in the package folder: Manage Mod rewrites `launcher.settings.json`, and each release is extracted to a new folder.
+  - `New-W3LanProfileStartInfo` starts the game without options; the bot harness sizes its windows itself.
+- **Tests:** `Test-Profile.ps1` extended (no forced options; settings read back; a broken file ignored; Enter keeps the answer; refused names asked again), PASS in Windows PowerShell 5.1 and PowerShell 7. `Test-Install` 30/30, `Test-Lan` 15/15, `Test-SessionSave` 8/8 (with `-JarPath`: in 5.1 `$PSScriptRoot` is empty in its parameter default, an older quirk).
+
