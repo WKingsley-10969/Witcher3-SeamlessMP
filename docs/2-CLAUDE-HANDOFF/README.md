@@ -602,3 +602,15 @@ Branch rebased onto `8c920f9` before publication, preserving Claude's additional
 - Regressions, all **PASS**: `loot_share` (`20261025-211205`), `shared_enemy` (`-211412`), `session_join` (`-211533`).
 - **Limits:** only shared enemies (both players within the shared-enemy range); other bodies keep their own loot per PC. Tested with one drowner, two clients on one PC.
 
+**25 October 2026 — Claude Code: monster survey (what of a monster's fight reaches the second PC).** Branch `feature/monster-survey` (stacked on `feature/corpse-loot`). First step of the monster-abilities work: measure before fixing.
+
+- **Test** `monster_survey` (new, `w3test_monsters.ws`): the leader spawns each monster of `W3T_SURVEY` in turn next to both players (both invulnerable), takes 8 % of its health every 4 s for 45 s (health-driven phases), then kills it and anything hostile left. Both games log, once per value, what they see of it: buffs, appearance, stance (and flying), height above its start, immortality mode, gameplay visibility, and gameplay entities appearing within 25 m (against a baseline taken as it comes). `survey_compare.py <runs>` prints per monster what the leader saw and the second PC's copy did not. `run-isolated-test.py --timeout` (new) for longer runs.
+- **Runs** `20261025-213141`, `-213907`, `-214627`, `-215347` (24 monsters, 6 per run; first run `-212334` had two survey bugs, fixed: `noonwraith` matched `wraith`, and the second PC had no entity baseline). Findings, apart from passers-by:
+  - **Flight:** griffin (stance fly, 6–17 m up; the copy is moved up but never in the flying stance), siren (fly, 2–7 m; the copy never leaves the ground). Harpy and wyvern did not take off within 45 s.
+  - **Untouchable / untargetable phases:** alghoul (invulnerable + out of gameplay visibility), fogling (out of gameplay visibility), noonwraith (both, first run only). The copy never is.
+  - **Spawned attack entities:** leshen roots (`lessog_root_proj`), griffin `gryphon_ground`. Never on the second PC.
+  - **Knockdown:** the siren's (out of the air) not on the copy.
+  - **No measurable gap:** wraith, nightwraith, earth elemental, golem, wyvern, forktail, arachas, endrega, bies, water hag, ekimmara, katakan, werewolf, troll, chort, cyclops, nekker, harpy. Summons and doppelgangers (noonwraith's) do reach the second PC, as puppets.
+- **Not measured:** effects played on the monster (glows, auras) and anything only visible on screen; screenshots of both screens at key moments would cover that next.
+- **Plan:** flight first; then untouchable phases and knockdown (a state field in the enemy snapshot); then spawned attack entities.
+
