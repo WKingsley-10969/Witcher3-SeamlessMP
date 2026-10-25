@@ -96,11 +96,20 @@ function Start-W3LanServer {
     param(
         [Parameter(Mandatory)][string]$JarPath,
         [string]$JavaPath,
-        [ValidateRange(1,65535)][int]$Port = 40000
+        [ValidateRange(1,65535)][int]$Port = 40000,
+        # Co-op session: joining players download the host's newest save from this folder (TCP Port+1)
+        [string]$SaveDirectory,
+        [string]$HostName
     )
     if (-not (Test-Path -LiteralPath $JarPath -PathType Leaf)) { throw 'Server JAR missing. Run Build-Server.ps1 first.' }
     $jar = (Resolve-Path -LiteralPath $JarPath).Path
     $java = Find-W3LanJava $JavaPath
+    $sessionArguments = ''
+    if ($SaveDirectory) {
+        if (-not (Test-Path -LiteralPath $SaveDirectory -PathType Container)) { throw "Save folder missing: $SaveDirectory" }
+        Assert-W3LanName $HostName
+        $sessionArguments = ' --save-dir "' + (Resolve-Path -LiteralPath $SaveDirectory).Path + '" --host-name ' + $HostName
+    }
     # Fail before starting a second server, including when another compatible server owns this port.
     $reservation = [Net.Sockets.Socket]::new([Net.Sockets.AddressFamily]::InterNetwork, [Net.Sockets.SocketType]::Dgram, [Net.Sockets.ProtocolType]::Udp)
     try {
@@ -110,7 +119,7 @@ function Start-W3LanServer {
     finally { $reservation.Dispose() }
     $info = [Diagnostics.ProcessStartInfo]::new()
     $info.FileName = $java
-    $info.Arguments = '-Djava.net.preferIPv4Stack=true -jar "' + $jar + '" ' + $Port
+    $info.Arguments = '-Djava.net.preferIPv4Stack=true -jar "' + $jar + '" ' + $Port + $sessionArguments
     $info.WorkingDirectory = Split-Path -Parent $jar
     $info.UseShellExecute = $false
     $info.CreateNoWindow = $true
@@ -155,4 +164,43 @@ function New-W3LanClientEnvironment {
     @{ WO_USERNAME = $PlayerName; WO_SERVER_IP = $ip; WO_SERVER_PORT = $Port.ToString() }
 }
 
-Export-ModuleMember -Function Assert-W3LanName, Resolve-W3LanAddress, Get-W3LanAddresses, Find-W3LanJava, Test-W3LanEndpoint, Start-W3LanServer, Stop-W3LanServer, New-W3LanClientEnvironment
+# Co-op session: download the host's newest save (and its thumbnail) into this player's co-op
+# save folder. Returns @{ Host; Save } (Save empty when the host has no save yet).
+function Copy-W3LanSessionSave {
+    param(
+        [Parameter(Mandatory)][string]$Address,
+        [ValidateRange(1,65535)][int]$Port = 40001,
+        [Parameter(Mandatory)][string]$SaveDirectory
+    )
+    $ip = Resolve-W3LanAddress $Address
+    $base = "http://${ip}:$Port/session"
+    $fields = @{}
+    foreach ($line in ((Invoke-WebRequest -Uri $base -UseBasicParsing -TimeoutSec 5).Content -split "`n")) {
+        $at = $line.IndexOf('=')
+        if ($at -gt 0) { $fields[$line.Substring(0, $at)] = $line.Substring($at + 1).Trim() }
+    }
+    $hostName = [string]$fields['host']
+    $save = [string]$fields['save']
+    if ($hostName) { Assert-W3LanName $hostName }
+    if (-not $save) { return @{ Host = $hostName; Save = '' } }
+    if ($save -notmatch '^[A-Za-z0-9_.-]{1,120}$') { throw "The host offered an invalid save name." }
+    [void][IO.Directory]::CreateDirectory($SaveDirectory)
+    foreach ($extension in @('.sav', '.png')) {
+        $target = Join-Path $SaveDirectory ($save + $extension)
+        $partial = $target + '.download'
+        try {
+            Invoke-WebRequest -Uri "$base/save/$save$extension" -UseBasicParsing -TimeoutSec 60 -OutFile $partial
+        } catch {
+            if ($extension -eq '.png') { continue }   # the thumbnail is optional
+            throw
+        }
+        if ($extension -eq '.sav' -and (Get-Item -LiteralPath $partial).Length -ne [long]$fields['size']) {
+            Remove-Item -LiteralPath $partial
+            throw 'The host save download was incomplete.'
+        }
+        Move-Item -LiteralPath $partial -Destination $target -Force
+    }
+    @{ Host = $hostName; Save = $save }
+}
+
+Export-ModuleMember -Function Assert-W3LanName, Resolve-W3LanAddress, Get-W3LanAddresses, Find-W3LanJava, Test-W3LanEndpoint, Start-W3LanServer, Stop-W3LanServer, New-W3LanClientEnvironment, Copy-W3LanSessionSave

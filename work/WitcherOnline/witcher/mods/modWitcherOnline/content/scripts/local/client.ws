@@ -253,6 +253,7 @@ statemachine class r_MultiplayerClient
     private var coopNpcs : r_CoopNpcs;
     private var coopTalk : r_CoopTalk;
     private var coopRevive : r_CoopRevive;
+    private var coopSession : r_CoopSession;
     private var coopTravel : r_CoopTravel;
     private var seamlessCampaign : r_SeamlessCampaign;
 
@@ -293,6 +294,15 @@ statemachine class r_MultiplayerClient
             coopTalk = new r_CoopTalk in this;
         }
         return coopTalk;
+    }
+
+    public function getCoopSession() : r_CoopSession
+    {
+        if(!coopSession)
+        {
+            coopSession = new r_CoopSession in this;
+        }
+        return coopSession;
     }
 
     public function getCoopRevive() : r_CoopRevive
@@ -5804,6 +5814,7 @@ statemachine class r_MultiplayerClient
                     client.getCoopNpcs().OnMessage();
                     client.getCoopTalk().OnMessage();
                     client.getCoopRevive().OnMessage();
+                    client.getCoopSession().OnMessage();
                     client.getCoopTravel().OnMessage();
                     client.getSeamlessCampaign().OnMessage();
                     break;
@@ -7767,6 +7778,7 @@ state WO_Tick in r_MultiplayerClient
             parent.getCoopNpcs().Tick();
             parent.getCoopTalk().Tick();
             parent.getCoopRevive().Tick();
+            parent.getCoopSession().Tick();
             parent.getCoopTravel().Tick();
             parent.getSeamlessCampaign().Tick();
 

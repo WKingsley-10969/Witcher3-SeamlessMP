@@ -406,3 +406,34 @@ Branch rebased onto `8c920f9` before publication, preserving Claude's additional
   - Enemies may keep attacking a downed player (no damage is taken).
   - A party member who truly dies (the normal death screen) is not noticed by a downed player until their figure reports it.
   - Not tested on two physical PCs.
+
+**25 October 2026 — Claude Code: co-op session (the host's game for everyone).** Branch `feature/coop-session` (from `main`). Step 1 of the co-op lobby; step 2 is a Co-op entry in the main menu.
+
+- **Before:** each PC played its own game. Players loaded their own saves, met in the world and joined a party by hand. Difficulty was each PC's own.
+- **Server** (`SaveShare.java`, new): with `--save-dir DIR --host-name NAME`, the server shares the host's co-op save folder read-only over HTTP on TCP port `--save-port`, by default the game port + 1.
+  - `GET /session` describes the newest `.sav`.
+  - `GET /session/save/FILE` serves one `.sav`/`.png` of that folder by plain name; nothing else is served.
+- **Launcher:**
+  - `Play-LAN.ps1 -Mode Host` starts the server sharing the host profile's `gamesaves`.
+  - `-Mode Join` downloads the host's newest save and its thumbnail into the joining player's co-op `gamesaves` (`Copy-W3LanSessionSave` in `W3Lan.psm1`: size checked, written through a `.download` file). It then starts the game with `W3LAN_SESSION_ROLE=join`, `W3LAN_SESSION_SAVE` and `W3LAN_SESSION_HOST`.
+  - `-NoSessionSave` keeps the old way. If the host has no save or the download fails, the launcher warns and plays the old way.
+  - Inherited `W3LAN_SESSION_*` variables are removed before launch.
+- **Native:** `WO_SessionConfig(key)` (`NativeBridge.cpp`) reads `role`, `save` and `host` from those variables, validated (role `host`/`join`, save and host names from a fixed character set and length). Anything else reads as empty.
+- **Game** (`coopSession.ws`, new):
+  - a joining player's game loads the host's save from the main menu (`CR4CommonMainMenuBase.OnConfigUI`, wrapped), once per game start;
+  - it joins the host's party (retried every 5 s until in it);
+  - it steps in 1.5 m beside the host once per load, also when the same save put both on one spot;
+  - it applies the host's difficulty (`coop ss diff level`, sent by the host at start and on every change) with the same calls as the options menu (`SetDifficultyLevel`, `OnDifficultyChanged`).
+- **Test bot:** the bot's own main-menu save loader leaves the load to the session when `WO_SessionConfig("save")` is set.
+- **Harness:** `run_test.py` gives the second PC the join variables for `session_join`.
+- **Tests:**
+  - `SaveShareTest` (server, 12 assertions): newest save, byte-for-byte files, refusals.
+  - `tests/Test-SessionSave.ps1` (launcher with the real server and fixture saves, 8 checks, PowerShell 5.1 and 7).
+  - `Test-Lan` 15/15.
+  - Game test `session_join` (new): the second PC's game loaded the host's save from the main menu by itself, joined the host's party on the first attempt, stepped in beside the host, and after walking 60 m off stepped in again 1.5 m from it. When the host changed difficulty 2 -> 3, the second PC's game followed within 2 s.
+  - Runs `20261025-143129` (PASS; both players still stood on one spot right after loading, now fixed) and `20261025-143445` (PASS: the second PC stepped 1.5 m aside right after loading, and in again after walking off).
+- **Limits:**
+  - The host shares its newest co-op save, so it should save before others join.
+  - The launcher downloads the save before the game starts. Picking a save, or starting together from a menu, is step 2 (the Co-op lobby).
+  - A joining player's own co-op progress is replaced by the host's save in that session (their older co-op saves stay in the folder).
+  - Not tested on two physical PCs.

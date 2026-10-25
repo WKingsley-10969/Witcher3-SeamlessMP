@@ -34,6 +34,8 @@ $classPath = $classes + [IO.Path]::PathSeparator + $testClasses
 if ($LASTEXITCODE -ne 0) { throw 'Campaign unit tests failed' }
 & $java -cp $classPath FactRemovalTest $TestRoot | Tee-Object -FilePath (Join-Path $TestRoot 'fact-removal-latest.log')
 if ($LASTEXITCODE -ne 0) { throw 'Fact removal tests failed' }
+& $java -cp $classPath SaveShareTest $TestRoot | Tee-Object -FilePath (Join-Path $TestRoot 'save-share-latest.log')
+if ($LASTEXITCODE -ne 0) { throw 'Save share tests failed' }
 & $java -cp $classPath SeamlessUdpIntegrationTest $java $classes $TestRoot | Tee-Object -FilePath (Join-Path $TestRoot 'udp-latest.log')
 if ($LASTEXITCODE -ne 0) { throw 'Real UDP integration tests failed' }
 Write-Output "Built tested server: $jarFile"

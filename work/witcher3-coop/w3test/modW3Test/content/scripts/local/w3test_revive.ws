@@ -75,7 +75,8 @@ function W3T_PartyRevive(bot : W3T_Bot, client : r_MultiplayerClient, other : r_
         if(bot.scenarioStep == 1 && revive.peerDowns == 1)
         {
             spot = other.pos + VecFromHeading(thePlayer.GetHeading()) * 1.0;
-            if(!theGame.GetWorld().NavigationFindSafeSpot(spot, 0.5, 2.0, safe)) { safe = spot; }
+            // the navmesh may move the spot out of revive range (run 20261025-143611: 2.7 m)
+            if(!theGame.GetWorld().NavigationFindSafeSpot(spot, 0.5, 2.0, safe) || VecDistance(safe, other.pos) > 1.5) { safe = spot; }
             thePlayer.Teleport(safe);
             revive.testHold = true;
             W3T_Log(label + " beside the downed host (" + FloatToStringPrec(VecDistance(safe, other.pos), 1) + " m), holding Interact");

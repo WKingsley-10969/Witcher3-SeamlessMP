@@ -359,7 +359,13 @@ def main():
                 # the harness times each scenario; the bots never give up by themselves
                 env.update(W3T_SCENARIO="session", W3T_SCENARIOS=",".join(session), W3T_CONTROL=control, W3T_DURATION="100000")
             for key in list(env):
-                if key.upper().startswith("WO_SC_"): del env[key]
+                if key.upper().startswith(("WO_SC_", "W3LAN_SESSION_")): del env[key]
+            if a.scenario == "session_join":
+                # the second PC joins the host's co-op session: its game loads the run's save as the host's
+                if i == 0:
+                    env.update(W3LAN_SESSION_ROLE="host")
+                else:
+                    env.update(W3LAN_SESSION_ROLE="join", W3LAN_SESSION_SAVE=a.save, W3LAN_SESSION_HOST=bot_name(0))
             if a.campaign:
                 env.update(WO_SC_ENABLED="1", WO_SC_EFFECTS="1", WO_SC_ROLE="host" if i == 0 else "guest",
                            WO_SC_HOST_TOKEN=host_proof if i == 0 else "")
