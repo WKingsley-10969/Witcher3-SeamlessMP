@@ -28,6 +28,8 @@ The deliberate held-file regression emits a campaign persistence error; its test
 
 Branch `codex/disconnect-rejoin-recovery` is based on `codex/campaign-fact-removals` at `ffc2de2`. Integrate PR #2 first, then this feature. Preserve newer dispatcher cases and scene work; do not overwrite whole files from this branch. The new dispatch case is `seamless_rejoin`, with its own `w3test_rejoin.ws`.
 
+Draft [PR #3](https://github.com/WKingsley-10969/Witcher3-SeamlessMP/pull/3) contains this feature only and targets the PR #2 branch. After PR #2 merges, retarget this PR to main before merging. Implementation commit: `d6d16f5`.
+
 The new two-player bot is written but **has not compiled or run in Witcher 3**. It pauses campaign Tick and inbound delivery for 24 seconds in the test mod, twice. The first outage spans host flag changes/removal; the second requires unchanged application/transaction counts. The production adapter has no test disconnect switch. Ordinary party traffic remains running in this scenario, so it is a coordinator outage test, not a cable-pull test. Conversation history/no duplicate graph invocation is covered by the server/source harness; the new game bot does not play a real cinematic.
 
 After integration, using the original checkout's installed JDK, guarded runner and verified isolated game copy, once that shared test setup is idle:
