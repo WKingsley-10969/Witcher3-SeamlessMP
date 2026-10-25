@@ -191,6 +191,15 @@ function W3T_ScenarioCheck(bot : W3T_Bot) : bool
         return W3T_PlayerCharacter(bot, client, players[0]);
     }
 
+    if(scenario == "party_leave")
+    {
+        if(players.Size() < 1)
+        {
+            return false;
+        }
+        return W3T_PartyLeave(bot, client, players[0]);
+    }
+
     if(scenario == "loot_share")
     {
         if(players.Size() < 1)

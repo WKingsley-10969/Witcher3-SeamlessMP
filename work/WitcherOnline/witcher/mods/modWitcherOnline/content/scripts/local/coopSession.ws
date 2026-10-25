@@ -15,12 +15,15 @@ class r_CoopSession
     private var lastJoinAttempt : float;
     private var lastDifficultySent : int;
     private var lastCheck : float;
+    private var leftByChoice : bool;    // this player left the party: no joining again until they join themselves
+    private var autoJoining : bool;     // the session's own join call is running
 
     public var loadsRequested : int;
     public var joinAttempts : int;
     public var placements : int;
     public var difficultyChanges : int;
     public var lastPlacedApart : float;
+    public var partyLeaves : int;
 
     public function TakeEvents() : array<string>
     {
@@ -98,6 +101,28 @@ class r_CoopSession
     // Step in beside the host again (the next time the host is in this region).
     public function Replace() { placed = false; }
 
+    // ------------------------------------------------------------ party
+
+    // The player left the party themselves (party menu, console): the session stops joining it again.
+    public function OnLeftParty()
+    {
+        if(!IsJoining()) { return; }
+        leftByChoice = true;
+        partyLeaves += 1;
+        Record("LEFT_PARTY by choice: no automatic joining");
+        theGame.GetGuiManager().ShowNotification("You left " + HostName() + "'s party. Interact with " + HostName() + " to join again.");
+    }
+
+    // Any join this player asks for (not the session's own) brings automatic joining back.
+    public function OnJoinParty()
+    {
+        if(autoJoining || !leftByChoice) { return; }
+        leftByChoice = false;
+        Record("JOINED_PARTY by choice: automatic joining again");
+    }
+
+    public function HasLeftParty() : bool { return leftByChoice; }
+
     // ------------------------------------------------------------ network
 
     public function OnMessage()
@@ -150,7 +175,7 @@ class r_CoopSession
         var host : r_RemotePlayer;
         client = theGame.r_getMultiplayerClient();
         host = FindHost();
-        if(!host) { return; }
+        if(!host || leftByChoice) { return; }
         if(!client.getInParty() || client.getJoinedParty() != HostName())
         {
             if(now - lastJoinAttempt >= 5.0)
@@ -158,7 +183,9 @@ class r_CoopSession
                 lastJoinAttempt = now;
                 joinAttempts += 1;
                 Record("JOIN_PARTY " + HostName());
+                autoJoining = true;
                 client.joinParty(HostName());
+                autoJoining = false;
             }
             return;
         }
@@ -213,4 +240,20 @@ function OnConfigUI()
     wrappedMethod();
     theGame.r_getMultiplayerClient().getCoopLobby().OnMainMenu();
     return true;
+}
+
+@wrapMethod(r_MultiplayerClient)
+function leaveParty()
+{
+    var wasInParty : bool;
+    wasInParty = getInParty();
+    wrappedMethod();
+    if(wasInParty && !getInParty()) { getCoopSession().OnLeftParty(); }
+}
+
+@wrapMethod(r_MultiplayerClient)
+function joinParty(val : string)
+{
+    getCoopSession().OnJoinParty();
+    wrappedMethod(val);
 }
