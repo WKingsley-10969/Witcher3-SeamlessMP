@@ -501,6 +501,15 @@ Branch rebased onto `8c920f9` before publication, preserving Claude's additional
 - Test `watch_skip` (new): the second PC talks to the trader twice; the host's bot answers Skip to the first prompt and leaves the second open. Run `20261025-112730` failed on a test bug (the second PC pressed Talk before choosing the trader). Run `20261025-113241`: **PASS**: Skip kept the host out of the conversation and where it stood; the second prompt closed itself when the conversation ended (`OFFER_GONE`); the host never joined.
 - With Ask as default, the bots' dialog hook answers Yes, so talk_share and scene_share cover the Watch path: `talk_share` (`20261025-113545`) **PASS**, `scene_share` (`20261025-113822`) **PASS**.
 
+
+**25 October 2026 — Claude Code: leaving the party sticks on LAN.** Branch `fix/leave-party` (from `main`).
+
+- **Before:** the co-op session joined a joining player to the host's party every 5 s while they were not in it. "Leave party" in the party menu was therefore undone within 5 s.
+- **Now** (`coopSession.ws`):
+  - A leave the player asks for (`r_MultiplayerClient.leaveParty`, wrapped: the party menu, the old item menu, the `leave` console command) stops the automatic joining, with a notification on how to join again.
+  - Any join the player asks for (interact with the host → Join party) turns automatic joining back on. The session's own join calls do not count as the player's.
+- **Test:** `party_leave` (new), passed (run `20261025-172746`). The second PC was joined by the session, left the party itself, and stayed out for 15 s with no join attempt. It then joined by itself, and automatic joining was on again.
+
 **25 October 2026 — Claude Code: player name labels hidden in scenes.** Branch `fix/name-labels` (from `main`).
 
 - **Before:** other players' name and status labels stayed on screen during conversations and cutscenes, over the subtitles. The players' figures were already hidden there.
