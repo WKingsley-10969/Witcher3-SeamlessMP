@@ -1499,3 +1499,14 @@ function OnInteraction(actionName : string, activator : CEntity)
     }
     return wrappedMethod(actionName, activator);
 }
+
+// The Watch / Skip prompt of a party member's conversation.
+@wrapMethod(CR4GuiManager)
+function UserDialogCallback(messageId : int, actionId : EUserMessageAction)
+{
+    wrappedMethod(messageId, actionId);
+    if(messageId == COOP_WATCH_DIALOG())
+    {
+        theGame.r_getMultiplayerClient().getCoopTalk().OnWatchAnswer(actionId == UMA_Yes);
+    }
+}
