@@ -413,7 +413,9 @@ class r_CoopCharacter
             enchantment = WO_ToName(f[5]);
             if(!inv.EnchantItem(id, enchantment, getEnchamtmentStatName(enchantment))) { problems += 1; Record("ENCHANT_FAILED " + f[5] + " on " + f[1]); }
         }
-        if(slot >= 0 && horses && !inv.IsIdValid(horses.EquipItem(id))) { problems += 1; Record("HORSE_EQUIP_FAILED " + f[1] + " -> " + slot); }
+        // the horse's EquipItem returns the item it replaced, not the one equipped
+        if(slot >= 0 && horses) { horses.EquipItem(id); }
+        if(slot >= 0 && horses && !horses.IsItemEquipped(id)) { problems += 1; Record("HORSE_EQUIP_FAILED " + f[1] + " -> " + slot); }
         else if(slot >= 0 && !horses && !w.EquipItemInGivenSlot(id, (EEquipmentSlots)slot, false)) { problems += 1; Record("EQUIP_FAILED " + f[1] + " -> " + slot); }
     }
 

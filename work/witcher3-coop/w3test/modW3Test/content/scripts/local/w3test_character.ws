@@ -169,7 +169,8 @@ function W3T_MakeOwnCharacterPart2(w : W3PlayerWitcher, inv : CInventoryComponen
     if(ids.Size() > 0)
     {
         moved = horses.MoveItemToHorse(ids[0], 1);
-        W3T_Log("CHARACTER member saddle on the horse: " + stash.IsIdValid(horses.EquipItem(moved)));
+        horses.EquipItem(moved);
+        W3T_Log("CHARACTER member saddle on the horse: " + horses.IsItemEquipped(moved));
     }
     W3T_Log("CHARACTER member stash holds " + stash.GetAllItemsQuantity() + " items");
     inv.GetAllItems(ids);
@@ -185,7 +186,15 @@ function W3T_MakeOwnCharacterPart2(w : W3PlayerWitcher, inv : CInventoryComponen
     if(w.GetItemEquippedOnSlot(EES_SteelSword, id))
     {
         before = inv.GetItemDurability(id);
+        W3T_Log("CHARACTER member steel sword " + NameToString(inv.GetItemName(id)) + ": has durability " + inv.HasItemDurability(id) + ", max " + inv.GetItemMaxDurability(id)
+            + ", indestructible " + inv.ItemHasAbility(id, 'MA_Indestructible') + "/" + CalculateAttributeValue(inv.GetItemAttributeValue(id, 'indestructible'))
+            + ", toughness " + CalculateAttributeValue(inv.GetItemAttributeValue(id, 'toughness')) + ", reduce returns " + inv.ReduceItemDurability(id, true));
         for(i = 0; i < 20; i += 1) { inv.ReduceItemDurability(id, true); }
-        W3T_Log("CHARACTER member worn steel sword " + NameToString(inv.GetItemName(id)) + ": durability " + before + " -> " + inv.GetItemDurability(id));
+        W3T_Log("CHARACTER member worn steel sword: durability " + before + " -> " + inv.GetItemDurability(id));
+        if(inv.GetItemDurability(id) >= before)
+        {
+            inv.SetItemDurabilityScript(id, 60);
+            W3T_Log("CHARACTER member steel sword set to 60 directly: durability " + inv.GetItemDurability(id));
+        }
     }
 }
