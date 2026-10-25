@@ -243,3 +243,106 @@ function W3T_CharacterSafety(bot : W3T_Bot, client : r_MultiplayerClient, other 
     return character.testPhase == 2;
 }
 
+// Custom Player Characters shows its tutorials (first time, hotkeys, changelogs...) as fullscreen popups
+// that pause the game, and this bot with it, until a player closes them. It records each one shown as the
+// fact nr_quest_track_<type>, kept in the save: marked shown here on every report (a load resets them).
+function W3T_MuteCpcTutorials()
+{
+    var types : array<string>;
+    var i : int;
+    types.PushBack("FirstTime");
+    types.PushBack("Update_v3_0_4");
+    types.PushBack("Update_v3_1_2");
+    types.PushBack("HotkeysHelp");
+    types.PushBack("SexSetHelp");
+    types.PushBack("MissedExtraContent");
+    types.PushBack("SorceressLevel1");
+    types.PushBack("SorceressInteractionHints2");
+    types.PushBack("PolymorphismWarning");
+    for(i = 0; i < types.Size(); i += 1)
+    {
+        if(FactsQuerySum("nr_quest_track_" + types[i]) < 1) { FactsAdd("nr_quest_track_" + types[i], 1); }
+    }
+}
+
+// cpc_character (staged with W3T_CPC=1: Custom Player Characters and its Remaster fix installed):
+// 1. The second PC joins BotA for the first time: a new character, whose creator is due (skipped:
+//    a bot cannot use it). It switches to a witcheress through Custom Player Characters and stores
+//    its character (type, head, look).
+// 2. It loads BotA's save again: the restore switches to a witcheress first, then the character
+//    recorded again must match the stored one line for line.
+// BotA must see the second PC as a witcheress.
+function W3T_CpcCharacter(bot : W3T_Bot, client : r_MultiplayerClient, other : r_RemotePlayer) : bool
+{
+    var character : r_CoopCharacter;
+    var session : r_CoopSession;
+    var pm : NR_PlayerManager;
+    var host : bool;
+    var label : string;
+    var events, diff : array<string>;
+    var i : int;
+    host = W3T_GetEnv("W3T_ROLE") == "mover";
+    label = "CPC member";
+    if(host) { label = "CPC host"; }
+    character = client.getCoopCharacter();
+    session = client.getCoopSession();
+    character.testNoCreator = true;
+    W3T_MuteCpcTutorials();
+    pm = NR_GetPlayerManager();
+    events = character.TakeEvents();
+    for(i = 0; i < events.Size(); i += 1) { W3T_Log(label + " " + events[i]); }
+    events = session.TakeEvents();
+    for(i = 0; i < events.Size(); i += 1) { W3T_Log(label + " session " + events[i]); }
+    W3T_Log(label + " phase=" + character.testPhase + " cpc=" + WO_SessionConfig("cpc") + " type=" + (int)pm.GetCurrentPlayerType() + " pmReady=" + pm.IsReady()
+        + " ready=" + character.IsReady() + " fresh=" + character.freshStarts + " restores=" + character.restores + " switches=" + character.cpcSwitches
+        + " looks=" + character.cpcLooks + " otherType=" + (int)other.cpcPlayerType + " inParty=" + client.getInParty());
+    if(host)
+    {
+        if(other.cpcPlayerType == ENR_PlayerWitcheress && bot.scenarioStep == 0)
+        {
+            W3T_Log(label + " sees the second PC as a witcheress");
+            bot.scenarioStep = 1;
+        }
+        return bot.scenarioStep == 1 && client.getCoopEnemies().GetRole() == 1;
+    }
+    if(WO_SessionConfig("cpc") != "1")
+    {
+        W3T_Log(label + " FAIL Custom Player Characters is not installed in the test copy (stage with W3T_CPC=1)");
+        return false;
+    }
+    if(character.testPhase == 0 && character.IsReady() && character.freshStarts == 1 && client.getInParty())
+    {
+        W3T_Log(label + " new character; switching to a witcheress");
+        NR_ChangePlayer(ENR_PlayerWitcheress);
+        character.testPhase = 1;
+        bot.scenarioTime = bot.ElapsedS();
+        return false;
+    }
+    if(character.testPhase == 1)
+    {
+        if(pm.IsReady() && pm.GetCurrentPlayerType() == ENR_PlayerWitcheress && GetWitcherPlayer())
+        {
+            character.Store();
+            character.testExpected = character.Capture();
+            W3T_Log(label + " a witcheress now; stored (" + StrLen(character.testExpected) + " chars); loading the host's save again");
+            character.testPhase = 2;
+            session.LoadSave(WO_SessionConfig("save"));
+        }
+        else if(bot.ElapsedS() - bot.scenarioTime > 60)
+        {
+            W3T_Log(label + " FAIL the switch to a witcheress did not finish");
+            character.testPhase = -1;
+        }
+        return false;
+    }
+    if(character.testPhase == 2 && character.restores == 1 && character.IsReady())
+    {
+        diff = character.Differences(character.testExpected, character.Capture());
+        for(i = 0; i < diff.Size() && i < 40; i += 1) { W3T_Log(label + " DIFF " + diff[i]); }
+        W3T_Log(label + " after the reload: type " + (int)pm.GetCurrentPlayerType() + ", " + diff.Size() + " differences, " + character.problems + " problems");
+        if(diff.Size() == 0 && pm.GetCurrentPlayerType() == ENR_PlayerWitcheress && character.cpcSwitches == 1 && character.cpcLooks == 1) { character.testPhase = 3; }
+        else { character.testPhase = -1; }
+    }
+    return character.testPhase == 3;
+}
+

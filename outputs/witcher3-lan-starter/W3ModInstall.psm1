@@ -188,6 +188,13 @@ function Restore-W3Pending([string]$Root) {
     try { Clear-W3TransactionStaging $Root $journal.transactionId } catch { Write-Warning 'Rollback succeeded; temporary staging was retained.' }
 }
 
+# Custom Player Characters (nikich340), installed by the player: its mod and DLC folders. Our
+# stand-in for it (mods/modWitcherOnlineCompatCPC) declares the same classes, so it stays out then.
+function Test-W3CpcInstalled([string]$Root) {
+    (Test-Path -LiteralPath (Join-Path $Root 'mods/modCustomPlayerCharacters') -PathType Container) -and
+        (Test-Path -LiteralPath (Join-Path $Root 'dlc/dlcCustomPlayerCharacters') -PathType Container)
+}
+
 function Invoke-W3ModTransaction {
     param([string]$GameDir, [string]$PackageDir, [switch]$Remove, [switch]$PreserveChanges)
     $root = Resolve-W3ModRoot $GameDir
@@ -233,6 +240,9 @@ function Invoke-W3ModTransaction {
             }
             if (@(Get-W3TreeFiles $payload).Count -ne $desired.Count) { throw 'Payload contains files not listed in its manifest.' }
             if (-not $desired.ContainsKey('bin/x64_dx12/w3test.asi')) { throw 'Package is missing its save-profile helper.' }
+            if (Test-W3CpcInstalled $root) {
+                foreach ($path in @($desired.Keys | Where-Object { $_.StartsWith('mods/modWitcherOnlineCompatCPC/', [StringComparison]::OrdinalIgnoreCase) })) { $desired.Remove($path) }
+            }
             $metadata = @{
                 '.w3lan-native.json' = [ordered]@{profileApi=1;profileDllSha256=$desired['bin/x64_dx12/w3test.asi'].Hash}
                 '.w3lan-managed.json' = [ordered]@{api=1;mode='InPlace';gameRoot=$root;exeSha256=$exeHash;installationId=$installationId}
@@ -333,4 +343,4 @@ function Remove-W3LanMod {
     Invoke-W3ModTransaction -GameDir $GameDir -Remove -PreserveChanges:$PreserveChanges
 }
 
-Export-ModuleMember -Function Install-W3LanMod, Remove-W3LanMod, Get-W3ModStatus
+Export-ModuleMember -Function Install-W3LanMod, Remove-W3LanMod, Get-W3ModStatus, Test-W3CpcInstalled

@@ -29,6 +29,9 @@
 //   stash;...          as item, in the stash / horse inventory; the slot is a horse slot
 //   mutations;<system enabled 0|1>;<equipped EPlayerMutationType>
 //   mutation;<EPlayerMutationType>;<red>;<blue>;<green>;<skill points>;<overall progress>
+//   cpc;<ENR_PlayerType>;<head>                with Custom Player Characters (nikich340) installed:
+//   cpcslot;<ENR_AppearanceSlots>;<template>   the character type and look; switched to before the
+//   cpcitem;<index>;<template>                 rest is restored. The first time, its creator opens.
 import function WO_CharacterStore(text : string) : bool;
 import function WO_CharacterLoad() : string;
 import function WO_ToName(text : string) : name;
@@ -42,10 +45,17 @@ class r_CoopCharacter
     private var ready : bool;       // restored (or started fresh) since the last load: recording
     private var broken : bool;      // the stored record could not be read: never overwrite it
     private var restoredSerial : int;   // the load of the host's world (r_CoopSession.HostLoadSerial) restored for
+    private var cpcPending : string;    // a record waiting for Custom Player Characters to switch the character type
+    private var cpcPendingSince : float;
+    private var creatorDue : bool;      // a new character with Custom Player Characters: open its creator once in the world
 
     public var restores : int;
     public var freshStarts : int;
     public var skippedRecords : int;  // records not applied: no weapon or armour while this character has some
+    public var cpcSwitches : int;     // character type switches before a restore (Custom Player Characters)
+    public var cpcLooks : int;        // looks applied from the record
+    public var creatorsOpened : int;
+    public var testNoCreator : bool;  // bot tests: the creator scene would wait for a player
     public var backups : int;
     public var stores : int;
     public var problems : int;      // entries a restore could not apply
@@ -90,12 +100,25 @@ class r_CoopCharacter
     public function Tick()
     {
         var now : float;
+        var text : string;
         if(!Active()) { return; }
         now = theGame.GetEngineTimeAsSeconds();
         // a new load of the host's world: restore once, after the game's own start-up work on the
         // loaded character (skill refund timers, 1.5 s). Other loading screens keep the character.
-        if(restoredSerial != Session().HostLoadSerial()) { ready = false; }
+        if(restoredSerial != Session().HostLoadSerial()) { ready = false; cpcPending = ""; }
         if(now - loadedAt < 5.0) { return; }
+        if(cpcPending != "")
+        {
+            // Custom Player Characters builds the new character over a few frames
+            if((NR_GetPlayerManager().IsReady() && (int)NR_GetPlayerManager().GetCurrentPlayerType() == CpcType(cpcPending)) || now - cpcPendingSince > 30.0)
+            {
+                text = cpcPending;
+                cpcPending = "";
+                RestoreRecord(text);
+            }
+            return;
+        }
+        if(ready && creatorDue && !thePlayer.IsInCombat() && !theGame.IsDialogOrCutscenePlaying() && Session().placements > 0) { OpenCreator(); }
         if(!ready)
         {
             if(theGame.IsDialogOrCutscenePlaying() || thePlayer.IsInNonGameplayCutscene()) { return; }
@@ -144,16 +167,129 @@ class r_CoopCharacter
             freshStarts += 1;
             Record("FRESH no character for " + Session().HostName() + " yet: starting from the host's Geralt");
             theGame.GetGuiManager().ShowNotification("Your co-op character starts as a copy of " + Session().HostName() + "'s Geralt.");
+            creatorDue = CpcInstalled();
+            ready = true;
+            Store();
+            return;
         }
-        else if(!Restore(text))
+        // the record's character type first (Custom Player Characters rebuilds the player), then the rest
+        if(CpcInstalled() && CpcType(text) > 0 && CpcType(text) != (int)NR_GetPlayerManager().GetCurrentPlayerType())
+        {
+            cpcSwitches += 1;
+            cpcPending = text;
+            cpcPendingSince = theGame.GetEngineTimeAsSeconds();
+            Record("CPC_SWITCH to character type " + CpcType(text) + " before the restore");
+            NR_ChangePlayer((ENR_PlayerType)CpcType(text));
+            return;
+        }
+        RestoreRecord(text);
+    }
+
+    private function RestoreRecord(text : string)
+    {
+        if(!Restore(text))
         {
             broken = true;
             Record("BROKEN the stored character could not be read: kept, not overwritten");
             theGame.GetGuiManager().ShowNotification("Your co-op character could not be read: playing the host's Geralt this time.");
             return;
         }
+        if(CpcInstalled()) { ApplyCpcLook(text); }
         ready = true;
         Store();
+    }
+
+    // ------------------------------------------------------------ Custom Player Characters
+
+    private function CpcInstalled() : bool { return WO_SessionConfig("cpc") == "1"; }
+
+    // The record's character type (ENR_PlayerType), 0 without a "cpc" line.
+    private function CpcType(text : string) : int
+    {
+        var lines, f : array<string>;
+        var i : int;
+        lines = CoopSplit(text, "|");
+        for(i = 0; i < lines.Size(); i += 1)
+        {
+            f = CoopSplit(lines[i], ";");
+            if(f.Size() == 3 && f[0] == "cpc") { return StringToInt(f[1], 0); }
+        }
+        return 0;
+    }
+
+    private function CaptureCpc() : string
+    {
+        var pm : NR_PlayerManager;
+        var heads : array<name>;
+        var type, slot, i : int;
+        var text, head : string;
+        if(!CpcInstalled()) { return ""; }
+        pm = NR_GetPlayerManager();
+        type = (int)pm.GetCurrentPlayerType();
+        heads = pm.mpghosts_GetHeads();
+        head = "";
+        if(type < heads.Size()) { head = NameToString(heads[type]); }
+        if(!CoopSafeField(head)) { head = ""; }
+        text = "|cpc;" + type + ";" + head;
+        if(type >= pm.m_appearanceTemplates.Size()) { return text; }
+        for(slot = (int)ENR_RSlotHair; slot <= (int)ENR_RSlotMisc && slot < pm.m_appearanceTemplates[type].Size(); slot += 1)
+        {
+            if(pm.m_appearanceTemplates[type][slot] != "" && CoopSafeField(pm.m_appearanceTemplates[type][slot])) { text += "|cpcslot;" + slot + ";" + pm.m_appearanceTemplates[type][slot]; }
+        }
+        for(i = 0; i < pm.m_appearanceItems[type].Size(); i += 1)
+        {
+            if(pm.m_appearanceItems[type][i] != "" && CoopSafeField(pm.m_appearanceItems[type][i])) { text += "|cpcitem;" + i + ";" + pm.m_appearanceItems[type][i]; }
+        }
+        return text;
+    }
+
+    // The record's look on the current character (its type switched to already).
+    private function ApplyCpcLook(text : string)
+    {
+        var pm : NR_PlayerManager;
+        var lines, f : array<string>;
+        var slots, items : array<string>;
+        var i, slot, type : int;
+        var head : string;
+        type = CpcType(text);
+        pm = NR_GetPlayerManager();
+        if(type <= 0 || type != (int)pm.GetCurrentPlayerType()) { return; }
+        slots.Resize((int)ENR_RSlotMisc + 1);
+        head = "";
+        lines = CoopSplit(text, "|");
+        for(i = 0; i < lines.Size(); i += 1)
+        {
+            f = CoopSplit(lines[i], ";");
+            if(f.Size() == 3 && f[0] == "cpc") { head = f[2]; }
+            else if(f.Size() == 3 && f[0] == "cpcslot")
+            {
+                slot = StringToInt(f[1], -1);
+                if(slot >= (int)ENR_RSlotHair && slot <= (int)ENR_RSlotMisc) { slots[slot] = f[2]; }
+            }
+            else if(f.Size() == 3 && f[0] == "cpcitem") { items.PushBack(f[2]); }
+        }
+        if(head != "") { pm.UpdateHead(WO_ToName(head)); }
+        // every slot as recorded: one the record leaves empty is emptied
+        for(slot = (int)ENR_RSlotHair; slot <= (int)ENR_RSlotMisc; slot += 1) { pm.UpdateAppearanceTemplate(slots[slot], (ENR_AppearanceSlots)slot); }
+        for(i = 0; i < items.Size(); i += 1) { pm.UpdateAppearanceItem(items[i], i); }
+        for(i = items.Size(); i < pm.m_appearanceItems[type].Size(); i += 1) { pm.UpdateAppearanceItem("", i); }
+        cpcLooks += 1;
+        Record("CPC_LOOK character type " + type + ", head " + head + ", " + items.Size() + " items");
+    }
+
+    // A new character: Custom Player Characters' creator (its Chameleon potion: the same fact).
+    private function OpenCreator()
+    {
+        creatorDue = false;
+        if(testNoCreator)
+        {
+            Record("CREATOR would open now (bot test: skipped)");
+            return;
+        }
+        creatorsOpened += 1;
+        Record("CREATOR opened for the new character");
+        theGame.GetGuiManager().ShowNotification("Create your co-op character. (Later: hold E and press P.)");
+        FactsAdd("item_use_nr_chameleon_potion", 1);
     }
 
     // Any weapon or armour equipped in the record ("item" lines with a sword or armour slot)?
@@ -246,7 +382,7 @@ class r_CoopCharacter
         for(i = 0; i < rewards.Size(); i += 1) { if(CoopSafeField(rewards[i])) { text += "|reward;" + rewards[i]; } }
         recipes = w.GetCraftingSchematicsNames();
         for(i = 0; i < recipes.Size(); i += 1) { if(CoopSafeField(NameToString(recipes[i]))) { text += "|schematic;" + NameToString(recipes[i]); } }
-        text += CaptureMutations(pam) + CaptureStash(w);
+        text += CaptureMutations(pam) + CaptureStash(w) + CaptureCpc();
         for(slot = 0; slot <= (int)EES_SkillMutagen4; slot += 1)
         {
             if(CharacterSlot(slot) && w.GetItemEquippedOnSlot((EEquipmentSlots)slot, id))

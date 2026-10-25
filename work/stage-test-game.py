@@ -1,6 +1,7 @@
 """Deploy only to this workspace's verified independent game copy; keep backups and a root-bound manifest."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 
@@ -30,10 +31,23 @@ for key in list(manifest['files']):
             if backup.exists(): shutil.copy2(backup, target)
             else: target.unlink()
         del manifest['files'][key]
+# Custom Player Characters (nikich340) in the test copy only when a run asks for it (W3T_CPC=1),
+# from the player's own downloads extracted to local/cpc (never committed or shipped); its stand-in
+# mod then stays out, as the installer leaves it out next to the real mod.
+cpc = os.environ.get('W3T_CPC') == '1'
+cpc_root = work.parent / 'local/cpc'
+cpc_sources = [(cpc_root / 'cpc-3.1.2/Mods/modCustomPlayerCharacters', Path('mods/modCustomPlayerCharacters')),
+               (cpc_root / 'cpc-3.1.2/Mods/mod_sharedutils_oneliners', Path('mods/mod_sharedutils_oneliners')),
+               (cpc_root / 'cpc-3.1.2/dlc/dlcCustomPlayerCharacters', Path('dlc/dlcCustomPlayerCharacters')),
+               (cpc_root / 'remaster-fix/mods/mod0000_CPC_RemasterFix', Path('mods/mod0000_CPC_RemasterFix')),
+               (cpc_root / 'remaster-fix/dlc/dlc_cpc_remaster_fix', Path('dlc/dlc_cpc_remaster_fix'))]
 sources = [(work / 'baseline-package', Path('.')),
+           (work / 'WitcherOnline/witcher/mods/modWitcherOnlineCompat', Path('mods/modWitcherOnlineCompat')),
            (work / 'WitcherOnline/witcher/mods/modWitcherOnline/content/scripts', Path('mods/modWitcherOnline/content/scripts')),
            (work / 'WitcherOnline/witcher/bin/config', Path('bin/config')),  # the mod's settings menu
            (work / 'witcher3-coop/w3test/modW3Test', Path('mods/modW3Test'))]
+sources += cpc_sources if cpc else [(work / 'WitcherOnline/witcher/mods/modWitcherOnlineCompatCPC', Path('mods/modWitcherOnlineCompatCPC'))]
+cpc_targets = {relative.as_posix() + '/' for _, relative in cpc_sources}
 single = [(work / 'witcher3-coop/w3test/build/w3test.asi', Path('bin/x64_dx12/w3test.asi'))]
 bridge = work / 'WitcherNativeBridge/build/Release/WitcherNativeBridge.asi'
 if bridge.is_file():
@@ -62,6 +76,9 @@ for source, relative in pairs:
     target = game / relative
     assert target.resolve().is_relative_to(game.resolve())
     key = relative.as_posix()
+    # the CPC files (over a gigabyte) are copied again only when they changed
+    if key in manifest['files'] and any(key.startswith(t) for t in cpc_targets) and target.exists()             and target.stat().st_size == source.stat().st_size and int(target.stat().st_mtime) == int(source.stat().st_mtime):
+        continue
     if key not in manifest['files'] and target.exists():
         backup = testing / 'deploy-backup' / relative
         backup.parent.mkdir(parents=True, exist_ok=True)
