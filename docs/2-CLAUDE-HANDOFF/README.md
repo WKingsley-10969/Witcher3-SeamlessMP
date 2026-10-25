@@ -491,3 +491,19 @@ Branch rebased onto `8c920f9` before publication, preserving Claude's additional
   - Loot is per player. A container the second PC emptied is full again in the host's next save, and quest items the second PC picked up are the world's (the host's save decides).
   - Only joining players have own characters; the host's Geralt is the save's.
   - Not tested on two physical PCs.
+
+**25 October 2026 — Claude Code: shared quest rewards and looted containers.** Branch `feature/shared-rewards` (from `main`).
+
+- **Rewards** (`coopLoot.ws`, wrapping `CR4Game.OnGiveReward`):
+  - A reward with experience that a player's game gives is sent to the party (`coop rw`, last 6 names; messages are per channel, so a burst keeps them all).
+  - The other player gets the reward's experience from the game's reward table for their own level (`theGame.GetReward`, then the reward handler with money, items and achievement cleared). Nothing else.
+  - A fact `coop_rw_<player>_<reward>` marks a reward whose experience a player had. When their own game later gives the same reward, the experience is set to 0 and the money and items still come. The fact is excluded from fact sharing (`CoopFactShared`), and own characters record it (`reward;<name>` lines), because a joining player loads the host's save.
+- **Containers** (wrapping `W3Container.OnItemTaken`):
+  - Each item taken is sent (`coop lt`, last 6 events: id, position, quantity, name, emptied).
+  - The other game finds the container at that position (within 5 cm), removes that many of the item, and empties it of everything but quest and no-drop items if the looter emptied it. A container not loaded yet is retried every 5 s for 10 minutes.
+  - `OnItemTaken` runs while the item is still in the container, so "emptied" is worked out there from what remains, not with `IsEmpty`.
+  - The native client turns `*` back into spaces in received fields, so received item names are encoded again before the event is split.
+- **Test:** `loot_share` (new), passed (run `20261025-175147`). The host was given contract reward `mh306_final`. The second PC got its 300 XP and no crowns; its own `mh306_final` then gave 267 crowns and no XP. The host emptied the nearest container; the second PC's copy of it, given an extra item first, ended up empty.
+- **Limits:** corpses (positions differ per PC) are not matched; money or items a quest hands over outside the reward table are not shared; tested with two clients on one PC.
+- This replaces "loot is per player" in the own-characters entry above for containers. Quest items picked up are still the world's.
+

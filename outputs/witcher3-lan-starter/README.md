@@ -107,9 +107,14 @@ Nearby-NPC limits: at most 24 shared NPCs and 12 stand-ins at a time (any beyond
 
 Talk-together limits: only conversations started with the Talk button are shared; cutscenes a quest starts on its own still play on one PC only; the joining player is moved next to the speaker; if the host stands closer to an NPC than the second PC, the second PC must walk up to it before it can talk to it; tested with one merchant conversation, not yet with long cinematic quest dialogues or timed choices.
 
-Shared-progress limits: only quest facts and quest-log states travel, so a quest step that waits for a scene or an interaction on one PC catches up on the other only where it is recorded as a fact; removals are not shared; rewards a quest gives when it advances on both PCs were not checked.
+Shared-progress limits: only quest facts and quest-log states travel, so a quest step that waits for a scene or an interaction on one PC catches up on the other only where it is recorded as a fact; removals are not shared.
 
-Inherited limits include the roughly 60 m shared-enemy range, independently started scenes, incomplete enemy animation/spell/summon cases and per-player loot. This adaptation does not remove them. The server has no enforced two-player cap or authenticated LAN session; use it on your trusted home network.
+**Shared quest rewards and looted containers (new).** In a party:
+- When a quest pays out on one PC, the other player gets that reward's experience too (for their own level), once. Money and items stay with the player whose game paid out. If the same quest then finishes in the second player's game, they get its money and items there, but not its experience a second time.
+- A container one player loots loses the same items in the other player's game. If the looter emptied it, it is emptied in the other game too (except quest items), even where the other game's loot roll differed. A container the other game has not loaded yet is updated when it loads, for up to 10 minutes.
+- Limits: containers are matched by position, so a corpse lying in a different spot on each PC is not matched; only rewards a quest gives through the game's reward table are shared, not money or items a dialogue hands over directly; tested with one contract reward and one container, two clients on one PC.
+
+Inherited limits include the roughly 60 m shared-enemy range, independently started scenes, incomplete enemy animation/spell/summon cases and loot on corpses. This adaptation does not remove them. The server has no enforced two-player cap or authenticated LAN session; use it on your trusted home network.
 
 To remove the managed mod, close the game/server and use **Remove Mod.cmd**. To discard a separate development copy instead, keep desired co-op saves first, then remove that separate folder. The installer never deletes a game installation or co-op saves.
 
