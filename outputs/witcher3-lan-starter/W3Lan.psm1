@@ -203,4 +203,47 @@ function Copy-W3LanSessionSave {
     @{ Host = $hostName; Save = $save }
 }
 
-Export-ModuleMember -Function Assert-W3LanName, Resolve-W3LanAddress, Get-W3LanAddresses, Find-W3LanJava, Test-W3LanEndpoint, Start-W3LanServer, Stop-W3LanServer, New-W3LanClientEnvironment, Copy-W3LanSessionSave
+# What a player typed last time (names per mode, the host's address), kept per Windows user so a
+# new package folder still knows them: %LOCALAPPDATA%\W3LAN\player.json.
+function Get-W3LanPlayerSettingsPath {
+    if (-not $env:LOCALAPPDATA -or -not [IO.Path]::IsPathRooted($env:LOCALAPPDATA)) { return $null }
+    Join-Path $env:LOCALAPPDATA 'W3LAN\player.json'
+}
+
+function Get-W3LanPlayerSettings {
+    param([string]$Path = (Get-W3LanPlayerSettingsPath))
+    $values = @{ HostName = ''; JoinName = ''; HostAddress = '' }
+    if ($Path -and (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        try {
+            $stored = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+            foreach ($key in @('HostName', 'JoinName', 'HostAddress')) {
+                if ($stored.PSObject.Properties.Name -contains $key) { $values[$key] = [string]$stored.$key }
+            }
+        } catch {
+            Write-Warning "Ignoring unreadable $Path"
+        }
+    }
+    $values
+}
+
+function Set-W3LanPlayerSettings {
+    param([string]$Path = (Get-W3LanPlayerSettingsPath), [Parameter(Mandatory)][hashtable]$Values)
+    if (-not $Path) { return }
+    [void][IO.Directory]::CreateDirectory((Split-Path -Parent $Path))
+    $Values | ConvertTo-Json | Set-Content -LiteralPath $Path -Encoding utf8
+}
+
+# Ask, offering the remembered answer (Enter keeps it); again until -Check accepts the answer.
+function Read-W3LanValue {
+    param([Parameter(Mandatory)][string]$Prompt, [string]$Default, [scriptblock]$Check)
+    for (;;) {
+        $text = if ($Default) { "$Prompt [$Default] (Enter keeps it)" } else { $Prompt }
+        $answer = (Read-Host $text).Trim()
+        if (-not $answer) { $answer = $Default }
+        if (-not $answer) { continue }
+        if (-not $Check) { return $answer }
+        try { & $Check $answer; return $answer } catch { Write-Warning $_.Exception.Message }
+    }
+}
+
+Export-ModuleMember -Function Assert-W3LanName, Resolve-W3LanAddress, Get-W3LanAddresses, Find-W3LanJava, Test-W3LanEndpoint, Start-W3LanServer, Stop-W3LanServer, New-W3LanClientEnvironment, Copy-W3LanSessionSave, Get-W3LanPlayerSettingsPath, Get-W3LanPlayerSettings, Set-W3LanPlayerSettings, Read-W3LanValue

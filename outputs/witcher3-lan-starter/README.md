@@ -44,6 +44,8 @@ A separate full copy remains optional for development:
    - Keep the console open. It runs the server: UDP 40000 for the game, and TCP 40001, which shares your co-op saves with joining players.
    - Load or start your game and **save**. Joining players get your newest co-op save.
 2. **Second PC:** run **Play Join LAN.cmd** with a different name such as `GuestWitcher`, and enter the host's home-network IPv4 address shown in its console.
+
+   The launchers remember your name and the host's address (in `%LOCALAPPDATA%\W3LAN\player.json`, so a newer package folder still knows them): next time, press Enter to keep them. Keep the same name: it picks your co-op saves and character. The game starts with your own graphics settings (no forced window or resolution).
 3. **The co-op session takes over.** The launcher downloads the host's newest co-op save, and the game then:
    - loads that save from the main menu by itself;
    - joins the host's party;
