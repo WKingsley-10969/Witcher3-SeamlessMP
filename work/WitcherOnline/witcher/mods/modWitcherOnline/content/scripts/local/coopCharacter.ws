@@ -15,6 +15,7 @@
 //   money;<crowns>
 //   skill;<ESkill>;<level>;<skill slot or -1>
 //   recipe;<name>      schematic;<name>
+//   reward;<name>      a reward whose XP this player had (coopLoot.ws)
 //   item;<name>;<quantity>;<durability or -1>;<equipment slot or -1>;<enchantment>;<runes, comma>;<rune slots>;<autogen abilities, comma>;<charges or -1>
 import function WO_CharacterStore(text : string) : bool;
 import function WO_CharacterLoad() : string;
@@ -140,6 +141,7 @@ class r_CoopCharacter
         var pam : W3PlayerAbilityManager;
         var skills : array<SSkill>;
         var recipes : array<name>;
+        var rewards : array<string>;
         var ids, equippedIds : array<SItemUniqueId>;
         var equippedSlots : array<int>;
         var id : SItemUniqueId;
@@ -160,6 +162,9 @@ class r_CoopCharacter
         }
         recipes = w.GetAlchemyRecipes();
         for(i = 0; i < recipes.Size(); i += 1) { if(CoopSafeField(NameToString(recipes[i]))) { text += "|recipe;" + NameToString(recipes[i]); } }
+        recipes.Clear();
+        rewards = theGame.r_getMultiplayerClient().getCoopLoot().RewardsHad();
+        for(i = 0; i < rewards.Size(); i += 1) { if(CoopSafeField(rewards[i])) { text += "|reward;" + rewards[i]; } }
         recipes = w.GetCraftingSchematicsNames();
         for(i = 0; i < recipes.Size(); i += 1) { if(CoopSafeField(NameToString(recipes[i]))) { text += "|schematic;" + NameToString(recipes[i]); } }
         for(slot = 0; slot <= (int)EES_SkillMutagen4; slot += 1)
@@ -224,7 +229,7 @@ class r_CoopCharacter
         var id : SItemUniqueId;
         var i, j, lvl, xp, spFree, spUsed, money, slot : int;
         var skillTypes, skillLevels, skillSlots : array<int>;
-        var itemLines : array<string>;
+        var itemLines, rewards : array<string>;
         lines = CoopSplit(text, "|");
         if(lines.Size() < 4 || lines[0] != "coop-character;1") { return false; }
         lvl = -1;
@@ -241,6 +246,7 @@ class r_CoopCharacter
                 skillSlots.PushBack(StringToInt(f[3], -1));
             }
             else if(f[0] == "item" && f.Size() == 10) { itemLines.PushBack(lines[i]); }
+            else if(f[0] == "reward" && f.Size() == 2) { rewards.PushBack(f[1]); }
         }
         if(lvl < 1 || lvl > 100 || xp < 0 || spFree < 0 || spUsed < 0 || money < 0) { return false; }
         w = GetWitcherPlayer();
@@ -276,6 +282,7 @@ class r_CoopCharacter
 
         // 3. recipes, money, items
         w.CoopSetRecipes(lines);
+        theGame.r_getMultiplayerClient().getCoopLoot().RestoreRewards(rewards);
         if(money > 0) { inv.AddMoney(money); }
         for(i = 0; i < itemLines.Size(); i += 1) { RestoreItem(w, inv, CoopSplit(itemLines[i], ";")); }
 

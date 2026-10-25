@@ -368,7 +368,7 @@ def main():
                 env.update(W3T_SCENARIO="session", W3T_SCENARIOS=",".join(session), W3T_CONTROL=control, W3T_DURATION="100000")
             for key in list(env):
                 if key.upper().startswith(("WO_SC_", "W3LAN_SESSION_")): del env[key]
-            if a.scenario in ("session_join", "player_character", "party_leave") or a.scenario.startswith("lobby_"):
+            if a.scenario in ("session_join", "player_character", "party_leave", "loot_share") or a.scenario.startswith("lobby_"):
                 # the second PC joins the host's co-op session: its game loads the run's save as the host's
                 if i == 0:
                     env.update(W3LAN_SESSION_ROLE="host")
