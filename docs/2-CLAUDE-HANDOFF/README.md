@@ -328,3 +328,12 @@ Limits: replay re-applies every transaction one per poll (~0.1 s each), so a lon
   - If the host stands closer to an NPC than the second PC, the second PC sees a stand-in, which can't be talked to; it must walk up first.
   - Tested with one merchant conversation, two players, bots. Not tested: a long quest dialogue with cinematic cameras, a choice that starts combat or a cutscene, Gwent, or a joiner whose facts differ before the scene starts. Choice timers are not handled.
   - The server keeps only the latest message per channel. A pick and a close sent in the same tick could lose the pick; the close also ends the joiner's scene.
+- Regressions on this build (channel limit, fact deferral, member `fx`/`jr`):
+  - `quest_share` (`20261025-101314`) **PASS**; `npc_own` (`20261025-101452`) **PASS**.
+  - `member_combat`: `20261025-100837` failed (only 2 of the 3 sword hits connected in 240 s; swings miss often in the passing runs too); rerun `20261025-101817` **PASS**.
+  - `shared_enemy`: `20261025-100729` and `-101705` failed; `-102022` **PASS**. Cause: after a hit the leader's drowner keeps losing about 1.5 % health a second with no further hits, and the second PC checks the leader's reading 2 s after each hit with ±0.02 tolerance. The same drain shows in the last passing run before this work (`20261024-210946`, hit 2 read 0.904 instead of 0.92), so it predates these changes. It is not bleeding, poison or burning: a check for those buffs never fired in `-102022`. The source of the drain is still unknown, and the test stays timing-dependent until it is found.
+- The project is now one git repo, pushed at the owner's request to `https://github.com/WKingsley-10969/Witcher3-SeamlessMP` (`main`).
+  - A whitelist `.gitignore` keeps out the game copy, saves, `local/` identities, test runs, toolchains and binaries.
+  - The vendored projects' original `.git` folders moved to `work/upstream-git/<name>.git` (with `core.worktree`), so `git --git-dir=work/upstream-git/WitcherOnline.git status` still diffs against upstream.
+  - `client/asio` is a submodule.
+  - `run-isolated-test.py` does not stage: run `stage-test-game.py` first.
