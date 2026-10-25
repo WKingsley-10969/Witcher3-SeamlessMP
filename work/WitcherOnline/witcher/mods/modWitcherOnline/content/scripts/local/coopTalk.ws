@@ -8,7 +8,13 @@
 // conversation opens (a shop, a barber) are closed in the joiner's game: trading is for the
 // one who asked. Records events (scene, lines, choices) for tests.
 //
-// "cv open id scene voice tpl app x y z px py pz": the starter (NPC at x y z, starter at p)
+// Scenes a quest starts by itself (no Talk pressed) are shared too: the joiner is brought beside
+// the starter and its own quest graph, kept at the same step by the shared quest progress, starts
+// the same scene there. If it does not within a few seconds, the joiner goes back where it was.
+// When both games start the same scene on their own, the leader chooses and the other listens.
+//
+// "cv open id scene voice tpl app x y z px py pz": the starter (NPC at x y z, starter at p); an
+// empty voice and template mark a scene the quest started (x y z is then the starter too)
 // "cv pick id set index text" / "cv vote id set index text" / "cv joined id scene" / "cv close id"
 class r_CoopTalkPick
 {
@@ -39,6 +45,10 @@ class r_CoopTalk
     private var joinNpc : CNewNPC;
     private var joinTalkAt : float;    // when to press Talk here; 0 once pressed
     private var joinStartedAt : float;
+    private var joinAuto : bool;       // joining a scene the quest started: wait for it, press nothing
+    private var joinFrom : Vector;     // where this player stood before being brought over
+    private var joinFromRot : EulerAngles;
+    private var auto : bool;           // the starter's scene was started by the quest, not by Talk
     private var picks : array<r_CoopTalkPick>;
     private var applying : bool;
     private var applyAt : float;
@@ -59,6 +69,10 @@ class r_CoopTalk
     public var votesSent : int;
     public var votesReceived : int;
     public var menusClosed : int;
+    public var autoOpens : int;        // quest-started scenes this game announced
+    public var autoJoins : int;        // quest-started scenes joined
+    public var autoMissed : int;       // brought over, but this game's quest started no scene
+    public var handovers : int;        // both games started it: this one became the listener
     public var lastVote : string;
 
     public function InScene() : bool { return inScene; }
@@ -109,9 +123,12 @@ class r_CoopTalk
         choiceSet = 0;
         choicesOpen = false;
         Record("SCENE " + scenePath);
+        // the scene's actors are this world's own NPCs: no stand-ins or hidden copies around it
+        if(InParty()) { theGame.r_getMultiplayerClient().getCoopNpcs().HoldAround(thePlayer.GetWorldPosition()); }
         if(role == 2)
         {
             role = 3;
+            if(joinAuto) { autoJoins += 1; }
             if(scenePath != hostScene)
             {
                 sceneMismatches += 1;
@@ -125,10 +142,23 @@ class r_CoopTalk
         {
             convId += 1;
             role = 1;
+            auto = false;
             listeners.Clear();
             WO_Send("coop cv open " + convId + " " + CoopEncode(scenePath) + " " + CoopEncode(NpcVoice(talkedTo)) + " "
                 + CoopEncode(talkedTo.GetReadableName()) + " " + CoopEncode(NameToString(talkedTo.GetAppearance())) + " "
                 + CoopNpcVec3(talkedTo.GetWorldPosition()) + " " + CoopNpcVec3(thePlayer.GetWorldPosition()));
+        }
+        else if(role == 0 && InParty())
+        {
+            // the quest started this scene: offer it to the party the same way
+            convId += 1;
+            role = 1;
+            auto = true;
+            autoOpens += 1;
+            listeners.Clear();
+            Record("AUTO_OPEN " + scenePath);
+            WO_Send("coop cv open " + convId + " " + CoopEncode(scenePath) + " - - - "
+                + CoopNpcVec3(thePlayer.GetWorldPosition()) + " " + CoopNpcVec3(thePlayer.GetWorldPosition()));
         }
         talkedTo = NULL;
     }
@@ -145,6 +175,7 @@ class r_CoopTalk
             listeners.Clear();
         }
         if(role == 3 || role == 2) { LeaveConversation(); }
+        else { theGame.r_getMultiplayerClient().getCoopNpcs().ReleaseScene(); }
         role = 0;
     }
 
@@ -226,9 +257,34 @@ class r_CoopTalk
         var npc : CNewNPC;
         var npcPos, starterPos, spot, safe : Vector;
         var rot : EulerAngles;
+        if(role == 1 && inScene && CoopDecode(WO_Str(3)) == scenePath)
+        {
+            // both games started the same scene: one chooses, the other listens
+            if(!ChoosesOver(sender))
+            {
+                WO_Send("coop cv close " + convId);
+                convId = 0;
+                listeners.Clear();
+                hostName = sender;
+                hostConv = StringToInt(WO_Str(2), 0);
+                hostScene = scenePath;
+                picks.Clear();
+                role = 3;
+                handovers += 1;
+                Record("HANDOVER to " + sender);
+                WO_Send("coop cv joined " + hostConv + " " + CoopEncode(scenePath));
+                ShowAlert(GetLocStringById(2111114102) + " " + hostName);
+            }
+            return;
+        }
         if(role != 0 || inScene || thePlayer.IsInCombat() || thePlayer.IsUsingVehicle()) { return; }
         npcPos = Vector(StringToFloat(WO_Str(7), 0), StringToFloat(WO_Str(8), 0), StringToFloat(WO_Str(9), 0));
         starterPos = Vector(StringToFloat(WO_Str(10), 0), StringToFloat(WO_Str(11), 0), StringToFloat(WO_Str(12), 0));
+        if(CoopDecode(WO_Str(4)) == "" && CoopDecode(WO_Str(5)) == "")
+        {
+            OnOpenAuto(sender, starterPos);
+            return;
+        }
         if(VecDistance(thePlayer.GetWorldPosition(), npcPos) > COOP_TALK_RANGE()) { return; }
         npc = theGame.r_getMultiplayerClient().getCoopNpcs().HoldForScene(CoopDecode(WO_Str(4)), CoopDecode(WO_Str(5)), CoopDecode(WO_Str(6)), npcPos);
         if(!npc)
@@ -248,8 +304,46 @@ class r_CoopTalk
         rot.Yaw = VecHeading(npcPos - safe);
         thePlayer.TeleportWithRotation(safe, rot);
         joinTalkAt = theGame.GetEngineTimeAsSeconds() + 0.5;
+        joinAuto = false;
         role = 2;
         Record("JOINING " + hostName + " " + hostScene);
+    }
+
+    // A scene the starter's quest started: come over and let this game's quest start it here.
+    private function OnOpenAuto(sender : string, starterPos : Vector)
+    {
+        var spot, safe : Vector;
+        var rot : EulerAngles;
+        if(VecDistance(thePlayer.GetWorldPosition(), starterPos) > COOP_SCENE_RANGE()) { return; }
+        hostName = sender;
+        hostConv = StringToInt(WO_Str(2), 0);
+        hostScene = CoopDecode(WO_Str(3));
+        joinNpc = NULL;
+        picks.Clear();
+        joinFrom = thePlayer.GetWorldPosition();
+        joinFromRot = thePlayer.GetWorldRotation();
+        if(VecDistance(joinFrom, starterPos) > 3.0)
+        {
+            spot = starterPos + VecFromHeading(VecHeading(joinFrom - starterPos)) * 1.5;
+            if(!theGame.GetWorld().NavigationFindSafeSpot(spot, 0.5, 3.0, safe)) { safe = spot; }
+            rot.Yaw = VecHeading(starterPos - safe);
+            thePlayer.TeleportWithRotation(safe, rot);
+        }
+        joinAuto = true;
+        joinTalkAt = 0;
+        joinStartedAt = theGame.GetEngineTimeAsSeconds();
+        joins += 1;
+        role = 2;
+        Record("JOINING_AUTO " + hostName + " " + hostScene);
+    }
+
+    // Both games started the same scene: the leader chooses; between members, the earlier name.
+    private function ChoosesOver(other : string) : bool
+    {
+        if(theGame.r_getMultiplayerClient().getCoopEnemies().GetRole() == 1) { return true; }
+        if(!theGame.r_getMultiplayerClient().getInParty()) { return true; }
+        if(theGame.r_getMultiplayerClient().getJoinedParty() == other) { return false; }
+        return StrCmp(theGame.r_getMultiplayerClient().getUsername(), other) < 0;
     }
 
     private function OnPick(sender : string)
@@ -285,7 +379,12 @@ class r_CoopTalk
     {
         if(sender != hostName || StringToInt(WO_Str(2), 0) != hostConv) { return; }
         Record("HOST_CLOSED");
-        if(role == 2) { LeaveConversation(); role = 0; }  // never got in
+        if(role == 2)  // never got in
+        {
+            if(joinAuto) { ReturnFromJoin(); }
+            LeaveConversation();
+            role = 0;
+        }
     }
 
     // ------------------------------------------------------------ every frame
@@ -307,10 +406,19 @@ class r_CoopTalk
             joinNpc.OnInteraction("Talk", thePlayer);
             applying = false;
         }
-        if(role == 2 && joinTalkAt == 0 && !inScene && now - joinStartedAt > 4.0)
+        if(role == 2 && !joinAuto && joinTalkAt == 0 && !inScene && now - joinStartedAt > 4.0)
         {
             joinFailures += 1;
             Record("JOIN_FAILED no scene");
+            LeaveConversation();
+            role = 0;
+        }
+        if(role == 2 && joinAuto && !inScene && now - joinStartedAt > COOP_SCENE_WAIT())
+        {
+            // this game's quest is not at that scene: go back to where this player was
+            autoMissed += 1;
+            Record("AUTO_MISSED " + hostScene);
+            ReturnFromJoin();
             LeaveConversation();
             role = 0;
         }
@@ -366,6 +474,12 @@ class r_CoopTalk
         }
     }
 
+    private function ReturnFromJoin()
+    {
+        if(VecDistance(thePlayer.GetWorldPosition(), joinFrom) > 3.0) { thePlayer.TeleportWithRotation(joinFrom, joinFromRot); }
+        joinAuto = false;
+    }
+
     private function LeaveConversation()
     {
         theGame.r_getMultiplayerClient().getCoopNpcs().ReleaseScene();
@@ -413,6 +527,24 @@ class r_CoopTalk
 function COOP_TALK_RANGE() : float
 {
     return 40.0;
+}
+
+// How far from the starter a party member may be and still be brought into a scene the quest started.
+function COOP_SCENE_RANGE() : float
+{
+    return 60.0;
+}
+
+// How far around a scene playing here synced NPCs are left to be themselves.
+function COOP_SCENE_HOLD_RADIUS() : float
+{
+    return 25.0;
+}
+
+// How long a brought-over member waits for its own quest to start that scene.
+function COOP_SCENE_WAIT() : float
+{
+    return 10.0;
 }
 
 function CoopNpcVec3(v : Vector) : string

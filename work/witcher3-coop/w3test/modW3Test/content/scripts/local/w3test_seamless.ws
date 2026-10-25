@@ -1261,6 +1261,326 @@ function W3T_TalkShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_R
     return bot.scenarioStep == 4 && talk.votesReceived >= 1;
 }
 
+// scene_probe: lists the save's active quests, the tracked one and its open objectives, so a
+// quest scene reachable from the test save can be chosen. Logs scene starts for a minute.
+function W3T_SceneProbe(bot : W3T_Bot, client : r_MultiplayerClient) : bool
+{
+    var manager : CWitcherJournalManager;
+    var quests : array<CJournalBase>;
+    var jq : CJournalQuest;
+    var phase : CJournalQuestPhase;
+    var objective : CJournalQuestObjective;
+    var label : string;
+    var i, j, k : int;
+    label = "SCENEPROBE";
+    W3T_TalkLogEvents(client.getCoopTalk(), label);
+    if(bot.scenarioStep == 0)
+    {
+        manager = theGame.GetJournalManager();
+        manager.GetActivatedOfType('CJournalQuest', quests);
+        for(i = 0; i < quests.Size(); i += 1)
+        {
+            jq = (CJournalQuest)quests[i];
+            if(!jq || manager.GetEntryStatus(jq) != JS_Active) { continue; }
+            W3T_Log(label + " QUEST " + NameToString(jq.GetUniqueScriptTag()) + " '" + GetLocStringById(jq.GetTitleStringId()) + "' type=" + (int)jq.GetType()
+                + " tracked=" + (jq == manager.GetTrackedQuest()));
+            for(j = 0; j < jq.GetNumChildren(); j += 1)
+            {
+                phase = (CJournalQuestPhase)jq.GetChild(j);
+                if(!phase) { continue; }
+                for(k = 0; k < phase.GetNumChildren(); k += 1)
+                {
+                    objective = (CJournalQuestObjective)phase.GetChild(k);
+                    if(objective && manager.GetEntryStatus(objective) == JS_Active)
+                    {
+                        W3T_Log(label + "   OBJ '" + GetLocStringById(objective.GetTitleStringId()) + "'");
+                        W3T_LogObjectivePins(label, objective);
+                    }
+                }
+            }
+        }
+        W3T_Log(label + " player=" + W3T_VecStr(thePlayer.GetWorldPosition()) + " area=" + WO_CurrentAreaCode() + " hour=" + GameTimeHours(theGame.GetGameTime()));
+        bot.scenarioTime = bot.ElapsedS();
+        bot.scenarioStep = 1;
+    }
+    return bot.scenarioStep == 1 && bot.ElapsedS() - bot.scenarioTime > 20;
+}
+
+function W3T_FindCiri() : CNewNPC
+{
+    var actors : array<CActor>;
+    var npc : CNewNPC;
+    var i : int;
+    actors = thePlayer.GetNPCsAndPlayersInRange(80, 64, '', FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
+    for(i = 0; i < actors.Size(); i += 1)
+    {
+        npc = (CNewNPC)actors[i];
+        if(npc && !npc.HasTag('w3coop_npc_copy') && NpcVoice(npc) == "CIRILLA") { return npc; }
+    }
+    return NULL;
+}
+
+// ciri_follow (probe): the mover keeps 2.5 m behind Ciri on "Go with Ciri to see Whoreson
+// Junior" and logs where she goes and every scene its quest starts; the other bot stands still
+// (no party), showing whether its own quest starts anything without its Geralt there.
+function W3T_CiriFollow(bot : W3T_Bot, client : r_MultiplayerClient) : bool
+{
+    var ciri : CNewNPC;
+    var talk : r_CoopTalk;
+    var spot : Vector;
+    var rot : EulerAngles;
+    var label, objectives : string;
+    var dist : float;
+    label = "CIRIFOLLOW";
+    talk = client.getCoopTalk();
+    W3T_TalkLogEvents(talk, label);
+    if(W3T_GetEnv("W3T_ROLE") != "mover") { return bot.ElapsedS() > 440; }
+    if(client.hasActiveDialogChoices() && talk.ChoicesAge() > 2)
+    {
+        W3T_Log(label + " takes choice 0");
+        W3T_DialogModule().OnDialogOptionSelected(0);
+        W3T_DialogModule().OnDialogOptionAccepted(0);
+    }
+    objectives = W3T_TrackedObjectives();
+    if(objectives != bot.scenarioText)
+    {
+        W3T_Log(label + " OBJECTIVES " + objectives);
+        bot.scenarioText = objectives;
+    }
+    ciri = W3T_FindCiri();
+    if(!ciri)
+    {
+        if(bot.scenarioStep % 5 == 0) { W3T_Log(label + " no Ciri within 80 m, player=" + W3T_VecStr(thePlayer.GetWorldPosition())); }
+        bot.scenarioStep += 1;
+        return false;
+    }
+    dist = VecDistance(ciri.GetWorldPosition(), thePlayer.GetWorldPosition());
+    if(bot.scenarioCount == 0 && bot.scenarioStep >= 10)
+    {
+        // "Wait for daylight": move the clock to the next morning, as meditating would
+        theGame.SetGameTime(GameTimeCreate(GameTimeDays(theGame.GetGameTime()) + 1, 8, 0, 0), true);
+        bot.scenarioCount = 1;
+        W3T_Log(label + " clock set to 08:00, hour now " + GameTimeHours(theGame.GetGameTime()));
+    }
+    if(!talk.InScene() && dist > 4.0)
+    {
+        spot = ciri.GetWorldPosition() - VecFromHeading(ciri.GetHeading()) * 2.5;
+        rot.Yaw = ciri.GetHeading();
+        thePlayer.TeleportWithRotation(spot, rot);
+    }
+    if(bot.scenarioStep % 5 == 0)
+    {
+        W3T_Log(label + " ciri=" + W3T_VecStr(ciri.GetWorldPosition()) + " speed=" + FloatToStringPrec(ciri.GetMovingAgentComponent().GetRelativeMoveSpeed(), 2)
+            + " dist=" + FloatToStringPrec(dist, 1) + " inScene=" + talk.InScene() + " scene=" + talk.GetScenePath());
+    }
+    bot.scenarioStep += 1;
+    return bot.ElapsedS() > 440;
+}
+
+// The map pins of a quest objective and where this world's map puts them.
+function W3T_LogObjectivePins(label : string, objective : CJournalQuestObjective)
+{
+    var pin : CJournalQuestMapPin;
+    var pins : array<SCommonMapPinInstance>;
+    var i, j : int;
+    pins = theGame.GetCommonMapManager().GetMapPinInstances(theGame.GetWorld().GetDepotPath());
+    for(i = 0; i < objective.GetNumChildren(); i += 1)
+    {
+        pin = (CJournalQuestMapPin)objective.GetChild(i);
+        if(!pin) { continue; }
+        W3T_Log(label + "     PIN " + NameToString(pin.GetMapPinID()) + " radius=" + FloatToStringPrec(pin.GetRadius(), 1));
+        for(j = 0; j < pins.Size(); j += 1)
+        {
+            if(pins[j].tag == pin.GetMapPinID())
+            {
+                W3T_Log(label + "       AT " + W3T_VecStr(pins[j].position) + " type=" + NameToString(pins[j].type) + " dist="
+                    + FloatToStringPrec(VecDistance(pins[j].position, thePlayer.GetWorldPosition()), 0));
+            }
+        }
+    }
+}
+
+// The tracked quest and its active objectives, as one line.
+function W3T_TrackedObjectives() : string
+{
+    var manager : CWitcherJournalManager;
+    var jq : CJournalQuest;
+    var phase : CJournalQuestPhase;
+    var objective : CJournalQuestObjective;
+    var text : string;
+    var j, k : int;
+    manager = theGame.GetJournalManager();
+    jq = manager.GetTrackedQuest();
+    if(!jq) { return "none"; }
+    text = GetLocStringById(jq.GetTitleStringId()) + ":";
+    for(j = 0; j < jq.GetNumChildren(); j += 1)
+    {
+        phase = (CJournalQuestPhase)jq.GetChild(j);
+        if(!phase) { continue; }
+        for(k = 0; k < phase.GetNumChildren(); k += 1)
+        {
+            objective = (CJournalQuestObjective)phase.GetChild(k);
+            if(objective && manager.GetEntryStatus(objective) == JS_Active) { text += " [" + GetLocStringById(objective.GetTitleStringId()) + "]"; }
+        }
+    }
+    return text;
+}
+
+// scene_share: a scene the quest starts by itself, shared. Stand-in for a quest's area trigger:
+// each bot starts the general-store trader's scene (PlayDialog, as Talk would, without Talk) once its
+// Geralt is within 6 m of him. The host stands in front of him and the second PC 20 m away, so
+// only the host's trigger fires. The second PC must be brought over, where its own trigger
+// starts the same scene; it suggests a choice; the host picks the artefacts topic (its lines open
+// the shop, closed on the second PC), closes its own shop and says farewell; both scenes end.
+// Then the second PC walks off again with its trigger spent (its "quest" is past that step) and
+// the host starts the scene once more: the second PC is brought over, no scene starts there,
+// and it must be put back where it was. During its scene the trader must be itself, not a stand-in.
+function W3T_SceneShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_RemotePlayer) : bool
+{
+    var talk : r_CoopTalk;
+    var trader, shown : CNewNPC;
+    var module : CR4HudModuleDialog;
+    var root : CR4Menu;
+    var host : bool;
+    var label : string;
+    var now, dist : float;
+    host = W3T_GetEnv("W3T_ROLE") == "mover";
+    label = "SCENESHARE member";
+    if(host) { label = "SCENESHARE host"; }
+    if(!host && !client.getInParty())
+    {
+        W3T_Log("PARTY join " + leader.username);
+        client.joinParty(leader.username);
+        return false;
+    }
+    if(host && client.getCoopEnemies().GetRole() != 1) { return false; }
+    talk = client.getCoopTalk();
+    W3T_TalkLogEvents(talk, label);
+    now = bot.ElapsedS();
+    if(bot.scenarioStep < 0) { return false; }
+    if(bot.scenarioStep == 0)
+    {
+        W3T_TeleportNear(W3T_TalkBoard(0));
+        bot.scenarioTime = now;
+        bot.scenarioStep = 1;
+        return false;
+    }
+    if(bot.scenarioStep == 1 && now - bot.scenarioTime >= 10)
+    {
+        trader = W3T_TalkMerchant();
+        if(!trader) { W3T_Log(label + " FAIL no merchant by board 0"); bot.scenarioStep = -1; return false; }
+        bot.scenarioEntity = trader;
+        if(host) { W3T_TeleportInFront(trader); }
+        else { W3T_SceneShareWalkOff(bot, trader); }
+        bot.scenarioTime = now;
+        bot.scenarioStep = 2;
+        return false;
+    }
+    trader = (CNewNPC)bot.scenarioEntity;
+    if(!trader) { return false; }
+    dist = VecDistance(trader.GetWorldPosition(), thePlayer.GetWorldPosition());
+
+    // the stand-in quest trigger (scenarioCount: times it fired here)
+    if(!talk.InScene() && dist < 6.0 && ((host && bot.scenarioStep == 2 && now - bot.scenarioTime >= 8 && bot.scenarioCount == 0)
+        || (host && bot.scenarioStep == 5 && now - bot.scenarioTime >= 8 && bot.scenarioCount == 1)
+        || (!host && bot.scenarioCount == 0)))
+    {
+        bot.scenarioCount += 1;
+        W3T_Log(label + " TRIGGER starts the trader scene (no Talk), dist=" + FloatToStringPrec(dist, 1) + " started=" + trader.PlayDialog());
+    }
+
+    module = W3T_DialogModule();
+    root = theGame.GetGuiManager().GetRootMenu();
+    if(host)
+    {
+        if(talk.ListenerCount() >= 1) { bot.scenarioFlag = true; }
+        if(bot.scenarioStep == 2 && client.hasActiveDialogChoices() && talk.picksSent == 0 && talk.ChoicesAge() > 2 && (talk.votesReceived >= 1 || talk.ChoicesAge() > 20))
+        {
+            W3T_Log(label + " picks choice 0 after " + talk.votesReceived + " suggestion(s): " + talk.lastVote);
+            module.OnDialogOptionSelected(0);
+            module.OnDialogOptionAccepted(0);
+        }
+        if(root && talk.InScene())
+        {
+            W3T_Log(label + " closes its shop");
+            root.CloseMenu();
+        }
+        if(client.hasActiveDialogChoices() && talk.picksSent >= 1 && talk.ChoicesAge() >= 3 && !root
+            && ((bot.scenarioStep == 2 && talk.picksSent == 1) || bot.scenarioStep == 5))
+        {
+            W3T_Log(label + " picks the last choice (farewell)");
+            module.OnDialogOptionSelected(talk.LastChoiceCount() - 1);
+            module.OnDialogOptionAccepted(talk.LastChoiceCount() - 1);
+        }
+        if(bot.scenarioStep == 2 && talk.picksSent >= 2 && !talk.InScene())
+        {
+            bot.scenarioStep = 3;
+            bot.scenarioTime = now;
+        }
+        // let the second PC walk off before the second scene
+        if(bot.scenarioStep == 3 && now - bot.scenarioTime >= 12)
+        {
+            bot.scenarioStep = 5;
+            bot.scenarioTime = now;
+        }
+        if(bot.scenarioStep == 5 && bot.scenarioCount == 2 && !talk.InScene() && talk.autoOpens >= 2)
+        {
+            bot.scenarioStep = 6;
+        }
+    }
+    else
+    {
+        if(talk.IsListening() && client.hasActiveDialogChoices() && talk.votesSent == 0 && talk.ChoicesAge() > 1)
+        {
+            W3T_Log(label + " clicks choice 1 (a suggestion)");
+            module.OnDialogOptionSelected(1);
+            module.OnDialogOptionAccepted(1);
+        }
+        if(talk.InScene())
+        {
+            shown = client.getCoopNpcs().ShownByVoice(NpcVoice(trader));
+            if(shown && shown.HasTag('w3coop_npc_copy'))
+            {
+                if(!bot.scenarioFlag) { W3T_Log(label + " FAIL-MARK the trader is a stand-in during the scene"); }
+                bot.scenarioFlag = true;
+            }
+        }
+        if(bot.scenarioStep == 2 && talk.autoJoins >= 1 && talk.picksApplied >= 2 && !talk.InScene())
+        {
+            W3T_SceneShareWalkOff(bot, trader);
+            bot.scenarioStep = 3;
+        }
+        if(bot.scenarioStep == 3 && talk.autoMissed >= 1 && !talk.IsListening())
+        {
+            W3T_Log(label + " back after the missed scene: " + FloatToStringPrec(VecDistance(thePlayer.GetWorldPosition(), bot.scenarioVec), 1) + " m from where it stood");
+            bot.scenarioStep = 4;
+        }
+    }
+    W3T_Log(label + " step=" + bot.scenarioStep + " triggers=" + bot.scenarioCount + " dist=" + FloatToStringPrec(dist, 1) + " inScene=" + talk.InScene()
+        + " listening=" + talk.IsListening() + " listeners=" + talk.ListenerCount() + " autoOpens=" + talk.autoOpens + " autoJoins=" + talk.autoJoins
+        + " autoMissed=" + talk.autoMissed + " handovers=" + talk.handovers + " mismatches=" + talk.sceneMismatches + " picksSent=" + talk.picksSent
+        + " picksApplied=" + talk.picksApplied + " votesSent=" + talk.votesSent + " votesReceived=" + talk.votesReceived + " menusClosed=" + talk.menusClosed
+        + " flag=" + bot.scenarioFlag);
+    if(host) { return bot.scenarioStep == 6 && bot.scenarioFlag && talk.votesReceived >= 1 && talk.handovers == 0; }
+    // put back where it stood when the scene was offered: the host's scene starting can nudge it a
+    // few metres first (run 20261025-110932: 2.7 m before the offer arrived), hence 5 m
+    return bot.scenarioStep == 4 && !bot.scenarioFlag && talk.sceneMismatches == 0 && talk.menusClosed >= 1 && talk.votesSent >= 1
+        && VecDistance(thePlayer.GetWorldPosition(), bot.scenarioVec) < 5.0;
+}
+
+// The second PC stands 20 m from the trader, out of the stand-in trigger's reach.
+function W3T_SceneShareWalkOff(bot : W3T_Bot, trader : CNewNPC)
+{
+    var spot, safe : Vector;
+    var rot : EulerAngles;
+    spot = trader.GetWorldPosition() + VecFromHeading(trader.GetHeading()) * 20.0;
+    if(!theGame.GetWorld().NavigationFindSafeSpot(spot, 0.5, 6.0, safe)) { safe = spot; }
+    rot.Yaw = VecHeading(trader.GetWorldPosition() - safe);
+    thePlayer.TeleportWithRotation(safe, rot);
+    bot.scenarioVec = safe;
+    W3T_Log("SCENESHARE member walks off to " + W3T_VecStr(safe) + ", " + FloatToStringPrec(VecDistance(safe, trader.GetWorldPosition()), 1) + " m from the trader");
+}
+
 // travel_together: both players stand together; the host fast-travels to a discovered signpost
 // at least 300 m away (the calls the map menu makes). The second PC must travel along and end up
 // near the host. Then the second PC walks 150 m off and the host fast-travels again: this time
