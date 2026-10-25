@@ -177,6 +177,8 @@ function ShowProgressDialog( messageId : int, title : string, message : string, 
     }
     W3T_Log("DIALOG id=" + messageId + " type=" + (int)type + " text=" + text);
 
+    if(W3T_GetEnv("W3T_SCENARIO") == "party_menu" && WO_IsPartyPrompt(messageId)) { theGame.W3T_AnswerPartyPrompt(messageId); return; }
+
     if(type == UDB_Ok || type == UDB_OkCancel)
     {
         UserDialogCallback(messageId, UMA_Ok);
