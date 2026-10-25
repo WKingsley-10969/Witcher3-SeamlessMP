@@ -363,3 +363,34 @@ Branch rebased onto `8c920f9` before publication, preserving Claude's additional
   - Run `20261025-111600`: **PASS**. The host's scene was offered; the second PC was brought from 20 m to beside the host, where its own trigger started the same scene; its suggestion reached the host; both host picks played on the second PC; the shop was closed there; the trader was himself (not a stand-in) during its scene; the second, missed scene put it back 0.2 m from where it stood.
 - Limits: not yet tried with a real quest graph (the test emulates the quest's trigger); scenes the quest starts only when the player stands in one exact spot may not start for the joiner placed 1.5 m away; a joiner whose quest is at a different step than the starter's is put back after 10 s and does not see the scene; no prompt yet: joining is automatic (the owner asked about an option to watch; a Watch / Skip prompt is queued); the joiner is moved without a fade.
 - Regressions on this branch: `talk_share` (`20261025-111934`) **PASS**, `npc_own` (`20261025-112208`) **PASS**.
+
+**25 October 2026 — Claude Code: party death and revive.** Branch `feature/party-revive` (from `main`).
+
+- Before: a party member who died got the normal death screen and reloaded their last save, leaving the other player's game behind. The mod had no death handling of its own.
+- Now (`coopRevive.ws`, new): while a party member is alive in the same region, a blow that would kill this player is capped at 1 health point where the game lowers health (`CActor.DrainVitality`, wrapped). The player is knocked down instead (new player state `CoopDowned`: the game's knock-out animation, all actions blocked, `OnCheckUnconscious` true so the game's damage code leaves them alone, a no-save lock).
+  - The game's saved immortality flags are not used. They are saved with the game, and all eight channels already have owners (Mutation 11, the god-mode cheat and others).
+  - A downed player reports itself as not alive in the movement update, so its figure on the other screens plays the existing death animation and lies on the ground.
+- Revive: a party member within 2.5 m who holds Interact for 3 s revives them. The reviver kneels facing the downed player: the game's examine-ground action, which the other screen already shows through the player-action sync. Interact on a downed figure no longer opens the party menu. The revived player gets up with 30% health.
+- Respawn: after 30 s without a revive, the screen fades out and the downed player gets up 1.5 m beside a party member, on the first side the navmesh has room on, with 30% health.
+- Normal death in these cases:
+  - alone, or with every party member down, dead or in another region (after 3 s, so lagging updates do not end it early);
+  - in water, on a horse or boat, in a fist fight, in a scene;
+  - when the game kills the player outright (`Kill`: quest deaths, kill triggers, falls into the abyss);
+  - when the game already protects the player (its own immortality or knock-out rules).
+- Messages: `coop dn state downSeq x y z target targetSeq` carries the player's up/down state and its count of knock-downs, plus the last party member this player revived and that member's knock-down count. The client passes a channel's message to scripts only when it changes, so each state reaches the others once.
+- Bugs found while testing:
+  - `r_RemotePlayer.inGame` is never set for other players.
+  - `isAlive` is only kept up to date in the nearby players' list (`getPlayers()`), not in the global list. The helper check now reads it from the nearby list.
+  - The first runs therefore found "no party member can help" and the host died normally.
+- `stage-test-game.py` now removes files an earlier deploy placed that the current sources no longer have (another branch's scripts, such as `coopTravel.ws` without its client wiring), restoring a backed-up original where there is one, and only if unchanged since deployed. Before, switching branches left them in the test copy and broke the script compile.
+- Test `party_revive` (new, `w3test_revive.ws`), run `20261025-125416`: **PASS**.
+  - The host took a lethal blow beside the second PC and was knocked down instead of dying.
+  - The second PC knelt beside it, held Interact, and revived it (33% health, back in the exploration state).
+  - The second PC walked 40 m off and the host took another lethal blow. Nobody came, so after 35.5 s the host got up 1.5 m beside the second PC (33% health).
+  - No real deaths.
+- Limits:
+  - Hold-to-revive uses the real Interact input, but the test simulates holding it.
+  - The knock-down and get-up animations, and the kneel as seen on the other screen, were not checked by eye.
+  - Enemies may keep attacking a downed player (no damage is taken).
+  - A party member who truly dies (the normal death screen) is not noticed by a downed player until their figure reports it.
+  - Not tested on two physical PCs.
