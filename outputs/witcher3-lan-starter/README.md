@@ -65,10 +65,10 @@ A separate full copy remains optional for development:
 - A joining player waits in the lobby until the host starts. **OK** stops waiting, to play on your own.
 - If the host's lobby does not answer within 8 s, a joining player's game loads the save the launcher downloaded, as in step 3.
 
-**Your own character (new).** The host's save brings the world: quests, choices and places. A joining player then plays their own Geralt, with their own level, XP, skills, money, recipes and gear.
+**Your own character (new).** The host's save brings the world: quests, choices and places. A joining player then plays their own Geralt, with their own level, XP, skills, mutations, money, recipes, gear, stash, horse gear and Gwent cards.
 - The first time you join a host, your character starts as a copy of the host's Geralt; from then on it is yours.
 - Your game records it every 20 s in your co-op profile (`The Witcher 3\coop-characters\<host>.txt`) and brings it back after every load of the host's game.
-- Quest items stay with the world. Not covered yet: mutations, the stash, horse gear and Gwent cards.
+- Quest items stay with the world. Gwent decks are the save's: your cards are yours, but which of them are in a deck comes with the host's save.
 
 **Nearby NPCs (new, experimental).** While in a party, the townsfolk, guards and characters such as Ciri within about 45 m of either player are shared. The host's game runs them, except that when the second PC walks up to one (within about 4 m and closer than the host), the second PC's game takes it over, so it reacts to that player at once; it goes back once they walk off. Whichever PC does not run an NPC shows a look-alike stand-in in its place that follows the other screen. You can't talk to a stand-in directly: walk up to it and the real NPC is handed to you first. Stand-ins walk and stand but do not play work animations, gestures or chatter. Stand-ins now move smoothly: they play slightly behind the other screen (about 0.15 s) instead of jumping between updates.
 
