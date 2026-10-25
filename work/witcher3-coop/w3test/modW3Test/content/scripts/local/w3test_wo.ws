@@ -167,6 +167,15 @@ function W3T_ScenarioCheck(bot : W3T_Bot) : bool
         return W3T_SceneProbe(bot, client);
     }
 
+    if(scenario == "lobby_save" || scenario == "lobby_new")
+    {
+        if(players.Size() < 1)
+        {
+            return W3T_Lobby(bot, client, NULL, scenario == "lobby_new");
+        }
+        return W3T_Lobby(bot, client, players[0], scenario == "lobby_new");
+    }
+
     if(scenario == "session_join")
     {
         if(players.Size() < 1)

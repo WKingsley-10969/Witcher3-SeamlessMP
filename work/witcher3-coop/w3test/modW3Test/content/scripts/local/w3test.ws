@@ -177,6 +177,12 @@ function ShowProgressDialog( messageId : int, title : string, message : string, 
     }
     W3T_Log("DIALOG id=" + messageId + " type=" + (int)type + " text=" + text);
 
+    if(messageId == COOP_LOBBY_DIALOG())
+    {
+        W3T_Log("DIALOG the co-op lobby is left open");
+        return;
+    }
+
     if(type == UDB_Ok || type == UDB_OkCancel)
     {
         UserDialogCallback(messageId, UMA_Ok);
@@ -202,6 +208,21 @@ function OnConfigUI()
 
     if(!W3T_Active() || !theGame.W3T_ClaimLoad())
     {
+        return true;
+    }
+
+    if(StrBeginsWith(W3T_GetEnv("W3T_SCENARIO"), "lobby_"))
+    {
+        if(W3T_GetEnv("W3T_ROLE") == "mover")
+        {
+            if(W3T_GetEnv("W3T_SCENARIO") == "lobby_new") { theGame.r_getMultiplayerClient().getCoopLobby().SetTestAutoNewGame(2); }
+            else { theGame.r_getMultiplayerClient().getCoopLobby().SetTestAutoStart(); }
+            W3T_Log("MENU the host waits in the co-op lobby for someone to join");
+        }
+        else
+        {
+            W3T_Log("MENU waiting in the co-op lobby");
+        }
         return true;
     }
 

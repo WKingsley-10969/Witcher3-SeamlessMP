@@ -307,6 +307,11 @@ def main():
 
     server_log = open(os.path.join(run_dir, "server.log"), "w")
     server_command = ["java", "-jar", SERVER_JAR, str(a.port)]
+    if a.scenario.startswith("lobby_"):
+        # the host's server shares BotA's saves and keeps the co-op lobby (SaveShare, CoopLobby)
+        host_saves = os.path.join(run_dir, "docs-" + bot_name(0), "The Witcher 3", "gamesaves")
+        os.makedirs(host_saves)
+        server_command += ["--save-dir", host_saves, "--host-name", bot_name(0)]
     server_env = dict(os.environ)
     host_proof = secrets.token_hex(32)
     if a.campaign:
@@ -346,7 +351,10 @@ def main():
     try:
         for i in range(a.bots):
             docs = os.path.join(run_dir, "docs-" + bot_name(i))
-            save = make_sandbox(docs, a.save)
+            # lobby scenarios: the second PC starts without the save, so it downloads the host's;
+            # lobby_new needs no save at all (the host starts a new game)
+            no_save = a.scenario == "lobby_new" or (a.scenario.startswith("lobby_") and i > 0)
+            save = make_sandbox(docs, None if no_save else a.save)
             print(f"[{time.time() - t0:6.1f}s] {bot_name(i)} sandbox with save {save}", flush=True)
             env = dict(os.environ, SteamAppId="292030", SteamGameId="292030", W3T_DOCUMENTS=docs,
                        WO_USERNAME=bot_name(i), WO_SERVER_IP="127.0.0.1",
@@ -360,7 +368,7 @@ def main():
                 env.update(W3T_SCENARIO="session", W3T_SCENARIOS=",".join(session), W3T_CONTROL=control, W3T_DURATION="100000")
             for key in list(env):
                 if key.upper().startswith(("WO_SC_", "W3LAN_SESSION_")): del env[key]
-            if a.scenario == "session_join":
+            if a.scenario == "session_join" or a.scenario.startswith("lobby_"):
                 # the second PC joins the host's co-op session: its game loads the run's save as the host's
                 if i == 0:
                     env.update(W3LAN_SESSION_ROLE="host")

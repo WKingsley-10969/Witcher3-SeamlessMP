@@ -51,12 +51,17 @@ A separate full copy remains optional for development:
    - follows the host's difficulty, also when the host changes it mid-session.
 
    Both players then play the same game: the same story point, choices and place. Your own solo saves are untouched; the host's save goes into your co-op profile only.
-4. **If the host has no save yet, or the download fails,** the launcher says so and you play as before:
+4. **If the host has no save yet,** your game waits in the co-op lobby (below) until the host starts a new game. **If the download fails,** the launcher says so and you play as before:
    - load a save yourself;
    - meet the host;
    - interact with the host character and choose **Join party**.
 
    To keep your own co-op save instead of the host's, start with `.\Play-LAN.ps1 -Mode Join -GameDir '<game folder>' -NoSessionSave`.
+
+**Co-op lobby (new).** The game starts in a **Co-op lobby** popup in the main menu (also the first main-menu entry).
+- The host's lobby lists the players waiting. **OK** starts with the host's newest co-op save: the host's game loads it, and everyone waiting downloads it if needed and loads it too. To start fresh instead, close the popup and choose **New Game**: everyone waiting starts the same new game.
+- A joining player waits in the lobby until the host starts. **OK** stops waiting, to play on your own.
+- If the host's lobby does not answer within 8 s, a joining player's game loads the save the launcher downloaded, as in step 3.
 
 **Nearby NPCs (new, experimental).** While in a party, the townsfolk, guards and characters such as Ciri within about 45 m of either player are shared. The host's game runs them, except that when the second PC walks up to one (within about 4 m and closer than the host), the second PC's game takes it over, so it reacts to that player at once; it goes back once they walk off. Whichever PC does not run an NPC shows a look-alike stand-in in its place that follows the other screen. You can't talk to a stand-in directly: walk up to it and the real NPC is handed to you first. Stand-ins walk and stand but do not play work animations, gestures or chatter. Stand-ins now move smoothly: they play slightly behind the other screen (about 0.15 s) instead of jumping between updates.
 

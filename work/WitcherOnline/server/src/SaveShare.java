@@ -39,6 +39,7 @@ public final class SaveShare
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
         SaveShare share = new SaveShare(directory.toRealPath(), hostName == null ? "" : hostName, server);
         server.createContext("/session", share::handle);
+        CoopLobby.attach(server, share);
         server.setExecutor(null);
         server.start();
         return share;
@@ -74,8 +75,8 @@ public final class SaveShare
         }
     }
 
-    // The newest save, as key=value lines.
-    String describe() throws IOException
+    // The newest .sav of the directory, or null.
+    Path newestSave() throws IOException
     {
         Path newest = null;
         long newestTime = Long.MIN_VALUE;
@@ -93,6 +94,33 @@ public final class SaveShare
                 }
             }
         }
+        return newest;
+    }
+
+    // A save's base name (no .sav), as the game and the lobby name it; "" for none.
+    static String baseName(Path save)
+    {
+        if (save == null) return "";
+        String name = save.getFileName().toString();
+        return name.substring(0, name.length() - ".sav".length());
+    }
+
+    boolean hasSave(String baseName)
+    {
+        String name = baseName + ".sav";
+        return FILE_NAME.matcher(name).matches() && Files.isRegularFile(directory.resolve(name));
+    }
+
+    String hostName()
+    {
+        return hostName;
+    }
+
+    // The newest save, as key=value lines.
+    String describe() throws IOException
+    {
+        Path newest = newestSave();
+        long newestTime = newest == null ? 0 : Files.getLastModifiedTime(newest).toMillis();
         StringBuilder text = new StringBuilder();
         text.append("host=").append(hostName).append('\n');
         if (newest == null)
@@ -120,7 +148,7 @@ public final class SaveShare
         send(exchange, 200, "application/octet-stream", Files.readAllBytes(file));
     }
 
-    private static void send(HttpExchange exchange, int status, String type, byte[] body) throws IOException
+    static void send(HttpExchange exchange, int status, String type, byte[] body) throws IOException
     {
         exchange.getResponseHeaders().set("Content-Type", type);
         exchange.sendResponseHeaders(status, body.length);

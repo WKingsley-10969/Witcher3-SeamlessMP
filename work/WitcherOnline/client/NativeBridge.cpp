@@ -5,6 +5,7 @@
 
 #include <windows.h>
 #include <bcrypt.h>
+#include <winhttp.h>
 
 #include <algorithm>
 #include <array>
@@ -15,6 +16,7 @@
 #include <list>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <cstdio>
 #include <cstring>
@@ -23,6 +25,7 @@
 
 #pragma comment(lib, "version.lib")
 #pragma comment(lib, "bcrypt.lib")
+#pragma comment(lib, "winhttp.lib")
 
 namespace wo_native
 {
@@ -615,17 +618,18 @@ namespace wo_native
 	}
 	// Co-op session settings from the launcher (Play-LAN.ps1): W3LAN_SESSION_ROLE host|join,
 	// W3LAN_SESSION_SAVE the host's save this player loads (a save file's base name),
-	// W3LAN_SESSION_HOST the host's player name. Anything malformed reads as empty.
+	// W3LAN_SESSION_HOST the host's player name, and WO_USERNAME this player's ("player").
+	// Anything malformed reads as empty.
 	static std::string SessionSetting(const std::string &key)
 	{
-		const char *variable = key == "role" ? "W3LAN_SESSION_ROLE" : key == "save" ? "W3LAN_SESSION_SAVE" : key == "host" ? "W3LAN_SESSION_HOST" : nullptr;
+		const char *variable = key == "role" ? "W3LAN_SESSION_ROLE" : key == "save" ? "W3LAN_SESSION_SAVE" : key == "host" ? "W3LAN_SESSION_HOST" : key == "player" ? "WO_USERNAME" : nullptr;
 		if (!variable) return "";
 		char value[128]{};
 		const DWORD length = GetEnvironmentVariableA(variable, value, sizeof(value));
 		if (length == 0 || length >= sizeof(value)) return "";
 		const std::string text(value, length);
 		if (key == "role") return text == "host" || text == "join" ? text : "";
-		const size_t maximum = key == "host" ? 16 : 120;
+		const size_t maximum = key == "host" || key == "player" ? 16 : 120;
 		if (text.size() > maximum) return "";
 		for (char c : text)
 		{
@@ -640,6 +644,210 @@ namespace wo_native
 		WNB_String key{};
 		WNB_ReadStringParameter(frame, &key);
 		ReturnString(frame, result, SessionSetting(NarrowPayload(key)));
+	}
+
+	// Co-op lobby (coopLobby.ws): the host's server shares saves and the lobby over HTTP on the game
+	// port + 1 (SaveShare.java, CoopLobby.java). Requests run on a worker thread so a slow or
+	// missing host never stalls the game; scripts poll for the result.
+	static std::wstring Widen(const std::string &text)
+	{
+		return std::wstring(text.begin(), text.end());
+	}
+
+	static bool SessionServer(std::string &host, INTERNET_PORT &port)
+	{
+		char ip[64]{};
+		char gamePort[16]{};
+		const DWORD ipLength = GetEnvironmentVariableA("WO_SERVER_IP", ip, sizeof(ip));
+		const DWORD portLength = GetEnvironmentVariableA("WO_SERVER_PORT", gamePort, sizeof(gamePort));
+		if (ipLength == 0 || ipLength >= sizeof(ip) || portLength == 0 || portLength >= sizeof(gamePort)) return false;
+		for (DWORD i = 0; i < ipLength; ++i)
+			if (!((ip[i] >= '0' && ip[i] <= '9') || ip[i] == '.')) return false;
+		const int value = atoi(gamePort);
+		if (value < 1 || value >= 65535) return false;
+		host = ip;
+		port = static_cast<INTERNET_PORT>(value + 1);
+		return true;
+	}
+
+	// GET path from the host's session server; false when it cannot be reached or the reply breaks off.
+	static bool SessionGet(const std::string &path, int &status, std::string &body)
+	{
+		std::string host;
+		INTERNET_PORT port = 0;
+		if (!SessionServer(host, port)) return false;
+		HINTERNET session = WinHttpOpen(L"W3LAN", WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+		if (!session) return false;
+		WinHttpSetTimeouts(session, 2000, 2000, 5000, 60000);
+		bool ok = false;
+		HINTERNET connection = WinHttpConnect(session, Widen(host).c_str(), port, 0);
+		HINTERNET request = connection ? WinHttpOpenRequest(connection, L"GET", Widen(path).c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0) : nullptr;
+		if (request && WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) && WinHttpReceiveResponse(request, nullptr))
+		{
+			DWORD code = 0;
+			DWORD size = sizeof(code);
+			WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &code, &size, WINHTTP_NO_HEADER_INDEX);
+			status = static_cast<int>(code);
+			body.clear();
+			ok = true;
+			for (;;)
+			{
+				DWORD available = 0;
+				if (!WinHttpQueryDataAvailable(request, &available)) { ok = false; break; }
+				if (available == 0) break;
+				std::string chunk(available, '\0');
+				DWORD read = 0;
+				if (!WinHttpReadData(request, &chunk[0], available, &read)) { ok = false; break; }
+				body.append(chunk.data(), read);
+				if (body.size() > 256u * 1024u * 1024u) { ok = false; break; }
+			}
+		}
+		if (request) WinHttpCloseHandle(request);
+		if (connection) WinHttpCloseHandle(connection);
+		WinHttpCloseHandle(session);
+		return ok;
+	}
+
+	static std::mutex g_lobbyMutex;
+	static bool g_lobbyBusy = false;
+	static std::deque<std::string> g_lobbyQueue; // requests waiting for the one in flight (kept in order)
+	static std::string g_lobbyResult;            // "<status>\n<body>" or "error\n"; empty until a request completes
+	static bool g_fetchBusy = false;
+	static std::string g_fetchState = "idle";    // idle | busy | done | error <why>
+
+	static bool SafeLobbyPath(const std::string &path)
+	{
+		if (path.rfind("/lobby", 0) != 0 || path.size() > 200) return false;
+		for (char c : path)
+			if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '/' || c == '?' || c == '=' || c == '&' || c == '_' || c == '-' || c == '.')) return false;
+		return true;
+	}
+
+	static bool SafeSaveName(const std::string &name)
+	{
+		if (name.empty() || name.size() > 120 || name[0] == '.' || name.find("..") != std::string::npos) return false;
+		for (char c : name)
+			if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.')) return false;
+		return true;
+	}
+
+	// This player's co-op save folder (the profile's redirected Documents).
+	static std::string SaveFolder()
+	{
+		char documents[MAX_PATH]{};
+		DWORD length = GetEnvironmentVariableA("W3LAN_DOCUMENTS", documents, sizeof(documents));
+		if (length == 0 || length >= sizeof(documents)) length = GetEnvironmentVariableA("W3T_DOCUMENTS", documents, sizeof(documents));
+		if (length == 0 || length >= sizeof(documents)) return "";
+		return std::string(documents, length) + "\\The Witcher 3\\gamesaves";
+	}
+
+	// "" when stored (or an optional file the host lacks), otherwise "error <why>"
+	static std::string FetchSaveFile(const std::string &folder, const std::string &file, bool required)
+	{
+		int status = 0;
+		std::string body;
+		if (!SessionGet("/session/save/" + file, status, body)) return "error the host did not answer";
+		if (status != 200) return required ? "error the host has no " + file : "";
+		const std::string target = folder + "\\" + file;
+		const std::string partial = target + ".download";
+		{
+			std::ofstream out(partial, std::ios::binary | std::ios::trunc);
+			if (!out) return "error cannot write " + file;
+			out.write(body.data(), static_cast<std::streamsize>(body.size()));
+			if (!out) return "error cannot write " + file;
+		}
+		if (!MoveFileExA(partial.c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING)) return "error cannot store " + file;
+		return "";
+	}
+
+	static void WO_LobbyRequest(void *, void *frame, void *result)
+	{
+		WNB_String text{};
+		WNB_ReadStringParameter(frame, &text);
+		const std::string path = NarrowPayload(text);
+		bool queued = false;
+		if (SafeLobbyPath(path))
+		{
+			std::lock_guard<std::mutex> lock(g_lobbyMutex);
+			if (g_lobbyQueue.size() < 8)
+			{
+				g_lobbyQueue.push_back(path);
+				queued = true;
+			}
+			if (!g_lobbyBusy)
+			{
+				g_lobbyBusy = true;
+				// one worker runs the queued requests in order, then ends
+				std::thread([] {
+					for (;;)
+					{
+						std::string next;
+						{
+							std::lock_guard<std::mutex> take(g_lobbyMutex);
+							if (g_lobbyQueue.empty()) { g_lobbyBusy = false; return; }
+							next = g_lobbyQueue.front();
+							g_lobbyQueue.pop_front();
+						}
+						int status = 0;
+						std::string body;
+						const bool ok = SessionGet(next, status, body);
+						std::lock_guard<std::mutex> done(g_lobbyMutex);
+						g_lobbyResult = ok ? std::to_string(status) + "\n" + body : std::string("error\n");
+					}
+				}).detach();
+			}
+		}
+		WNB_ReturnBool(frame, result, queued);
+	}
+
+	// The last reply, lines joined by '|' (scripts have no newline escape): "200|host=...|state=...|"
+	static void WO_LobbyResult(void *, void *frame, void *result)
+	{
+		std::string value;
+		{
+			std::lock_guard<std::mutex> lock(g_lobbyMutex);
+			value.swap(g_lobbyResult);
+		}
+		value.erase(std::remove(value.begin(), value.end(), '\r'), value.end());
+		std::replace(value.begin(), value.end(), '\n', '|');
+		ReturnString(frame, result, value);
+	}
+
+	static void WO_LobbyFetchSave(void *, void *frame, void *result)
+	{
+		WNB_String text{};
+		WNB_ReadStringParameter(frame, &text);
+		const std::string name = NarrowPayload(text);
+		const std::string folder = SaveFolder();
+		bool started = false;
+		if (SafeSaveName(name) && !folder.empty())
+		{
+			std::lock_guard<std::mutex> lock(g_lobbyMutex);
+			if (!g_fetchBusy)
+			{
+				g_fetchBusy = true;
+				g_fetchState = "busy";
+				started = true;
+				std::thread([name, folder] {
+					std::string state = FetchSaveFile(folder, name + ".sav", true);
+					if (state.empty()) FetchSaveFile(folder, name + ".png", false);   // the thumbnail is optional
+					std::lock_guard<std::mutex> done(g_lobbyMutex);
+					g_fetchState = state.empty() ? "done" : state;
+					g_fetchBusy = false;
+				}).detach();
+			}
+		}
+		WNB_ReturnBool(frame, result, started);
+	}
+
+	static void WO_LobbyFetchState(void *, void *frame, void *result)
+	{
+		std::string value;
+		{
+			std::lock_guard<std::mutex> lock(g_lobbyMutex);
+			value = g_fetchState;
+		}
+		ReturnString(frame, result, value);
 	}
 
 	static void WO_SCInstance(void *, void *frame, void *result)
@@ -885,6 +1093,8 @@ namespace wo_native
 		    {"WO_FactsBaseline", &WO_FactsBaseline}, {"WO_FactsPage", &WO_FactsPage},
 		    {"WO_SCConfig", &WO_SCConfig},
 		    {"WO_SessionConfig", &WO_SessionConfig},
+		    {"WO_LobbyRequest", &WO_LobbyRequest}, {"WO_LobbyResult", &WO_LobbyResult},
+		    {"WO_LobbyFetchSave", &WO_LobbyFetchSave}, {"WO_LobbyFetchState", &WO_LobbyFetchState},
 		    {"WO_SCInstance", &WO_SCInstance},
 		    {"WO_SCResetFacts", &WO_SCResetFacts}, {"WO_SCWatchFact", &WO_SCWatchFact},
 		    {"WO_SCReadFactChange", &WO_SCReadFactChange}, {"WO_SCAckFactChange", &WO_SCAckFactChange},

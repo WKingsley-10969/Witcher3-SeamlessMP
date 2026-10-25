@@ -42,28 +42,50 @@ class r_CoopSession
 
     // ------------------------------------------------------------ main menu
 
-    // The main menu opened: a joining player loads the host's save, once per game start.
-    public function OnMainMenu()
+    // Without a lobby on the host's server (coopLobby.ws), a joining player loads the save the
+    // launcher downloaded, once per game start.
+    public function LoadLauncherSave()
     {
-        var saves : array<SSavegameInfo>;
         var wanted : string;
-        var i : int;
         wanted = WO_SessionConfig("save");
         if(Role() != "join" || wanted == "" || loadRequested) { return; }
         loadRequested = true;
+        if(!LoadSave(wanted))
+        {
+            theGame.GetGuiManager().ShowNotification(HostName() + "'s save " + wanted + " was not found: load a save yourself.");
+        }
+    }
+
+    // A save of this player's co-op saves, by base name.
+    public function FindSave(wanted : string, out save : SSavegameInfo) : bool
+    {
+        var saves : array<SSavegameInfo>;
+        var i : int;
         theGame.ListSavedGames(saves);
         for(i = 0; i < saves.Size(); i += 1)
         {
-            if(StrFindFirst(saves[i].filename, wanted) >= 0)
+            if(StrFindFirst(StrLower(saves[i].filename), StrLower(wanted)) >= 0)
             {
-                loadsRequested += 1;
-                Record("LOAD_HOST_SAVE " + saves[i].filename + " of " + HostName());
-                theGame.LoadGameInit(saves[i], false);
-                return;
+                save = saves[i];
+                return true;
             }
         }
-        Record("HOST_SAVE_MISSING " + wanted + " among " + saves.Size() + " saves");
-        theGame.GetGuiManager().ShowNotification(HostName() + "'s save " + wanted + " was not found: load a save yourself.");
+        return false;
+    }
+
+    // Load a co-op save by base name; false when this player does not have it.
+    public function LoadSave(wanted : string) : bool
+    {
+        var save : SSavegameInfo;
+        if(!FindSave(wanted, save))
+        {
+            Record("HOST_SAVE_MISSING " + wanted);
+            return false;
+        }
+        loadsRequested += 1;
+        Record("LOAD_HOST_SAVE " + save.filename + " of " + HostName());
+        theGame.LoadGameInit(save, false);
+        return true;
     }
 
     // A game was loaded: step in beside the host again once the party is together.
@@ -189,6 +211,6 @@ class r_CoopSession
 function OnConfigUI()
 {
     wrappedMethod();
-    theGame.r_getMultiplayerClient().getCoopSession().OnMainMenu();
+    theGame.r_getMultiplayerClient().getCoopLobby().OnMainMenu();
     return true;
 }
