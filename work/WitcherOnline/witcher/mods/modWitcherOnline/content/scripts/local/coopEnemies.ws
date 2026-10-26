@@ -3849,7 +3849,10 @@ function OnQuestObjectiveEvent(journalQuest : CJournalQuest, journalObjective : 
 // tutorial progress (each player sees their own tutorials). Everything else is shared.
 function CoopFactShared(id : string) : bool
 {
+    // nge_: the game's own UI locks (nge_pause_menu_disabled while a timed choice or a movie plays:
+    // copied, it never went again and Esc did nothing); manual_equipment_changes_blocked likewise
     return id != "game_is_loaded" && StrFindFirst(id, "tutorial") != 0 && StrFindFirst(id, "Tutorial") != 0
+        && StrFindFirst(id, "nge_") != 0 && id != "manual_equipment_changes_blocked"
         && id != "RemasterSkillResetAndRefund" && StrFindFirst(id, "coop_rw_") != 0
         // Custom Player Characters: each player's own character, appearance and creator
         && StrFindFirst(id, "nr_") != 0 && StrFindFirst(id, "item_use_nr_") != 0;

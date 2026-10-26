@@ -144,7 +144,9 @@ class r_CoopCharacter
     // The pause menu opened (also on the way to quitting): record what this player has now.
     public function OnPauseMenu()
     {
-        if(Active() && ready && theGame.GetEngineTimeAsSeconds() - loadedAt >= 5.0) { Store(); }
+        // the record every 20 s covers the rest: each one builds the whole inventory and writes it
+        // out, a stall the owner felt on Esc
+        if(Active() && ready && theGame.GetEngineTimeAsSeconds() - loadedAt >= 5.0 && theGame.GetEngineTimeAsSeconds() - lastStore >= 10.0) { Store(); }
     }
 
     private function Begin()

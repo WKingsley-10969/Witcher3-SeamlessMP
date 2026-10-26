@@ -142,6 +142,12 @@ function W3T_ScenarioCheck(bot : W3T_Bot) : bool
         return W3T_PrologueCoop(bot, client, players[0]);
     }
 
+    if(scenario == "pause_menu")
+    {
+        if(ghosts < 1) { return false; }
+        return W3T_PauseMenu(bot, client, players[0]);
+    }
+
     if(scenario == "talk_share")
     {
         if(ghosts < 1)
