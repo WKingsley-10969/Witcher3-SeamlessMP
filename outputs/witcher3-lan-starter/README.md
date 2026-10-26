@@ -43,6 +43,7 @@ A separate full copy remains optional for development:
 1. **Host:** run **Play Host LAN.cmd** with a name such as `HostWitcher`.
    - Keep the console open. It runs the server: UDP 40000 for the game, and TCP 40001, which shares your co-op saves with joining players.
    - Load or start your game and **save**. Joining players get your newest co-op save.
+   - **Join password (optional):** the host launcher asks for one each time. Type a password and tell it to the player on the second PC; their launcher asks for it before joining, and a wrong or missing password is refused (no game, no save download). Press Enter for none: then anyone who can reach your PC can join, as before. Use one when you play over the internet through a virtual network such as ZeroTier or Tailscale. It is never saved or shown; it lasts until you close the host console.
 2. **Second PC:** run **Play Join LAN.cmd** with a different name such as `GuestWitcher`, and enter the host's home-network IPv4 address shown in its console.
 
    The launchers remember your name and the host's address (in `%LOCALAPPDATA%\W3LAN\player.json`, so a newer package folder still knows them): next time, press Enter to keep them. Keep the same name: it picks your co-op saves and character. The game starts with your own graphics settings (no forced window or resolution).

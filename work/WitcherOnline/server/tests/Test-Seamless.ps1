@@ -38,6 +38,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Fact removal tests failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Save share tests failed' }
 & $java -cp $classPath CoopLobbyTest $TestRoot | Tee-Object -FilePath (Join-Path $TestRoot 'coop-lobby-latest.log')
 if ($LASTEXITCODE -ne 0) { throw 'Co-op lobby tests failed' }
+& $java -cp $classPath JoinGateTest $TestRoot | Tee-Object -FilePath (Join-Path $TestRoot 'join-gate-latest.log')
+if ($LASTEXITCODE -ne 0) { throw 'Join password tests failed' }
 & $java -cp $classPath SeamlessUdpIntegrationTest $java $classes $TestRoot | Tee-Object -FilePath (Join-Path $TestRoot 'udp-latest.log')
 if ($LASTEXITCODE -ne 0) { throw 'Real UDP integration tests failed' }
 Write-Output "Built tested server: $jarFile"

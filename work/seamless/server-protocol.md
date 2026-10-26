@@ -168,3 +168,15 @@ Verification on the separate Codex branch: 255 existing pure assertions + 54 rem
 The owner of a scope drains the native FactsSet journal (`WNB_FactOps*`) one FactsSet at a time. Each FactsSet is recorded as a `remove`/`add` pair for one target; the adapter acknowledges the `remove` locally, turns the `add` into `EFFECT fx_<processNonce>_<generation>_<revision> <scope> fact <target> <value[@validFor]>`, and acknowledges the `add` only after `OK` (or `OK ... DUPLICATE` on a resend). Only operations captured under the scope id the client currently owns are sent; others wait. Any other reply halts the adapter (`CAPTURE_COMMIT_<status>`) with the operation still queued.
 
 Applying a `TRANSACTION` brackets each fact write in both remote-echo guards (`WO_SCBeginRemoteFact` and, when capture is active, `WNB_FactOpsBeginRemote`), so a replicated write is never recaptured. The capturing process skips its own `fx_<processNonce>_` transactions because the engine already holds them; a later process (new nonce) replays them like any remote write. A positive duration re-arms expiry from the applying game's current time. Capture remains restricted to `sc_test_` scopes and targets.
+
+## Join password (26 October 2026)
+
+Optional and separate from the campaign host secret. The server reads it only from the environment variable `W3LAN_JOIN_PASSWORD` (the launcher sets it on the server process only); empty or unset keeps the open behaviour. It is never logged. With a password, a non-loopback address is refused until it answers a challenge once per server run:
+
+```
+AUTH                      ->  AUTH  CHALLENGE  <32 hex nonce>     (AUTH  OPEN without a password)
+AUTH  <nonce>  <proof>    ->  AUTH  OK  |  ERROR  WRONG_PASSWORD  |  ERROR  TOO_MANY_ATTEMPTS
+proof = lowercase hex HMAC-SHA256(key = UTF-8 password, message = "w3lan-join:" + nonce)
+```
+
+A nonce belongs to the requesting address, answers once and expires after 30 s; 5 wrong answers within 60 s refuse new nonces to that address. Before a successful answer, every other UDP packet from that address gets `ERROR  NOT_WHITELISTED  PASSWORD_REQUIRED` (unchanged native clients show the "not whitelisted" message; launchers read the third field), and the save share and lobby (`/session`, `/lobby`) answer HTTP 403. Bans and the IP whitelist are checked first. Access is per address, not per player; it is not encryption, so run it inside a trusted LAN or an encrypted virtual network.

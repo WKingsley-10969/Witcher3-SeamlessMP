@@ -19,6 +19,11 @@ $nameKey=if($Mode -eq 'Host'){'HostName'}else{'JoinName'}
 $name=Read-W3LanValue -Prompt 'Your player name (letters, digits or underscores; different on each PC)' -Default $remembered[$nameKey] -Check {param($value) Assert-W3LanName $value}
 $remembered[$nameKey]=$name
 $arguments=@{Mode=$Mode; GameDir=$gameDir; PlayerName=$name}
+if($Mode -eq 'Host'){
+    # typed each time and never stored; the second PC is asked for it when it joins
+    $password=Read-Host 'Join password for the second PC (Enter for none: anyone who can reach this PC may join)' -AsSecureString
+    if($password.Length){$arguments['JoinPassword']=$password}
+}
 if($Mode -eq 'Join'){
     $address=Read-W3LanValue -Prompt "Host PC's LAN IPv4 address" -Default $remembered['HostAddress'] -Check {param($value) [void](Resolve-W3LanAddress $value)}
     $remembered['HostAddress']=$address
