@@ -1152,11 +1152,9 @@ function W3T_TalkProbe(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_R
 
 // Shared conversation (talk_share). Both bots go to the Novigrad general store (merchant by
 // board 0). The second PC walks up and presses Talk; the host, 10-15 m away, must be brought
-// into the same conversation by its own game. At the first choice list the host clicks
-// "Care to play cards?", which must only reach the second PC as a suggestion. The second PC
-// then picks the first choice (its lines end in the shop opening): the host must follow, and
-// the shop opened by the conversation in the host's game must be closed. The second PC closes
-// its own shop and picks the last choice (Farewell); both conversations must end.
+// into the same conversation by its own game. Whoever picks first decides: at the first choice
+// list the host (listening) picks the last choice (Farewell) before the second PC (which started
+// the conversation) picks anything, and the second PC's game must apply it; both conversations end.
 function W3T_TalkShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_RemotePlayer) : bool
 {
     var talk : r_CoopTalk;
@@ -1210,45 +1208,40 @@ function W3T_TalkShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_R
     root = theGame.GetGuiManager().GetRootMenu();
     if(host)
     {
-        // the listener: once its choices are up, click one; it must stay a suggestion
-        if(bot.scenarioStep == 2 && talk.IsListening() && client.hasActiveDialogChoices() && talk.votesSent == 0)
+        // the listener picks first (farewell): whoever picks first decides, so it goes through here
+        // and the starter's game must apply it
+        if(bot.scenarioStep == 2 && talk.IsListening() && client.hasActiveDialogChoices() && talk.picksSent == 0 && talk.ChoicesAge() > 1)
         {
-            W3T_Log(label + " clicks choice 1 (a suggestion)");
-            module.OnDialogOptionSelected(1);
-            module.OnDialogOptionAccepted(1);
+            W3T_Log(label + " picks the last choice (farewell) first");
+            module.OnDialogOptionSelected(talk.LastChoiceCount() - 1);
+            module.OnDialogOptionAccepted(talk.LastChoiceCount() - 1);
         }
-        if(bot.scenarioStep == 2 && talk.joins >= 1 && talk.picksApplied >= 2 && !talk.InScene())
+        if(bot.scenarioStep == 2 && talk.joins >= 1 && talk.picksSent >= 1 && !talk.InScene())
         {
             bot.scenarioStep = 3;
         }
     }
     else
     {
+        // the starter waits: the listener's pick must be applied here; after 25 s it picks itself (a failure)
         if(bot.scenarioStep == 3 && client.hasActiveDialogChoices() && bot.scenarioCount == 0)
         {
             bot.scenarioCount = 1;
-            bot.scenarioTime = now;  // the choices are up: give the host 10 s to suggest
-        }
-        if(bot.scenarioStep == 3 && client.hasActiveDialogChoices() && talk.picksSent == 0 && (talk.votesReceived >= 1 || now - bot.scenarioTime >= 10))
-        {
-            W3T_Log(label + " picks choice 0 after " + talk.votesReceived + " suggestion(s): " + talk.lastVote);
-            module.OnDialogOptionSelected(0);
-            module.OnDialogOptionAccepted(0);
             bot.scenarioTime = now;
         }
-        if(bot.scenarioStep == 3 && root && talk.picksSent >= 1)
+        if(bot.scenarioStep == 3 && client.hasActiveDialogChoices() && talk.picksSent == 0 && talk.picksApplied == 0 && bot.scenarioCount == 1
+            && now - bot.scenarioTime >= 25)
         {
-            W3T_Log(label + " closes its shop");
-            root.CloseMenu();
-        }
-        if(bot.scenarioStep == 3 && client.hasActiveDialogChoices() && talk.picksSent == 1 && talk.ChoicesAge() >= 3 && !root)
-        {
-            W3T_Log(label + " picks the last choice (farewell)");
+            W3T_Log(label + " FAIL-MARK no pick from the listener in 25 s: picks the last choice itself");
             module.OnDialogOptionSelected(talk.LastChoiceCount() - 1);
             module.OnDialogOptionAccepted(talk.LastChoiceCount() - 1);
-            bot.scenarioTime = now;
         }
-        if(bot.scenarioStep == 3 && talk.picksSent >= 2 && !talk.InScene())
+        if(bot.scenarioStep == 3 && root)
+        {
+            W3T_Log(label + " closes a menu");
+            root.CloseMenu();
+        }
+        if(bot.scenarioStep == 3 && bot.scenarioCount == 1 && !talk.InScene())
         {
             bot.scenarioStep = 4;
         }
@@ -1257,8 +1250,8 @@ function W3T_TalkShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_R
         + " joins=" + talk.joins + " joinFailures=" + talk.joinFailures + " mismatches=" + talk.sceneMismatches + " picksSent=" + talk.picksSent
         + " picksApplied=" + talk.picksApplied + " votesSent=" + talk.votesSent + " votesReceived=" + talk.votesReceived + " menusClosed=" + talk.menusClosed
         + " lines=" + talk.linesSeen + " scene=" + talk.GetScenePath());
-    if(host) { return bot.scenarioStep == 3 && talk.sceneMismatches == 0 && talk.votesSent >= 1 && talk.menusClosed >= 1; }
-    return bot.scenarioStep == 4 && talk.votesReceived >= 1;
+    if(host) { return bot.scenarioStep == 3 && talk.sceneMismatches == 0 && talk.picksSent >= 1; }
+    return bot.scenarioStep == 4 && talk.picksApplied >= 1 && talk.picksSent == 0 && talk.alertsShown >= 1;
 }
 
 // scene_probe: lists the save's active quests, the tracked one and its open objectives, so a
@@ -1430,8 +1423,9 @@ function W3T_TrackedObjectives() : string
 // each bot starts the general-store trader's scene (PlayDialog, as Talk would, without Talk) once its
 // Geralt is within 6 m of him. The host stands in front of him and the second PC 20 m away, so
 // only the host's trigger fires. The second PC must be brought over, where its own trigger
-// starts the same scene; it suggests a choice; the host picks the artefacts topic (its lines open
-// the shop, closed on the second PC), closes its own shop and says farewell; both scenes end.
+// starts the same scene. Whoever picks first decides: the host picks the artefacts topic (its lines
+// open the shop, closed on the second PC) and closes its own shop; the second PC picks the farewell,
+// applied in the host's game; both scenes end.
 // Then the second PC walks off again with its trigger spent (its "quest" is past that step) and
 // the host starts the scene once more: the second PC is brought over, no scene starts there,
 // and it must be put back where it was. During its scene the trader must be itself, not a stand-in.
@@ -1494,9 +1488,10 @@ function W3T_SceneShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_
     if(host)
     {
         if(talk.ListenerCount() >= 1) { bot.scenarioFlag = true; }
-        if(bot.scenarioStep == 2 && client.hasActiveDialogChoices() && talk.picksSent == 0 && talk.ChoicesAge() > 2 && (talk.votesReceived >= 1 || talk.ChoicesAge() > 20))
+        // the starter picks the topic first (choice 0) once the second PC listens; the farewell is the second PC's
+        if(bot.scenarioStep == 2 && client.hasActiveDialogChoices() && talk.picksSent == 0 && talk.ChoicesAge() > 2 && (talk.ListenerCount() >= 1 || talk.ChoicesAge() > 20))
         {
-            W3T_Log(label + " picks choice 0 after " + talk.votesReceived + " suggestion(s): " + talk.lastVote);
+            W3T_Log(label + " picks choice 0 first");
             module.OnDialogOptionSelected(0);
             module.OnDialogOptionAccepted(0);
         }
@@ -1505,14 +1500,15 @@ function W3T_SceneShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_
             W3T_Log(label + " closes its shop");
             root.CloseMenu();
         }
-        if(client.hasActiveDialogChoices() && talk.picksSent >= 1 && talk.ChoicesAge() >= 3 && !root
-            && ((bot.scenarioStep == 2 && talk.picksSent == 1) || bot.scenarioStep == 5))
+        // the farewell: the second PC's in the shared scene (the host's own after 25 s), the host's in the scene it has alone
+        if(client.hasActiveDialogChoices() && talk.picksSent >= 1 && !root
+            && ((bot.scenarioStep == 2 && talk.picksSent == 1 && talk.picksApplied == 0 && talk.ChoicesAge() >= 25) || (bot.scenarioStep == 5 && talk.ChoicesAge() >= 3)))
         {
             W3T_Log(label + " picks the last choice (farewell)");
             module.OnDialogOptionSelected(talk.LastChoiceCount() - 1);
             module.OnDialogOptionAccepted(talk.LastChoiceCount() - 1);
         }
-        if(bot.scenarioStep == 2 && talk.picksSent >= 2 && !talk.InScene())
+        if(bot.scenarioStep == 2 && talk.picksSent >= 1 && (talk.picksApplied >= 1 || talk.picksSent >= 2) && !talk.InScene())
         {
             bot.scenarioStep = 3;
             bot.scenarioTime = now;
@@ -1530,11 +1526,12 @@ function W3T_SceneShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_
     }
     else
     {
-        if(talk.IsListening() && client.hasActiveDialogChoices() && talk.votesSent == 0 && talk.ChoicesAge() > 1)
+        // after the host's topic was applied here, the farewell is this PC's: picked first, it decides
+        if(talk.IsListening() && client.hasActiveDialogChoices() && talk.picksApplied >= 1 && talk.picksSent == 0 && talk.ChoicesAge() > 3)
         {
-            W3T_Log(label + " clicks choice 1 (a suggestion)");
-            module.OnDialogOptionSelected(1);
-            module.OnDialogOptionAccepted(1);
+            W3T_Log(label + " picks the last choice (farewell) first");
+            module.OnDialogOptionSelected(talk.LastChoiceCount() - 1);
+            module.OnDialogOptionAccepted(talk.LastChoiceCount() - 1);
         }
         if(talk.InScene())
         {
@@ -1545,7 +1542,7 @@ function W3T_SceneShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_
                 bot.scenarioFlag = true;
             }
         }
-        if(bot.scenarioStep == 2 && talk.autoJoins >= 1 && talk.picksApplied >= 2 && !talk.InScene())
+        if(bot.scenarioStep == 2 && talk.autoJoins >= 1 && talk.picksApplied >= 1 && talk.picksSent >= 1 && !talk.InScene())
         {
             W3T_SceneShareWalkOff(bot, trader);
             bot.scenarioStep = 3;
@@ -1572,10 +1569,10 @@ function W3T_SceneShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_
         + " picksApplied=" + talk.picksApplied + " votesSent=" + talk.votesSent + " votesReceived=" + talk.votesReceived + " menusClosed=" + talk.menusClosed
         + " flag=" + bot.scenarioFlag + " labelChecks=" + bot.labelSceneChecks + " labelsShown=" + bot.labelSceneShown);
     if(bot.labelSceneShown > 0) { return false; }
-    if(host) { return bot.scenarioStep == 6 && bot.scenarioFlag && talk.votesReceived >= 1 && talk.handovers == 0 && bot.labelSceneChecks > 0; }
+    if(host) { return bot.scenarioStep == 6 && bot.scenarioFlag && talk.picksApplied >= 1 && talk.handovers == 0 && bot.labelSceneChecks > 0; }
     // put back where it stood when the scene was offered: the host's scene starting can nudge it a
     // few metres first (run 20261025-110932: 2.7 m before the offer arrived), hence 5 m
-    return bot.scenarioStep == 4 && !bot.scenarioFlag && talk.sceneMismatches == 0 && talk.menusClosed >= 1 && talk.votesSent >= 1 && bot.labelSceneChecks > 0
+    return bot.scenarioStep == 4 && !bot.scenarioFlag && talk.sceneMismatches == 0 && talk.menusClosed >= 1 && talk.picksSent >= 1 && bot.labelSceneChecks > 0
         && VecDistance(thePlayer.GetWorldPosition(), bot.scenarioVec) < 5.0;
 }
 

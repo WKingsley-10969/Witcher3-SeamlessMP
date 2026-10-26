@@ -274,6 +274,8 @@ class r_CoopAck
 
 class r_CoopEnemies
 {
+    private var loggedRole : int;
+    private var loggedStatusAt : float;
     private var epoch : int;    // this game as leader: changes on restart so members drop stale ids
     private var session : int;  // this game as member: lets the leader restart hit numbering
     private var nextNetId : int;
@@ -487,6 +489,17 @@ class r_CoopEnemies
         RetryFactsBaseline(now);
         LandFallingCopies(now);
         role = GetRole();
+        // for the player's log (uploaded to the host): who runs the enemies, and how many are shared
+        if(role != loggedRole || now - loggedStatusAt >= 10.0 || now < loggedStatusAt)
+        {
+            if(role != loggedRole || HostEnemyCount() + PuppetCount() + SuppressedCount() > 0)
+            {
+                WO_Log("coop enemies role=" + role + " party=" + client.getJoinedParty() + " area=" + WO_CurrentAreaCode() + " shared=" + HostEnemyCount()
+                    + " copies=" + PuppetCount() + " suppressed=" + SuppressedCount() + " hostilesNear=" + CoopHostilesNear(30));
+            }
+            loggedRole = role;
+            loggedStatusAt = now;
+        }
 
         if(role == 1)
         {
@@ -3889,8 +3902,26 @@ function OnQuestObjectiveEvent(journalQuest : CJournalQuest, journalObjective : 
 // tutorial progress (each player sees their own tutorials). Everything else is shared.
 function CoopFactShared(id : string) : bool
 {
+    // nge_: the game's own UI locks (nge_pause_menu_disabled while a timed choice or a movie plays:
+    // copied, it never went again and Esc did nothing); manual_equipment_changes_blocked likewise
     return id != "game_is_loaded" && StrFindFirst(id, "tutorial") != 0 && StrFindFirst(id, "Tutorial") != 0
+        && StrFindFirst(id, "nge_") != 0 && id != "manual_equipment_changes_blocked"
         && id != "RemasterSkillResetAndRefund" && StrFindFirst(id, "coop_rw_") != 0
         // Custom Player Characters: each player's own character, appearance and creator
         && StrFindFirst(id, "nr_") != 0 && StrFindFirst(id, "item_use_nr_") != 0;
+}
+
+// Hostile NPCs within range of this player (for the log).
+function CoopHostilesNear(range : float) : int
+{
+    var actors : array<CActor>;
+    var npc : CNewNPC;
+    var i, n : int;
+    actors = thePlayer.GetNPCsAndPlayersInRange(range, 50, '', FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
+    for(i = 0; i < actors.Size(); i += 1)
+    {
+        npc = (CNewNPC)actors[i];
+        if(npc && npc.GetAttitude(thePlayer) == AIA_Hostile) { n += 1; }
+    }
+    return n;
 }

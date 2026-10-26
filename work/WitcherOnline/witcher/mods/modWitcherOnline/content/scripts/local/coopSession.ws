@@ -291,6 +291,7 @@ function OnConfigUI()
     wrappedMethod();
     theGame.r_getMultiplayerClient().getCoopSession().OnMainMenu();
     theGame.r_getMultiplayerClient().getCoopLobby().OnMainMenu();
+    theGame.r_getMultiplayerClient().getCoopTalk().Reset();
     return true;
 }
 
