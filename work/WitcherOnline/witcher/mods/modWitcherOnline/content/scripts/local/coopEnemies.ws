@@ -60,6 +60,7 @@ class r_CoopPuppet
     public var stride : r_CoopStride;
     public var reactUntil : float;  // forced idle lifted until then, so the AI plays the hit reaction
     public var addedNoFinishers : array<name>;
+    public var flying : bool;   // in flight as the leader's monster: no gravity, free of the navmesh
 }
 
 // Feet swinging along the actor's facing over 1.5 s windows while it moves: a walking stride swings a foot tens of
@@ -301,6 +302,9 @@ class r_CoopEnemies
     private var corpseKeys : array<string>;
     private var corpseNpcs : array<CNewNPC>;
     private var corpseTimes : array<float>;
+    // copies killed in flight, falling to the ground (as btTaskFalling), and since when
+    private var fallingCopies : array<CNewNPC>;
+    private var fallingSince : array<float>;
 
     // journal entries (quests, objectives) whose status changed this session, latest status per tag
     private var journalTags : array<name>;
@@ -338,6 +342,8 @@ class r_CoopEnemies
     public var hitsApplied : int;
     public var puppetsSpawned : int;
     public var puppetsKilled : int;  // puppets that died with the leader's monster
+    public var puppetFlights : int;  // puppets that took off with the leader's monster
+    public var copiesPutDown : int;  // copies killed in flight that did not fall by themselves
     public var twinsBound : int;
     public var spawnFailures : int;
     public var lastError : string;
@@ -465,6 +471,7 @@ class r_CoopEnemies
         EnsureIds();
         now = theGame.GetEngineTimeAsSeconds();
         RetryFactsBaseline(now);
+        LandFallingCopies(now);
         role = GetRole();
 
         if(role == 1)
@@ -605,6 +612,29 @@ class r_CoopEnemies
             e.lastSeenAt = now;
         }
 
+        // one already shared stays shared while it is above or around the party: a flying monster circles high
+        // over the fight (a griffin climbs past 80 m), out of the 40 m spheres above
+        for(i = 0; i < hostEnemies.Size(); i += 1)
+        {
+            e = hostEnemies[i];
+            if(!e.npc || !e.npc.IsAlive() || e.lastSeenAt == now)
+            {
+                continue;
+            }
+            if(VecDistance2D(e.npc.GetWorldPosition(), thePlayer.GetWorldPosition()) < 45)
+            {
+                e.lastSeenAt = now;
+                continue;
+            }
+            for(j = 0; j < globals.Size(); j += 1)
+            {
+                if(globals[j] && globals[j].inParty && globals[j].joinedParty == me && VecDistance2D(e.npc.GetWorldPosition(), globals[j].pos) < 45)
+                {
+                    e.lastSeenAt = now;
+                }
+            }
+        }
+
         ArmGhosts(client);
 
         // keep dead enemies for a few seconds so members see the death; drop ones out of range
@@ -630,7 +660,7 @@ class r_CoopEnemies
 
     // "en epoch seq area acks{user session lastSeq} templates{path}
     //  enemies{netId tpl appearance x y z yaw hp alive attackSeq attackAnim hitSeq hitBy hitReaction moveSeq moveAnim
-    //  attackTarget projSeq [projTpl fromX fromY fromZ toX toY toZ angle speed range]}" (projSeq 0 = no projectile in the
+    //  attackTarget stance projSeq [projTpl fromX fromY fromZ toX toY toZ angle speed range]}" (projSeq 0 = no projectile in the
     //  last 1.5 s)
     private function HostSend()
     {
@@ -670,7 +700,8 @@ class r_CoopEnemies
                 + " " + FloatToStringPrec(e.npc.GetHeading(), 1) + " " + FloatToStringPrec(MaxF(0, e.npc.GetHealthPercents()), 4)
                 + " " + alive + " " + e.attackSeq + " " + CoopEncode(NameToString(e.attackAnim))
                 + " " + e.hitSeq + " " + CoopEncode(e.hitBy) + " " + e.hitReaction
-                + " " + e.moveSeq + " " + CoopEncode(NameToString(e.moveAnim)) + " " + CoopEncode(e.attackTarget);
+                + " " + e.moveSeq + " " + CoopEncode(NameToString(e.moveAnim)) + " " + CoopEncode(e.attackTarget)
+                + " " + (int)e.npc.GetCurrentStance();
 
             if(e.projSeq > 0 && now - e.projAt < 1.5)
             {
@@ -1444,7 +1475,7 @@ class r_CoopEnemies
         var pos : Vector;
         var attackAnim, moveAnim : name;
         var hitBy, projTpl, attackTarget : string;
-        var snapshotEpoch, n, i, idx, netId, tplIndex, attackSeq, hitSeq, hitReaction, moveSeq, projSeq, projIndex : int;
+        var snapshotEpoch, n, i, idx, netId, tplIndex, attackSeq, hitSeq, hitReaction, moveSeq, projSeq, projIndex, stance : int;
         var hp, yaw, projAngle, projSpeed, projRange : float;
         var projFrom, projTo : Vector;
         var alive : bool;
@@ -1494,7 +1525,7 @@ class r_CoopEnemies
 
         n = StringToInt(WO_Str(idx), 0);
         idx += 1;
-        for(i = 0; i < n && idx + 16 < count; i += 1)
+        for(i = 0; i < n && idx + 17 < count; i += 1)
         {
             netId = StringToInt(WO_Str(idx), 0);
             tplIndex = StringToInt(WO_Str(idx + 1), 0);
@@ -1522,7 +1553,8 @@ class r_CoopEnemies
                 moveAnim = WO_NameAt(idx + 15);
             }
             attackTarget = CoopDecode(WO_Str(idx + 16));
-            idx += 17;
+            stance = StringToInt(WO_Str(idx + 17), 0);
+            idx += 18;
             projSeq = StringToInt(WO_Str(idx), 0);
             idx += 1;
             projTpl = "";
@@ -1548,7 +1580,7 @@ class r_CoopEnemies
             if(tplIndex >= 0 && tplIndex < templates.Size())
             {
                 ApplyEnemy(netId, templates[tplIndex], app, pos, yaw, hp, alive, attackSeq, attackAnim, hitSeq, hitBy, hitReaction,
-                    moveSeq, moveAnim, attackTarget);
+                    moveSeq, moveAnim, attackTarget, stance);
                 if(projSeq != 0 && projTpl != "")
                 {
                     ApplyProjectile(netId, projSeq, projTpl, projFrom, projTo, projAngle, projSpeed, projRange);
@@ -1700,7 +1732,7 @@ class r_CoopEnemies
 
     private function ApplyEnemy(netId : int, tpl : string, app : string, pos : Vector, yaw : float, hp : float, alive : bool,
         attackSeq : int, attackAnim : name, hitSeq : int, hitBy : string, hitReaction : int, moveSeq : int, moveAnim : name,
-        attackTarget : string)
+        attackTarget : string, stance : int)
     {
         var p : r_CoopPuppet;
         var npc : CNewNPC;
@@ -1763,6 +1795,12 @@ class r_CoopEnemies
             {
                 PlayMove(p, moveAnim);
             }
+        }
+
+        // flying or on the ground as the leader's (before the move: in flight it is not pulled down to the ground)
+        if(p.alive && (stance == (int)NS_Fly) != p.flying)
+        {
+            SetPuppetFlying(p, stance == (int)NS_Fly);
         }
 
         if(p.lastTargetAt > 0 && now - p.lastTargetAt > 0.02)
@@ -2081,6 +2119,11 @@ class r_CoopEnemies
                 continue;
             }
 
+            if(p.flying)
+            {
+                // its forced idle tree may switch gravity back on
+                ((CMovingPhysicalAgentComponent)p.npc.GetMovingAgentComponent()).SetGravity(false);
+            }
             MovePuppet(p);
             DrivePuppetLocomotion(p);
             if(!p.stride)
@@ -2181,8 +2224,92 @@ class r_CoopEnemies
         adjustor.SlideTo(ticket, p.target);
     }
 
+    // As the game's own take-off and landing (btTaskSpawnAnim, btTaskManageGravity): a flying stance, physical
+    // movement, no gravity and free of the navmesh, so the slides follow the leader's monster up into the air.
+    private function SetPuppetFlying(p : r_CoopPuppet, fly : bool)
+    {
+        var mac : CMovingPhysicalAgentComponent;
+
+        p.flying = fly;
+        mac = (CMovingPhysicalAgentComponent)p.npc.GetMovingAgentComponent();
+        if(fly)
+        {
+            puppetFlights += 1;
+            p.npc.EnablePhysicalMovement(true);
+            if(mac)
+            {
+                mac.SnapToNavigableSpace(false);
+                mac.SetGravity(false);
+            }
+            p.npc.SetBehaviorVariable('npcStance', (int)NS_Fly);
+        }
+        else
+        {
+            p.npc.SetBehaviorVariable('npcStance', (int)NS_Normal);
+            if(mac)
+            {
+                mac.SnapToNavigableSpace(true);
+                mac.SetGravity(true);
+            }
+            p.npc.EnablePhysicalMovement(false);
+        }
+    }
+
+    // As btTaskFalling: on the ground (within 0.5 m) it snaps back to the navmesh; one still up after 4 s is put
+    // down where it is (a dead actor's physics may not carry it).
+    private function LandFallingCopies(now : float)
+    {
+        var mac : CMovingPhysicalAgentComponent;
+        var npc : CNewNPC;
+        var pos : Vector;
+        var height : float;
+        var i : int;
+
+        for(i = fallingCopies.Size() - 1; i >= 0; i -= 1)
+        {
+            npc = fallingCopies[i];
+            if(npc)
+            {
+                height = npc.GetDistanceFromGround(50);
+                if(height > 0.5 && now - fallingSince[i] < 4.0)
+                {
+                    continue;
+                }
+                if(height > 0.5)
+                {
+                    pos = npc.GetWorldPosition();
+                    pos.Z -= height;
+                    npc.Teleport(pos);
+                    copiesPutDown += 1;
+                }
+                mac = (CMovingPhysicalAgentComponent)npc.GetMovingAgentComponent();
+                if(mac)
+                {
+                    mac.SnapToNavigableSpace(true);
+                }
+                npc.EnablePhysicalMovement(false);
+            }
+            fallingCopies.Erase(i);
+            fallingSince.Erase(i);
+        }
+    }
+
     private function KillPuppet(p : r_CoopPuppet)
     {
+        var mac : CMovingPhysicalAgentComponent;
+
+        // a monster killed in flight falls, as the leader's does: gravity on, physical movement until it lands
+        if(p.flying)
+        {
+            p.flying = false;
+            mac = (CMovingPhysicalAgentComponent)p.npc.GetMovingAgentComponent();
+            if(mac)
+            {
+                mac.SetGravity(true);
+            }
+            fallingCopies.PushBack(p.npc);
+            fallingSince.PushBack(theGame.GetEngineTimeAsSeconds());
+        }
         p.alive = false;
         puppetsKilled += 1;
         if(p.animAiId != 0)
@@ -2209,6 +2336,10 @@ class r_CoopEnemies
         if(!p.npc || !p.alive)
         {
             return;
+        }
+        if(p.flying)
+        {
+            SetPuppetFlying(p, false);
         }
         if(p.animAiId != 0)
         {
@@ -3057,6 +3188,11 @@ class r_CoopEnemies
     public function PuppetAlive(i : int) : bool
     {
         return puppets[i].alive;
+    }
+
+    public function PuppetFlying(i : int) : bool
+    {
+        return puppets[i].flying;
     }
 
     public function PuppetSpawned(i : int) : bool
