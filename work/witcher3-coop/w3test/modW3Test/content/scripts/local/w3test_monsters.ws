@@ -323,3 +323,105 @@ function W3T_FlightMember(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
     }
     return bot.scenarioStep == 3;
 }
+
+// monster_states: a monster's untouchable phases and knockdowns show on the second PC. The leader spawns a
+// drowner ahead of both players; 12 s later it makes it invulnerable and untargetable (as a noonwraith's or
+// alghoul's phase) for 12 s, then knocks it down. The second PC's copy must be invulnerable and untargetable
+// while the leader's is, targetable again after, and knocked down too.
+function W3T_StatesLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
+{
+    var template : CEntityTemplate;
+    var monster : CNewNPC;
+    var now : float;
+    now = bot.ElapsedS();
+    if(bot.scenarioStep < 0) { return false; }
+    if(bot.scenarioStep == 0)
+    {
+        if(client.getCoopEnemies().GetRole() != 1 || now < 25) { return false; }
+        template = (CEntityTemplate)LoadResource("characters\npc_entities\monsters\drowner_lvl1.w2ent", true);
+        thePlayer.SetImmortalityMode(AIM_Invulnerable, AIC_Cheat, true);
+        bot.scenarioEntity = theGame.CreateEntity(template, thePlayer.GetWorldPosition() + VecFromHeading(thePlayer.GetHeading()) * 6.0,
+            thePlayer.GetWorldRotation(), true, false, false, PM_DontPersist);
+        monster = (CNewNPC)bot.scenarioEntity;
+        if(!monster) { W3T_Log("STATES leader FAIL no drowner"); bot.scenarioStep = -1; return false; }
+        W3T_Log("STATES leader spawned a drowner");
+        bot.scenarioStep = 1;
+        bot.scenarioTime = now;
+        return false;
+    }
+    monster = (CNewNPC)bot.scenarioEntity;
+    if(!monster) { W3T_Log("STATES leader FAIL the drowner is gone"); bot.scenarioStep = -1; return false; }
+    W3T_Log("STATES leader step=" + bot.scenarioStep + " mode=" + (int)monster.GetImmortalityMode() + " targetable=" + monster.GetGameplayVisibility()
+        + " knockdown=" + monster.HasBuff(EET_Knockdown) + " alive=" + monster.IsAlive());
+    if(bot.scenarioStep == 1 && now - bot.scenarioTime > 12)
+    {
+        W3T_Log("STATES leader makes it untouchable");
+        // AIC_Default: the drowner's own combat tasks keep resetting AIC_Combat (btTaskManageVulnerability)
+        monster.SetImmortalityMode(AIM_Invulnerable, AIC_Default);
+        monster.SetGameplayVisibility(false);
+        bot.scenarioStep = 2;
+        bot.scenarioTime = now;
+    }
+    else if(bot.scenarioStep == 2 && now - bot.scenarioTime > 12)
+    {
+        W3T_Log("STATES leader ends the phase");
+        monster.SetImmortalityMode(AIM_None, AIC_Default);
+        monster.SetGameplayVisibility(true);
+        bot.scenarioStep = 3;
+        bot.scenarioTime = now;
+    }
+    else if(bot.scenarioStep == 3 && now - bot.scenarioTime > 8)
+    {
+        W3T_Log("STATES leader knocks it down");
+        monster.AddEffectDefault(EET_Knockdown, thePlayer, "W3T");
+        bot.scenarioStep = 4;
+        bot.scenarioTime = now;
+    }
+    else if(bot.scenarioStep == 4 && now - bot.scenarioTime > 12)
+    {
+        W3T_Log("STATES leader kills it");
+        monster.Kill('W3T', true);
+        bot.scenarioStep = 5;
+        bot.scenarioTime = now;
+    }
+    return bot.scenarioStep == 5 && now - bot.scenarioTime > 15;
+}
+
+function W3T_StatesMember(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_RemotePlayer) : bool
+{
+    var coop : r_CoopEnemies;
+    var copy : CNewNPC;
+    var i : int;
+    coop = client.getCoopEnemies();
+    if(!client.getInParty())
+    {
+        thePlayer.SetImmortalityMode(AIM_Invulnerable, AIC_Cheat, true);
+        client.joinParty(leader.username);
+        return false;
+    }
+    for(i = 0; i < coop.PuppetCount(); i += 1)
+    {
+        if(coop.PuppetAt(i) && StrFindFirst(coop.PuppetAt(i).GetReadableName(), "drowner_lvl1") >= 0) { bot.scenarioEntity = coop.PuppetAt(i); }
+    }
+    copy = (CNewNPC)bot.scenarioEntity;
+    if(!copy) { return false; }
+    W3T_Log("STATES copy step=" + bot.scenarioStep + " mode=" + (int)copy.GetImmortalityMode() + " targetable=" + copy.GetGameplayVisibility()
+        + " knockdown=" + copy.HasBuff(EET_Knockdown) + " alive=" + copy.IsAlive() + " mirrored=" + coop.statesMirrored + "/" + coop.controlStatesMirrored);
+    // scenarioStep: 1 seen untouchable, 2 seen back to normal, 3 seen knocked down
+    if(bot.scenarioStep == 0 && copy.GetImmortalityMode() == AIM_Invulnerable && !copy.GetGameplayVisibility())
+    {
+        W3T_Log("STATES copy is untouchable and untargetable, as the leader's");
+        bot.scenarioStep = 1;
+    }
+    if(bot.scenarioStep == 1 && copy.GetImmortalityMode() == AIM_None && copy.GetGameplayVisibility())
+    {
+        W3T_Log("STATES copy is back to normal");
+        bot.scenarioStep = 2;
+    }
+    if(bot.scenarioStep == 2 && copy.HasBuff(EET_Knockdown))
+    {
+        W3T_Log("STATES copy is knocked down, as the leader's");
+        bot.scenarioStep = 3;
+    }
+    return bot.scenarioStep == 3;
+}
