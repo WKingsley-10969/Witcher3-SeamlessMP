@@ -379,6 +379,20 @@ function W3T_ScenarioCheck(bot : W3T_Bot) : bool
         return W3T_SharedEnemyMember(bot, client, client.getCoopEnemies(), players[0]);
     }
 
+    if(scenario == "boss_fight")
+    {
+        if(W3T_GetEnv("W3T_ROLE") == "mover")
+        {
+            return W3T_BossLeader(bot, client);
+        }
+        // not its ghost: the leader goes far off to the fight, where only its position reaches this PC
+        if(players.Size() < 1)
+        {
+            return false;
+        }
+        return W3T_BossMember(bot, client, players[0]);
+    }
+
     if(scenario == "monster_objects")
     {
         if(W3T_GetEnv("W3T_ROLE") == "mover")
