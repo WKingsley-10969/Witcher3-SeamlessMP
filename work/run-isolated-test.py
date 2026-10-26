@@ -25,6 +25,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument('scenario')
 ap.add_argument('--save', default='ManualSave_4e4da')
 ap.add_argument('--duration', type=int)
+ap.add_argument('--timeout', type=int, default=480, help='seconds the whole run may take (the game slot is held that long plus 5 min)')
 a = ap.parse_args()
 env = dict(os.environ, W3_GAME_DIR=str(game), W3C_ROOT=str(work), W3C_WORK=str(testing),
            WO_SERVER_IP='127.0.0.1', WO_SERVER_PORT='41000', WO_USERNAME='CompileCheck')
@@ -39,7 +40,7 @@ if a.scenario == 'verify':
                '--errors', str(testing / (tag + '-errors.txt')), '--timeout', '240', '--', '-verifyscriptsandexit']
 else:
     command = [sys.executable, str(tools / 'run_test.py'), a.scenario, '--save', a.save,
-               '--duration', str(a.duration or (60 if a.scenario in ('see_each_other', 'movement') else 300)), '--timeout', '480', '--size', '960x540']
+               '--duration', str(a.duration or (60 if a.scenario in ('see_each_other', 'movement') else 300)), '--timeout', str(a.timeout), '--size', '960x540']
     if a.scenario.startswith('seamless_'):
         command.append('--campaign')
 slot_source = work / 'coop-playbook/tools/gameslot/gameslot.py'
@@ -49,7 +50,7 @@ spec = importlib.util.spec_from_file_location('gameslot', slot_source)
 slots = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(slots)
 owner = 'w3-' + uuid.uuid4().hex
-ok, indices, reason = slots.try_acquire(owner, 900, 1 if a.scenario == 'verify' else 2, time.time())
+ok, indices, reason = slots.try_acquire(owner, max(900, a.timeout + 300), 1 if a.scenario == 'verify' else 2, time.time())
 if not ok:
     raise SystemExit('Game slot unavailable: ' + reason)
 env.update(GAMESLOT_DIR=os.environ['GAMESLOT_DIR'], GAMESLOT_OWNER=owner, GAMESLOT_SOURCE=str(slot_source))
