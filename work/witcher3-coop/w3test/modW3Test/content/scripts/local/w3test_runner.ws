@@ -6,9 +6,9 @@
 //   W3T_RUN_TIME   seconds the run may take (600 unless set)
 // Every 3 s, when not in a scene: the first open objective of the quest that has a map pin is gone to (teleport);
 // there the leader talks to a character offering talk within 12 m and examines the monster clues within 15 m
-// (a character once a minute, a clue once: a trail has dozens), takes the items of containers and plants holding a
-// quest item within 30 m, and goes to a quest character within 40 m that offers talk; after 30 s with nothing to do
-// it goes to the next objective with a pin. In a scene it takes a choice once the choices have been up 2 s: the
+// (a character once a minute, a clue once: a trail has dozens), takes the items of plants and of containers holding
+// a quest item within 50 m, and goes to a quest character that offers talk within 40 m (300 m after 15 s); after
+// 30 s with nothing to do it goes to the next objective with a pin. In a scene it takes a choice once the choices have been up 2 s: the
 // first, and the next one each time the same menu comes back (a conversation that loops). Hostiles that are not the
 // boss are killed. Logs:
 //   RUN objectives | <text> ; ...      on change, then a save (ManualSave) once out of scenes and fights
@@ -132,6 +132,7 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     var clue : W3MonsterClue;
     var container : W3Container;
     var items : array<SItemUniqueId>;
+    var range : float;
     var talk : r_CoopTalk;
     var text, key : string;
     var at, spot : Vector;
@@ -295,12 +296,15 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
             return false;
         }
     }
-    // a quest's own character a little off the pin (it walks about): gone to and talked to
-    actors = thePlayer.GetNPCsAndPlayersInRange(40, 32, '', FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
+    // a quest's own character (its template under a quests folder) off the pin, as it walks about: within 40 m, and
+    // within 300 m once nothing was found here for 15 s (the hunter is not home): gone to and talked to
+    range = 40;
+    if(bot.runIdle >= 5) { range = 300; }
+    actors = thePlayer.GetNPCsAndPlayersInRange(range, 200, '', FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
     for(i = 0; i < actors.Size(); i += 1)
     {
         npc = (CNewNPC)actors[i];
-        if(npc && !npc.HasTag('MPEntity') && !npc.HasTag('w3coop_npc_copy') && StrFindFirst(npc.GetReadableName(), "quest_files") >= 0
+        if(npc && !npc.HasTag('MPEntity') && !npc.HasTag('w3coop_npc_copy') && StrFindFirst(npc.GetReadableName(), "quests") >= 0
             && W3T_Talkable(npc) && !W3T_RunRecently(bot, npc, now, 60))
         {
             spot = npc.GetWorldPosition() + VecNormalize(thePlayer.GetWorldPosition() - npc.GetWorldPosition()) * 2.0;
