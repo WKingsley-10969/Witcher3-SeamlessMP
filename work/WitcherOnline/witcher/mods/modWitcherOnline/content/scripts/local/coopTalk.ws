@@ -2,9 +2,11 @@
 // same conversation in their own game: each game starts that NPC's conversation the way the
 // Talk button does (the probe showed both get the same scene, lines and choices), so the
 // joiner watches it with camera, voice and subtitles, and its own quest graph runs it too.
-// The player who started it chooses. A joiner's click is a suggestion, shown to the chooser;
-// the chooser's pick is applied in the joiner's game when the same choice list comes up there
-// (matched by text, so a joiner that is a line or two behind still follows). Menus the
+// Whoever picks a choice first decides it (owner decision, 2026-10-26): the pick goes through in
+// that player's game, is shown above the choices in the others' as "<name> chose: <text>", and is
+// applied there when the same choice list comes up (matched by text, so a game that is a line or
+// two behind still follows). A pick that arrives for a list this game already answered itself
+// is dropped (both picked at once: each game keeps its own, logged as CONFLICT). Menus the
 // conversation opens (a shop, a barber) are closed in the joiner's game: trading is for the
 // one who asked. Records events (scene, lines, choices) for tests.
 //
@@ -19,7 +21,8 @@
 //
 // "cv open id scene voice tpl app x y z px py pz": the starter (NPC at x y z, starter at p); an
 // empty voice and template mark a scene the quest started (x y z is then the starter too)
-// "cv pick id set index text" / "cv vote id set index text" / "cv joined id scene" / "cv close id"
+// "cv pick id set index text" (from the starter or any listener; id is the starter's conversation)
+// "cv vote id set index text" (older clients' suggestion) / "cv joined id scene" / "cv close id"
 class r_CoopTalkPick
 {
     public var listNo : int;
@@ -27,6 +30,7 @@ class r_CoopTalkPick
     public var text : string;
     public var at : float;
     public var reported : bool;
+    public var who : string;
 }
 
 class r_CoopTalk
@@ -53,6 +57,7 @@ class r_CoopTalk
     private var joinFrom : Vector;     // where this player stood before being brought over
     private var joinFromRot : EulerAngles;
     private var auto : bool;           // the starter's scene was started by the quest, not by Talk
+    private var partyKnown : bool;     // the scene playing here was announced or joined in a party
 
     // an offer to join a party member's conversation, waiting for this player's answer
     private var offerOpen : bool;
@@ -74,6 +79,11 @@ class r_CoopTalk
     private var choiceTexts : array<string>;
     private var choicesOpen : bool;
     private var choicesAt : float;      // engine time the current choice list appeared
+    private var answeredSet : int;      // the last choice list answered here (its number in the conversation)
+    // "<name> chose: <text>" for a pick made in another game, shown above the choices only while
+    // they are on screen: the dialogue box's field for it lies over the subtitles otherwise
+    private var pickAlert : string;
+    private var pickAlertShown : bool;
 
     public var linesSeen : int;
     public var choiceSets : int;
@@ -82,6 +92,7 @@ class r_CoopTalk
     public var sceneMismatches : int;
     public var picksSent : int;
     public var picksApplied : int;
+    public var alertsShown : int;      // "<name> chose" shown above the choices
     public var votesSent : int;
     public var votesReceived : int;
     public var menusClosed : int;
@@ -140,8 +151,10 @@ class r_CoopTalk
         scenePath = "";
         if(scene) { scenePath = scene.GetPath(); }
         choiceSet = 0;
+        answeredSet = 0;
         choicesOpen = false;
         Record("SCENE " + scenePath);
+        partyKnown = InParty();
         // the scene's actors are this world's own NPCs: no stand-ins or hidden copies around it
         if(InParty()) { theGame.r_getMultiplayerClient().getCoopNpcs().HoldAround(thePlayer.GetWorldPosition()); }
         if(role == 2)
@@ -154,7 +167,6 @@ class r_CoopTalk
                 Record("MISMATCH host=" + hostScene);
             }
             WO_Send("coop cv joined " + hostConv + " " + CoopEncode(scenePath));
-            ShowAlert(GetLocStringById(2111114102) + " " + hostName);
             return;
         }
         if(role == 0 && talkedTo && now - talkedAt < 3.0 && InParty())
@@ -192,6 +204,11 @@ class r_CoopTalk
             WO_Send("coop cv close " + convId);
             convId = 0;
             listeners.Clear();
+            picks.Clear();
+            applyAt = 0;
+            pickAlert = "";
+            pickAlertShown = false;
+            theGame.r_getMultiplayerClient().clearDialogPickAlert();
         }
         if(role == 3 || role == 2) { LeaveConversation(); }
         else { theGame.r_getMultiplayerClient().getCoopNpcs().ReleaseScene(); }
@@ -225,29 +242,40 @@ class r_CoopTalk
         if(choicesOpen) { choiceSet += 1; }
     }
 
-    // Called before a choice is accepted here. True: the click is a joiner's suggestion and
-    // must not reach the scene; the starter's pick will come.
+    // Called before a choice is accepted here. True would keep the click from the scene: no longer
+    // used, since whoever picks first decides.
     public function InterceptChoice(index : int) : bool
     {
-        var text : string;
-        if(role != 3 || applying) { return false; }
-        if(index >= 0 && index < choiceTexts.Size()) { text = choiceTexts[index]; }
-        WO_Send("coop cv vote " + hostConv + " " + choiceSet + " " + index + " " + CoopEncode(text));
-        votesSent += 1;
-        Record("SUGGEST " + index + " " + text);
-        ShowAlert(GetLocStringById(2111114102) + " " + hostName);
-        return true;
+        return false;
     }
 
     public function OnAccepted(index : int)
     {
         var text : string;
+        var conv, i : int;
         Record("ACCEPT " + index);
         choicesOpen = false;
-        if(role == 1 && convId != 0)
+        answeredSet = choiceSet;
+        if(pickAlertShown) { theGame.r_getMultiplayerClient().clearDialogPickAlert(); }
+        pickAlertShown = false;
+        pickAlert = "";
+        if(index >= 0 && index < choiceTexts.Size()) { text = choiceTexts[index]; }
+        // this list is answered here: picks the others sent for it are too late
+        for(i = picks.Size() - 1; i >= 0; i -= 1)
         {
-            if(index >= 0 && index < choiceTexts.Size()) { text = choiceTexts[index]; }
-            WO_Send("coop cv pick " + convId + " " + choiceSet + " " + index + " " + CoopEncode(text));
+            if(picks[i].index >= 0 && picks[i].index < choiceTexts.Size() && choiceTexts[picks[i].index] == picks[i].text)
+            {
+                if(!applying && picks[i].text != text) { Record("CONFLICT kept " + text + " over " + picks[i].who + "'s " + picks[i].text); }
+                picks.Erase(i);
+            }
+        }
+        if(applying) { return; }
+        conv = 0;
+        if(role == 1) { conv = convId; }
+        else if(role == 3) { conv = hostConv; }
+        if(conv != 0)
+        {
+            WO_Send("coop cv pick " + conv + " " + choiceSet + " " + index + " " + CoopEncode(text));
             picksSent += 1;
         }
     }
@@ -292,7 +320,14 @@ class r_CoopTalk
                 handovers += 1;
                 Record("HANDOVER to " + sender);
                 WO_Send("coop cv joined " + hostConv + " " + CoopEncode(scenePath));
-                ShowAlert(GetLocStringById(2111114102) + " " + hostName);
+            }
+            else if(!listeners.Contains(sender))
+            {
+                // this game chooses: announce again, in case the other ignored this game's first
+                // announcement (its scene was not linked to a party yet)
+                Record("REOPEN for " + sender);
+                WO_Send("coop cv open " + convId + " " + CoopEncode(scenePath) + " - - - "
+                    + CoopNpcVec3(thePlayer.GetWorldPosition()) + " " + CoopNpcVec3(thePlayer.GetWorldPosition()));
             }
             return;
         }
@@ -421,17 +456,30 @@ class r_CoopTalk
         return StrCmp(theGame.r_getMultiplayerClient().getUsername(), other) < 0;
     }
 
+    // A pick from anyone in this conversation: the starter's (here listening) or a listener's (here
+    // the starter, or another listener of the same starter).
     private function OnPick(sender : string)
     {
         var pick : r_CoopTalkPick;
-        if((role != 2 && role != 3) || sender != hostName || StringToInt(WO_Str(2), 0) != hostConv) { return; }
+        var conv : int;
+        conv = StringToInt(WO_Str(2), 0);
+        if(!(((role == 2 || role == 3) && conv == hostConv) || (role == 1 && conv == convId && listeners.Contains(sender)))) { return; }
         pick = new r_CoopTalkPick in this;
         pick.listNo = StringToInt(WO_Str(3), 0);
         pick.index = StringToInt(WO_Str(4), -1);
         pick.text = CoopDecode(WO_Str(5));
         pick.at = theGame.GetEngineTimeAsSeconds();
+        pick.who = sender;
+        // both picked the same list at once: this game already went on with its own
+        if(!choicesOpen && pick.listNo == answeredSet && answeredSet > 0)
+        {
+            Record("CONFLICT late " + sender + "'s " + pick.text);
+            return;
+        }
         picks.PushBack(pick);
-        Record("PICK_IN " + pick.index + " " + pick.text);
+        Record("PICK_IN " + sender + " " + pick.index + " " + pick.text);
+        pickAlert = sender + " chose: " + pick.text;
+        pickAlertShown = false;
     }
 
     private function OnVote(sender : string)
@@ -440,7 +488,8 @@ class r_CoopTalk
         votesReceived += 1;
         lastVote = sender + ": " + CoopDecode(WO_Str(5));
         Record("VOTE_IN " + lastVote);
-        ShowAlert(sender + " > " + CoopDecode(WO_Str(5)));
+        pickAlert = sender + " > " + CoopDecode(WO_Str(5));
+        pickAlertShown = false;
     }
 
     private function OnJoined(sender : string)
@@ -479,6 +528,22 @@ class r_CoopTalk
         var i : int;
         now = theGame.GetEngineTimeAsSeconds();
 
+        // a scene that was already playing when the party formed (both games loaded a save that starts in
+        // one, as the owner's prologue checkpoint does): announced now, so the two scenes are linked (the
+        // leader's game chooses where both run it; either player's pick still goes through)
+        if(role == 0 && inScene && !partyKnown && scenePath != "" && InParty())
+        {
+            partyKnown = true;
+            convId += 1;
+            role = 1;
+            auto = true;
+            autoOpens += 1;
+            listeners.Clear();
+            Record("LATE_OPEN " + scenePath);
+            WO_Send("coop cv open " + convId + " " + CoopEncode(scenePath) + " - - - "
+                + CoopNpcVec3(thePlayer.GetWorldPosition()) + " " + CoopNpcVec3(thePlayer.GetWorldPosition()));
+        }
+
         if(role == 2 && joinNpc && joinTalkAt > 0 && now >= joinTalkAt)
         {
             joinTalkAt = 0;
@@ -504,11 +569,11 @@ class r_CoopTalk
             LeaveConversation();
             role = 0;
         }
-        if(role != 3) { return; }
+        if(role != 3 && !(role == 1 && convId != 0)) { return; }
 
         // menus the conversation opens are for the one who asked
         root = theGame.GetGuiManager().GetRootMenu();
-        if(root)
+        if(role == 3 && root)
         {
             // the scene waits (OpenGUIPanelForScene) until the panel reports it opened; closing
             // before that would leave the conversation waiting for good
@@ -518,7 +583,15 @@ class r_CoopTalk
             Record("MENU_CLOSED");
         }
 
-        // the starter's pick, once the same choice list is up here
+        // who chose, while the choices are on screen
+        if(choicesOpen && pickAlert != "" && !pickAlertShown)
+        {
+            ShowAlert(pickAlert);
+            pickAlertShown = true;
+            alertsShown += 1;
+            Record("ALERT " + pickAlert);
+        }
+        // a pick made in another game, once the same choice list is up here
         if(choicesOpen && applyAt == 0)
         {
             for(i = 0; i < picks.Size(); i += 1)
@@ -526,7 +599,7 @@ class r_CoopTalk
                 if(picks[i].index >= 0 && picks[i].index < choiceTexts.Size() && choiceTexts[picks[i].index] == picks[i].text)
                 {
                     applyIndex = picks[i].index;
-                    applyAt = now + 0.6;  // let the list settle on screen first
+                    applyAt = now + 1.5;  // the list settles on screen and "<name> chose" can be read first
                     picks.Erase(i);
                     // the scene takes the highlighted line on accept, whatever index is passed
                     module = (CR4HudModuleDialog)((CR4ScriptedHud)theGame.GetHud()).GetHudModule("DialogModule");
@@ -569,6 +642,8 @@ class r_CoopTalk
         joinNpc = NULL;
         picks.Clear();
         applyAt = 0;
+        pickAlert = "";
+        pickAlertShown = false;
     }
 
     // ------------------------------------------------------------ helpers

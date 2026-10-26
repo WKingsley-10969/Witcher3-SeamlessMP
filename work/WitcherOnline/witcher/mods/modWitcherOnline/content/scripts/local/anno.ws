@@ -1012,7 +1012,7 @@ function OnDialogChoicesSet(choices : array<SSceneChoice>, alternativeUI : bool)
 @wrapMethod(CR4HudModuleDialog)
 function OnDialogOptionAccepted(index : int)
 {
-    // in a joined conversation the click is a suggestion to the player who started it
+    // in a shared conversation whoever picks first decides (coopTalk sends the pick to the others)
     if(!theGame.r_getMultiplayerClient().getCoopTalk().InterceptChoice(index)
         && !theGame.r_getMultiplayerClient().getSeamlessCampaign().InterceptChoice(index))
     {
