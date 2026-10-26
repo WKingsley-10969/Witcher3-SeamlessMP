@@ -365,6 +365,17 @@ def main():
                 other = sorted(f for f in os.listdir(stale_saves) if f.endswith(".sav") and f != host_save)[0]
                 shutil.copy2(os.path.join(stale_saves, other), os.path.join(docs, "The Witcher 3", "gamesaves", host_save))
                 print(f"[{time.time() - t0:6.1f}s] {bot_name(i)} has {other} as a stale {host_save}", flush=True)
+            if a.scenario == "lobby_rejoin" and i > 0 and host_save:
+                # as in the owner's playtest: the second PC's folder already holds saves of its own (the
+                # launcher seeds the profile with them), and the host's save has its .json
+                owner_saves = os.path.join(OWNER_W3_DOCS, "gamesaves")
+                host_base = os.path.splitext(host_save)[0]
+                seeded = 0
+                for f in sorted(os.listdir(owner_saves)):
+                    if f.endswith((".sav", ".png", ".json")) and os.path.splitext(f)[0] != host_base:
+                        shutil.copy2(os.path.join(owner_saves, f), os.path.join(docs, "The Witcher 3", "gamesaves", f))
+                        seeded += f.endswith(".sav")
+                print(f"[{time.time() - t0:6.1f}s] {bot_name(i)} starts with {seeded} saves of its own", flush=True)
             if a.scenario == "character_safety" and i > 0:
                 # a character record for BotA without any gear, as one made outside the host's world
                 records = os.path.join(docs, "The Witcher 3", "coop-characters")

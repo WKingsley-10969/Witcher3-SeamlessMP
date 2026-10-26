@@ -11,7 +11,7 @@ import java.nio.file.attribute.FileTime;
 import java.util.Arrays;
 
 // SaveShare: the newest save is described, files of the save directory are served byte for byte,
-// and nothing outside it (or that is not a .sav/.png) can be fetched.
+// and nothing outside it (or that is not a .sav/.png/.json) can be fetched.
 public final class SaveShareTest
 {
     private static int assertions;
@@ -34,6 +34,7 @@ public final class SaveShareTest
             byte[] newer = bytes(250_000, 7);
             Files.write(saves.resolve("ManualSave_1a2b3c.sav"), older);
             Files.write(saves.resolve("ManualSave_1a2b3c.png"), bytes(900, 3));
+            Files.write(saves.resolve("ManualSave_1a2b3c.json"), "{\"build\":\"4.04\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
             Files.write(saves.resolve("QuickSave_9f8e.sav"), newer);
             Files.setLastModifiedTime(saves.resolve("ManualSave_1a2b3c.sav"), FileTime.fromMillis(1_700_000_000_000L));
             Files.setLastModifiedTime(saves.resolve("QuickSave_9f8e.sav"), FileTime.fromMillis(1_700_000_500_000L));
@@ -48,10 +49,12 @@ public final class SaveShareTest
             check(sav.status == 200 && Arrays.equals(sav.bytes, newer), "save served byte for byte");
             Response png = get(base + "/session/save/ManualSave_1a2b3c.png");
             check(png.status == 200 && png.bytes.length == 900, "thumbnail served");
+            Response json = get(base + "/session/save/ManualSave_1a2b3c.json");
+            check(json.status == 200 && new String(json.bytes, java.nio.charset.StandardCharsets.UTF_8).contains("4.04"), "save metadata (.json) served");
 
             check(get(base + "/session/save/../secret.sav").status == 404, "no path outside the directory");
             check(get(base + "/session/save/%2e%2e%2fsecret.sav").status == 404, "no encoded path outside the directory");
-            check(get(base + "/session/save/notes.txt").status == 404, "only .sav and .png files");
+            check(get(base + "/session/save/notes.txt").status == 404, "only .sav, .png and .json files");
             check(get(base + "/session/save/Missing_0000.sav").status == 404, "missing file");
             check(get(base + "/other").status == 404, "nothing else is served");
         }
