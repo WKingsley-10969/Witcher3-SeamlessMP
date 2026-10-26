@@ -356,7 +356,8 @@ function W3T_StatesLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     if(bot.scenarioStep == 1 && now - bot.scenarioTime > 12)
     {
         W3T_Log("STATES leader makes it untouchable");
-        monster.SetImmortalityMode(AIM_Invulnerable, AIC_Combat);
+        // AIC_Default: the drowner's own combat tasks keep resetting AIC_Combat (btTaskManageVulnerability)
+        monster.SetImmortalityMode(AIM_Invulnerable, AIC_Default);
         monster.SetGameplayVisibility(false);
         bot.scenarioStep = 2;
         bot.scenarioTime = now;
@@ -364,7 +365,7 @@ function W3T_StatesLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     else if(bot.scenarioStep == 2 && now - bot.scenarioTime > 12)
     {
         W3T_Log("STATES leader ends the phase");
-        monster.SetImmortalityMode(AIM_None, AIC_Combat);
+        monster.SetImmortalityMode(AIM_None, AIC_Default);
         monster.SetGameplayVisibility(true);
         bot.scenarioStep = 3;
         bot.scenarioTime = now;
