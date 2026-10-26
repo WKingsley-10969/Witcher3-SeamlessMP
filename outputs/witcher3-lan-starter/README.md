@@ -2,6 +2,8 @@
 
 Two Windows PCs on one home network: one hosts, the other joins by private IPv4 address. Built on **W3Coop v0.2.0**, a fork of **Witcher Online**. This is an experimental LAN adaptation, not a verified seamless campaign.
 
+**Version:** the `VERSION` file in this package (for example `0.3.0-alpha`) is this build's version. The package folder, its zip and its GitHub release carry the same number.
+
 The full development ZIP contains the native mod, its DLC/templates, Java server, LAN launchers, source and licenses. It contains no Witcher 3 installation or Java runtime. Each player needs a matching game. Target: Steam build **25773555**, executable resource version **5.0.0.1048522**; other builds are rejected until checked.
 
 ## On this development PC

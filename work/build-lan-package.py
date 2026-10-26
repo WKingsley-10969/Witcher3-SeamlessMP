@@ -9,9 +9,12 @@ import zipfile
 work=Path(__file__).resolve().parent
 root=work.parent
 starter=root/'outputs/witcher3-lan-starter'
-package=root/'outputs/Witcher3-LAN-0.2.0-dev'
+# the release version (outputs/witcher3-lan-starter/VERSION): the package's folder, archive and manifest carry it
+version=(starter/'VERSION').read_text(encoding='utf-8').strip()
+assert version and all(c.isalnum() or c in '.-' for c in version), 'VERSION must look like 0.3.0-alpha'
+package=root/('outputs/Witcher3-LAN-'+version)
 package.mkdir(exist_ok=True)
-for name in ('W3Lan.psm1','W3LanProfile.psm1','W3ModInstall.psm1','Play-LAN.ps1','Launch-Game.ps1','Install-LAN.ps1','Install-Copy.ps1','Remove-LAN.ps1','Manage-Mod.ps1','Manage Mod.cmd','Remove Mod.cmd','Play Host LAN.cmd','Play Join LAN.cmd','Setup LAN.cmd','Host LAN.cmd','Join LAN.cmd','Lan.ps1','Build-Server.ps1','README.md','INSTALL-UPDATE-REMOVE.md','LICENSE.txt','PROVENANCE.json','BUILD-NATIVE.md'):
+for name in ('W3Lan.psm1','W3LanProfile.psm1','W3ModInstall.psm1','Play-LAN.ps1','Launch-Game.ps1','Install-LAN.ps1','Install-Copy.ps1','Remove-LAN.ps1','Manage-Mod.ps1','Manage Mod.cmd','Remove Mod.cmd','Play Host LAN.cmd','Play Join LAN.cmd','Setup LAN.cmd','Host LAN.cmd','Join LAN.cmd','Lan.ps1','Build-Server.ps1','README.md','INSTALL-UPDATE-REMOVE.md','LICENSE.txt','PROVENANCE.json','BUILD-NATIVE.md','VERSION'):
     shutil.copy2(starter/name,package/name)
 shutil.copy2(starter/'GAME-TEST-RESULTS.md',package/'TEST-RESULTS.md')
 for name in ('server','licenses','tests'):
@@ -75,7 +78,7 @@ for relative in ('src/ScriptStringResult.h', 'src/FactOperationJournal.h'):
         shutil.copy2(new_header,source/repo/relative)
 shutil.copytree(work/'native-tests',source/'native-tests',dirs_exist_ok=True,ignore=shutil.ignore_patterns('*.exe','*.obj','*.lib','*.exp','*.log','documents'))
 shutil.copytree(work/'witcher3-coop/w3test/modW3Test',helper/'modW3Test',dirs_exist_ok=True)
-manifest={'version':'0.2.0-dev','files':[]}
+manifest={'version':version,'files':[]}
 for file in sorted((package/'mod').rglob('*')):
     if file.is_file():
         manifest['files'].append({'path':file.relative_to(package/'mod').as_posix(),'sha256':hashlib.sha256(file.read_bytes()).hexdigest()})
