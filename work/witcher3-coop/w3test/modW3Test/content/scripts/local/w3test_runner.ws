@@ -1,7 +1,7 @@
 // quest_run: plays a quest of the save on, objective by objective, and saves the game at each new objective, so a
 // boss fight's quest can be started from a save made just before it (boss_fight with W3T_SAVES_DIR). The leader
 // plays alone (no party); the second PC idles.
-//   W3T_RUN_QUEST  part of the quest's title: tracked, and played
+//   W3T_RUN_QUEST  parts of the quests' titles, comma-separated: tracked, and played (see W3T_RunQuest)
 //   W3T_RUN_BOSS   part of the boss's template name: the run ends when it shows (other hostiles are killed)
 //   W3T_RUN_TIME   seconds the run may take (600 unless set)
 // Every 3 s, when not in a scene: the first open objective of the quest that has a map pin is gone to (teleport);
@@ -20,27 +20,41 @@ function W3T_RunTime() : float
     return (float)t;
 }
 
-// The quest of W3T_RUN_QUEST among the active ones, tracked.
+// The quest played, tracked: of the active quests named in W3T_RUN_QUEST (comma-separated parts of titles, as one
+// quest hands over to another: "Lilac and Gooseberries,The Beast of White Orchard"), the first in that order with an
+// objective that has a map pin here; else the first of them active.
 function W3T_RunQuest() : CJournalQuest
 {
     var manager : CWitcherJournalManager;
     var quests : array<CJournalBase>;
-    var jq : CJournalQuest;
-    var i : int;
+    var names : array<string>;
+    var objectives : array<CJournalQuestObjective>;
+    var jq, fallback : CJournalQuest;
+    var at : Vector;
+    var i, j, k : int;
     manager = theGame.GetJournalManager();
-    jq = manager.GetTrackedQuest();
-    if(jq && StrFindFirst(GetLocStringById(jq.GetTitleStringId()), W3T_GetEnv("W3T_RUN_QUEST")) >= 0) { return jq; }
     manager.GetActivatedOfType('CJournalQuest', quests);
-    for(i = 0; i < quests.Size(); i += 1)
+    names = W3T_Split(W3T_GetEnv("W3T_RUN_QUEST"), ",");
+    for(j = 0; j < names.Size(); j += 1)
     {
-        jq = (CJournalQuest)quests[i];
-        if(jq && manager.GetEntryStatus(jq) == JS_Active && StrFindFirst(GetLocStringById(jq.GetTitleStringId()), W3T_GetEnv("W3T_RUN_QUEST")) >= 0)
+        for(i = 0; i < quests.Size(); i += 1)
         {
-            manager.SetTrackedQuest(jq);
-            return jq;
+            jq = (CJournalQuest)quests[i];
+            if(!jq || manager.GetEntryStatus(jq) != JS_Active || StrFindFirst(GetLocStringById(jq.GetTitleStringId()), names[j]) < 0) { continue; }
+            if(!fallback) { fallback = jq; }
+            objectives = W3T_RunObjectives(jq);
+            for(k = 0; k < objectives.Size(); k += 1)
+            {
+                if(W3T_RunPinAt(objectives[k], at))
+                {
+                    if(manager.GetTrackedQuest() != jq) { manager.SetTrackedQuest(jq); }
+                    return jq;
+                }
+            }
         }
     }
-    return NULL;
+    if(fallback && manager.GetTrackedQuest() != fallback) { manager.SetTrackedQuest(fallback); }
+    return fallback;
 }
 
 function W3T_RunObjectives(jq : CJournalQuest) : array<CJournalQuestObjective>
