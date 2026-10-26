@@ -379,6 +379,19 @@ function W3T_ScenarioCheck(bot : W3T_Bot) : bool
         return W3T_SharedEnemyMember(bot, client, client.getCoopEnemies(), players[0]);
     }
 
+    if(scenario == "monster_states")
+    {
+        if(W3T_GetEnv("W3T_ROLE") == "mover")
+        {
+            return W3T_StatesLeader(bot, client);
+        }
+        if(ghosts < 1)
+        {
+            return false;
+        }
+        return W3T_StatesMember(bot, client, players[0]);
+    }
+
     if(scenario == "monster_flight")
     {
         if(W3T_GetEnv("W3T_ROLE") == "mover")

@@ -61,6 +61,8 @@ class r_CoopPuppet
     public var reactUntil : float;  // forced idle lifted until then, so the AI plays the hit reaction
     public var addedNoFinishers : array<name>;
     public var flying : bool;   // in flight as the leader's monster: no gravity, free of the navmesh
+    public var immortality : int;   // the leader's monster's EActorImmortalityMode, set here on AIC_Combat
+    public var untargetable : bool; // out of gameplay visibility (no lock-on), as the leader's
 }
 
 // Feet swinging along the actor's facing over 1.5 s windows while it moves: a walking stride swings a foot tens of
@@ -344,6 +346,8 @@ class r_CoopEnemies
     public var puppetsKilled : int;  // puppets that died with the leader's monster
     public var puppetFlights : int;  // puppets that took off with the leader's monster
     public var copiesPutDown : int;  // copies killed in flight that did not fall by themselves
+    public var statesMirrored : int;  // untouchable phases started or ended on copies
+    public var controlStatesMirrored : int;  // knockdowns, staggers ... put on copies
     public var twinsBound : int;
     public var spawnFailures : int;
     public var lastError : string;
@@ -660,7 +664,7 @@ class r_CoopEnemies
 
     // "en epoch seq area acks{user session lastSeq} templates{path}
     //  enemies{netId tpl appearance x y z yaw hp alive attackSeq attackAnim hitSeq hitBy hitReaction moveSeq moveAnim
-    //  attackTarget stance projSeq [projTpl fromX fromY fromZ toX toY toZ angle speed range]}" (projSeq 0 = no projectile in the
+    //  attackTarget stance immortality untargetable states projSeq [projTpl fromX fromY fromZ toX toY toZ angle speed range]}" (projSeq 0 = no projectile in the
     //  last 1.5 s)
     private function HostSend()
     {
@@ -701,7 +705,8 @@ class r_CoopEnemies
                 + " " + alive + " " + e.attackSeq + " " + CoopEncode(NameToString(e.attackAnim))
                 + " " + e.hitSeq + " " + CoopEncode(e.hitBy) + " " + e.hitReaction
                 + " " + e.moveSeq + " " + CoopEncode(NameToString(e.moveAnim)) + " " + CoopEncode(e.attackTarget)
-                + " " + (int)e.npc.GetCurrentStance();
+                + " " + (int)e.npc.GetCurrentStance() + " " + (int)e.npc.GetImmortalityMode()
+                + " " + CoopBit(!e.npc.GetGameplayVisibility()) + " " + StateMask(e.npc);
 
             if(e.projSeq > 0 && now - e.projAt < 1.5)
             {
@@ -1475,10 +1480,10 @@ class r_CoopEnemies
         var pos : Vector;
         var attackAnim, moveAnim : name;
         var hitBy, projTpl, attackTarget : string;
-        var snapshotEpoch, n, i, idx, netId, tplIndex, attackSeq, hitSeq, hitReaction, moveSeq, projSeq, projIndex, stance : int;
+        var snapshotEpoch, n, i, idx, netId, tplIndex, attackSeq, hitSeq, hitReaction, moveSeq, projSeq, projIndex, stance, immortality, states : int;
         var hp, yaw, projAngle, projSpeed, projRange : float;
         var projFrom, projTo : Vector;
-        var alive : bool;
+        var alive, untargetable : bool;
         var app : string;
 
         if(GetRole() != 2 || sender != leaderName || count < 4)
@@ -1525,7 +1530,7 @@ class r_CoopEnemies
 
         n = StringToInt(WO_Str(idx), 0);
         idx += 1;
-        for(i = 0; i < n && idx + 17 < count; i += 1)
+        for(i = 0; i < n && idx + 20 < count; i += 1)
         {
             netId = StringToInt(WO_Str(idx), 0);
             tplIndex = StringToInt(WO_Str(idx + 1), 0);
@@ -1554,7 +1559,10 @@ class r_CoopEnemies
             }
             attackTarget = CoopDecode(WO_Str(idx + 16));
             stance = StringToInt(WO_Str(idx + 17), 0);
-            idx += 18;
+            immortality = StringToInt(WO_Str(idx + 18), 0);
+            untargetable = WO_Str(idx + 19) == "1";
+            states = StringToInt(WO_Str(idx + 20), 0);
+            idx += 21;
             projSeq = StringToInt(WO_Str(idx), 0);
             idx += 1;
             projTpl = "";
@@ -1580,7 +1588,7 @@ class r_CoopEnemies
             if(tplIndex >= 0 && tplIndex < templates.Size())
             {
                 ApplyEnemy(netId, templates[tplIndex], app, pos, yaw, hp, alive, attackSeq, attackAnim, hitSeq, hitBy, hitReaction,
-                    moveSeq, moveAnim, attackTarget, stance);
+                    moveSeq, moveAnim, attackTarget, stance, immortality, untargetable, states);
                 if(projSeq != 0 && projTpl != "")
                 {
                     ApplyProjectile(netId, projSeq, projTpl, projFrom, projTo, projAngle, projSpeed, projRange);
@@ -1732,7 +1740,7 @@ class r_CoopEnemies
 
     private function ApplyEnemy(netId : int, tpl : string, app : string, pos : Vector, yaw : float, hp : float, alive : bool,
         attackSeq : int, attackAnim : name, hitSeq : int, hitBy : string, hitReaction : int, moveSeq : int, moveAnim : name,
-        attackTarget : string, stance : int)
+        attackTarget : string, stance : int, immortality : int, untargetable : bool, states : int)
     {
         var p : r_CoopPuppet;
         var npc : CNewNPC;
@@ -1795,6 +1803,11 @@ class r_CoopEnemies
             {
                 PlayMove(p, moveAnim);
             }
+        }
+
+        if(p.alive)
+        {
+            ApplyStates(p, immortality, untargetable, states);
         }
 
         // flying or on the ground as the leader's (before the move: in flight it is not pulled down to the ground)
@@ -2224,6 +2237,123 @@ class r_CoopEnemies
         adjustor.SlideTo(ticket, p.target);
     }
 
+    // Effects that take a monster out of the fight for a while without damage (they put it in a critical state),
+    // mirrored from the leader's monster to its copies. Damage over time is not: a copy's own ticks would be sent
+    // to the leader as this player's hits.
+    private function StateEffects() : array<EEffectType>
+    {
+        var types : array<EEffectType>;
+
+        types.PushBack(EET_Knockdown);
+        types.PushBack(EET_HeavyKnockdown);
+        types.PushBack(EET_Stagger);
+        types.PushBack(EET_LongStagger);
+        types.PushBack(EET_Immobilized);
+        types.PushBack(EET_Paralyzed);
+        types.PushBack(EET_Blindness);
+        types.PushBack(EET_Confusion);
+        types.PushBack(EET_Frozen);
+        types.PushBack(EET_Tangled);
+        types.PushBack(EET_Hypnotized);
+        return types;
+    }
+
+    // Which of StateEffects the actor has, one bit each in that order.
+    private function StateMask(npc : CNewNPC) : int
+    {
+        var types : array<EEffectType>;
+        var mask, bit, i : int;
+
+        types = StateEffects();
+        bit = 1;
+        for(i = 0; i < types.Size(); i += 1)
+        {
+            if(npc.HasBuff(types[i]))
+            {
+                mask += bit;
+            }
+            bit *= 2;
+        }
+        return mask;
+    }
+
+    // The leader's monster's untouchable phases (immortality, out of gameplay visibility: a noonwraith's or
+    // alghoul's) and its knockdowns, staggers and the like, on its copy. Effects added here carry the source
+    // "W3CoopState" and only those are removed; while one lasts the forced idle tree is lifted so the copy's own
+    // AI plays the critical state, as the leader's does.
+    private function ApplyStates(p : r_CoopPuppet, immortality : int, untargetable : bool, states : int)
+    {
+        var types : array<EEffectType>;
+        var creator : CGameplayEntity;
+        var bit, i : int;
+        var has : bool;
+
+        if(immortality != p.immortality)
+        {
+            p.immortality = immortality;
+            if(immortality == (int)AIM_None)
+            {
+                p.npc.SetImmortalityMode(AIM_None, AIC_Combat);
+            }
+            else
+            {
+                p.npc.SetImmortalityMode((EActorImmortalityMode)immortality, AIC_Combat);
+            }
+            statesMirrored += 1;
+        }
+        if(untargetable != p.untargetable)
+        {
+            p.untargetable = untargetable;
+            p.npc.SetGameplayVisibility(!untargetable);
+            statesMirrored += 1;
+        }
+
+        types = StateEffects();
+        bit = 1;
+        for(i = 0; i < types.Size(); i += 1)
+        {
+            has = (states / bit) % 2 == 1;
+            bit *= 2;
+            if(has)
+            {
+                OpenReactionWindow(p);
+                if(!p.npc.HasBuff(types[i]))
+                {
+                    creator = GhostOf(leaderName);
+                    if(!creator)
+                    {
+                        creator = thePlayer;
+                    }
+                    applyingHostState = true;
+                    p.npc.AddEffectDefault(types[i], creator, "W3CoopState");
+                    applyingHostState = false;
+                    controlStatesMirrored += 1;
+                }
+            }
+            else if(p.npc.HasBuff(types[i]))
+            {
+                p.npc.RemoveBuff(types[i], true, "W3CoopState");
+            }
+        }
+    }
+
+    // A copy leaving the leader's control (a local twin gets its own AI back): nothing of the leader's state stays.
+    private function ClearStates(p : r_CoopPuppet)
+    {
+        var types : array<EEffectType>;
+        var i : int;
+
+        p.npc.SetImmortalityMode(AIM_None, AIC_Combat);
+        p.npc.SetGameplayVisibility(true);
+        types = StateEffects();
+        for(i = 0; i < types.Size(); i += 1)
+        {
+            p.npc.RemoveBuff(types[i], true, "W3CoopState");
+        }
+        p.immortality = 0;
+        p.untargetable = false;
+    }
+
     // As the game's own take-off and landing (btTaskSpawnAnim, btTaskManageGravity): a flying stance, physical
     // movement, no gravity and free of the navmesh, so the slides follow the leader's monster up into the air.
     private function SetPuppetFlying(p : r_CoopPuppet, fly : bool)
@@ -2341,6 +2471,7 @@ class r_CoopEnemies
         {
             SetPuppetFlying(p, false);
         }
+        ClearStates(p);
         if(p.animAiId != 0)
         {
             p.npc.CancelAIBehavior(p.animAiId);
