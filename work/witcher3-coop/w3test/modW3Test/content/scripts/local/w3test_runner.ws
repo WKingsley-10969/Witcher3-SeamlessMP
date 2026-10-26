@@ -172,10 +172,17 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
         W3T_Log("RUN state inScene=" + talk.InScene() + " scene='" + talk.GetScenePath() + "' dialogOrCutscene=" + theGame.IsDialogOrCutscenePlaying()
             + " choices=" + client.hasActiveDialogChoices() + " pos=" + W3T_VecStr(thePlayer.GetWorldPosition()) + " objectives='" + bot.scenarioText + "'");
     }
+    // lines and cutscenes skipped, as a player pressing skip does (the owner: no need to watch them)
+    if(theGame.IsDialogOrCutscenePlaying() && !client.hasActiveDialogChoices() && now - bot.scenarioActAt >= 0.5
+        && theGame.GetStorySceneSystem().IsSkippingLineAllowed())
+    {
+        bot.scenarioActAt = now;
+        theGame.GetStorySceneSystem().SendSignal(SSST_Skip, 0);
+    }
     if(talk.InScene())
     {
         // the same menu again (a conversation that loops back): the next choice this time
-        if(client.hasActiveDialogChoices() && talk.ChoicesAge() > 2)
+        if(client.hasActiveDialogChoices() && talk.ChoicesAge() > 1)
         {
             key = talk.GetScenePath() + "|" + talk.LastChoiceCount();
             k = bot.runPickKeys.FindFirst(key);
