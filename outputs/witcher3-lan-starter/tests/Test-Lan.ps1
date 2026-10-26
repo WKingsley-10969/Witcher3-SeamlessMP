@@ -53,10 +53,10 @@ Check 'PowerShell files parse' {
     }
 }
 Check 'private address and loopback validation' {
-    foreach ($address in @('10.0.0.2','172.16.0.2','172.31.255.254','192.168.1.20','127.0.0.1')) {
+    foreach ($address in @('10.0.0.2','172.16.0.2','172.31.255.254','192.168.1.20','127.0.0.1','100.64.0.1','100.101.102.103','100.127.255.254')) {
         Assert ((Resolve-W3LanAddress $address) -ceq $address) 'Address changed.'
     }
-    foreach ($address in @('8.8.8.8','172.15.0.1','172.32.0.1','0.0.0.0','255.255.255.255','169.254.1.2','::1','127.1','192.168.001.2','192.168.999.1','localhost','192.168.1.2;whoami')) {
+    foreach ($address in @('8.8.8.8','172.15.0.1','172.32.0.1','100.63.255.255','100.128.0.1','0.0.0.0','255.255.255.255','169.254.1.2','::1','127.1','192.168.001.2','192.168.999.1','localhost','192.168.1.2;whoami')) {
         Throws { Resolve-W3LanAddress $address }
     }
 }
@@ -78,6 +78,12 @@ Check 'missing Java and JAR fail clearly' {
 Check 'an unused UDP endpoint is not reported as connected' {
     $result = Test-W3LanEndpoint -Address 127.0.0.1 -Port (FreePort) -TimeoutMs 150
     Assert (-not $result.Reachable) 'False positive connection.'
+    $result = Test-W3LanEndpoint -Address 127.0.0.1 -Port (FreePort) -TimeoutMs 150 -Attempts 2
+    Assert (-not $result.Reachable) 'False positive connection after a retry.'
+}
+Check 'an unreachable host gets a ZeroTier or Tailscale hint' {
+    Assert ((Get-W3LanUnreachableHint '10.147.17.5') -match 'same ZeroTier network') 'No ZeroTier hint.'
+    Assert ((Get-W3LanUnreachableHint '100.101.102.103') -match 'same Tailscale tailnet') 'No Tailscale hint.'
 }
 
 $server = $null; $alice = $null; $bob = $null; $late = $null
