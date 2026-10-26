@@ -2,14 +2,18 @@
 
 What changed for players in each release of the Witcher 3 LAN co-op mod, newest first. Every release is an early alpha test build. Both PCs must run the same build: to update, extract the new package and run **Manage Mod.cmd** → **1** on both PCs.
 
-Releases up to 25 October 2026 all shipped as `Witcher3-LAN-0.2.0-dev.zip`; each one is named here by its GitHub release tag.
+From v0.3.0-alpha on, each release is named by its version and ships as `Witcher3-LAN-<version>.zip`. The builds before it all shipped as `Witcher3-LAN-0.2.0-dev.zip`; each one is named here by its GitHub release tag.
 
-## Unreleased (0.3.0-alpha)
+## Unreleased
+
+- **This changelog** is now part of the package.
+
+## v0.3.0-alpha (26 October 2026)
 
 - **Flying monsters fly on both screens.** Griffins, sirens and other flyers take off, fly at the same height and land on the second PC too. One killed in the air falls to the ground.
 - **Monster phases and knockdowns on both screens.** A monster that turns untouchable or untargetable (a noonwraith, an alghoul, a fogling in its fog) does so on both PCs, and neither player can lock on to it. A monster knocked down, staggered, frozen, blinded or held by Yrden is so on both screens.
-- **A leshen's roots and crows on both screens.** The roots it sends through the ground and the crows it throws show on the second PC too, and its crows hurt whichever player they hit.
-- **This changelog** is now part of the package.
+- **A leshen's roots on both screens.** The roots a leshen sends through the ground show on the second PC too.
+- **Attacks that come out of the ground.** A spriggan's roots and similar things a monster's attack makes appear show on both screens. Only the real ones hurt: the second PC's copies are just for show.
 
 ## lan-dev-2026-10-25-5 (25 October 2026)
 

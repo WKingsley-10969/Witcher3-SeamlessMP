@@ -1,7 +1,9 @@
 // monster_survey: which parts of a monster's fight reach the second PC. Measures, does not pass/fail on them.
 // The leader spawns each monster of W3T_SURVEY in turn (comma-separated template names under
-// characters\npc_entities\monsters\, without .w2ent) 6 m ahead, near both players (both invulnerable), hurts
-// it by 8 % every 4 s for 45 s so its health-driven phases begin, then kills it and anything hostile left.
+// characters\npc_entities\monsters\, without .w2ent, or whole template paths ending in .w2ent: a story boss)
+// 6 m ahead, near both players (both invulnerable), makes it hostile to the players if it is not (a story
+// character outside its quest), hurts it by 8 % every 4 s for 45 s so its health-driven phases begin, then kills
+// it and anything hostile left. A monster is labelled by its template's file name.
 // Both games log, once per monster and value, what they see of it:
 //   SURVEY <side> <monster> buff <effect type>        its buffs (an aura, a shield, invisibility ...)
 //   SURVEY <side> <monster> app <appearance>
@@ -13,7 +15,8 @@
 // side is "leader" (the real monster) or "copy" (the second PC's puppet of it); survey_compare.py lists what
 // the leader saw that the copy did not.
 
-function W3T_SurveyList() : array<string>
+// W3T_SURVEY as given: names under monsters\ or whole template paths
+function W3T_SurveyEntries() : array<string>
 {
     var list : array<string>;
     list = W3T_Split(W3T_GetEnv("W3T_SURVEY"), ",");
@@ -27,6 +30,31 @@ function W3T_SurveyList() : array<string>
         list.PushBack("harpy_lvl1");
     }
     return list;
+}
+
+// The monsters' labels: their template file names without .w2ent
+function W3T_SurveyList() : array<string>
+{
+    var entries, labels, parts : array<string>;
+    var i : int;
+    entries = W3T_SurveyEntries();
+    for(i = 0; i < entries.Size(); i += 1)
+    {
+        parts = W3T_Split(entries[i], StrMid("a\b", 1, 1));
+        labels.PushBack(StrReplace(parts[parts.Size() - 1], ".w2ent", ""));
+    }
+    return labels;
+}
+
+function W3T_SurveyPath(i : int) : string
+{
+    var entries : array<string>;
+    entries = W3T_SurveyEntries();
+    if(StrEndsWith(entries[i], ".w2ent"))
+    {
+        return entries[i];
+    }
+    return StrReplace("characters\npc_entities\monsters\X.w2ent", "X.w2ent", entries[i] + ".w2ent");
 }
 
 function W3T_SurveyLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
@@ -47,7 +75,7 @@ function W3T_SurveyLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     if(bot.scenarioCount == 0)
     {
         thePlayer.SetImmortalityMode(AIM_Invulnerable, AIC_Cheat, true);
-        template = (CEntityTemplate)LoadResource(StrReplace("characters\npc_entities\monsters\X.w2ent", "X.w2ent", list[bot.scenarioStep] + ".w2ent"), true);
+        template = (CEntityTemplate)LoadResource(W3T_SurveyPath(bot.scenarioStep), true);
         if(!template)
         {
             W3T_Log("SURVEY leader " + list[bot.scenarioStep] + " missing template");
@@ -66,6 +94,11 @@ function W3T_SurveyLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
             W3T_Log("SURVEY leader " + list[bot.scenarioStep] + " did not spawn an NPC");
             bot.scenarioStep += 1;
             return false;
+        }
+        if(monster.GetAttitude(thePlayer) != AIA_Hostile)
+        {
+            W3T_Log("SURVEY leader " + list[bot.scenarioStep] + " was attitude " + (int)monster.GetAttitude(thePlayer) + " to the player: made hostile");
+            monster.SetTemporaryAttitudeGroup('hostile_to_player', AGP_Default);
         }
         W3T_Log("SURVEY leader " + list[bot.scenarioStep] + " spawned as '" + monster.GetReadableName() + "'");
         bot.scenarioCount = 1;
@@ -497,4 +530,91 @@ function W3T_ObjectsMember(bot : W3T_Bot, client : r_MultiplayerClient, leader :
         }
     }
     return bot.scenarioCount >= 1;
+}
+
+// attack_objects: objects a monster's attacks spawn (roots, ice, ground trails ...) show on the second PC too. The
+// leader spawns W3T_OBJECT_MONSTER (the spriggan unless set: its roots burst out of the ground) 8 m ahead of both
+// players, hostile, and lets it fight for 100 s. The leader must have reported at least one object; the second PC
+// must have spawned a copy of at least one (tagged W3CoopMirror) and none may have failed. Both log what they saw;
+// the second PC also logs the damage its copies tried to deal here (dropped) and the leader's hurts that reached it.
+function W3T_AttackObjectsMonster() : string
+{
+    if(W3T_GetEnv("W3T_OBJECT_MONSTER") != "") { return W3T_GetEnv("W3T_OBJECT_MONSTER"); }
+    return "dlc\bob\data\characters\npc_entities\monsters\spriggan.w2ent";
+}
+
+function W3T_AttackObjectsLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
+{
+    var template : CEntityTemplate;
+    var monster : CNewNPC;
+    var coop : r_CoopEnemies;
+    var now : float;
+    now = bot.ElapsedS();
+    coop = client.getCoopEnemies();
+    if(bot.scenarioStep < 0) { return false; }
+    if(bot.scenarioStep == 0)
+    {
+        if(coop.GetRole() != 1 || now < 25) { return false; }
+        template = (CEntityTemplate)LoadResource(W3T_AttackObjectsMonster(), true);
+        thePlayer.SetImmortalityMode(AIM_Invulnerable, AIC_Cheat, true);
+        bot.scenarioEntity = theGame.CreateEntity(template, thePlayer.GetWorldPosition() + VecFromHeading(thePlayer.GetHeading()) * 8.0,
+            thePlayer.GetWorldRotation(), true, false, false, PM_DontPersist);
+        monster = (CNewNPC)bot.scenarioEntity;
+        if(!monster) { W3T_Log("ATTACKOBJ leader FAIL no monster from " + W3T_AttackObjectsMonster()); bot.scenarioStep = -1; return false; }
+        if(monster.GetAttitude(thePlayer) != AIA_Hostile) { monster.SetTemporaryAttitudeGroup('hostile_to_player', AGP_Default); }
+        W3T_Log("ATTACKOBJ leader spawned " + W3T_SurveyEntityName(monster));
+        bot.scenarioStep = 1;
+        bot.scenarioTime = now;
+        return false;
+    }
+    if(bot.scenarioStep == 1 && now - bot.scenarioSeenAt >= 10)
+    {
+        bot.scenarioSeenAt = now;
+        W3T_Log("ATTACKOBJ leader objects reported " + coop.objectsSeen + " hurts sent " + coop.hurtsCaptured);
+    }
+    monster = (CNewNPC)bot.scenarioEntity;
+    if(bot.scenarioStep == 1 && now - bot.scenarioTime > 100)
+    {
+        if(monster) { monster.Kill('W3T', true); }
+        if(coop.objectsSeen < 1) { W3T_Log("ATTACKOBJ leader FAIL its monster spawned no object: nothing to compare"); bot.scenarioStep = -1; return false; }
+        bot.scenarioStep = 2;
+        bot.scenarioTime = now;
+    }
+    return bot.scenarioStep == 2 && now - bot.scenarioTime > 10;
+}
+
+function W3T_AttackObjectsMember(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_RemotePlayer) : bool
+{
+    var entities : array<CGameplayEntity>;
+    var coop : r_CoopEnemies;
+    var i : int;
+    coop = client.getCoopEnemies();
+    if(!client.getInParty())
+    {
+        thePlayer.SetImmortalityMode(AIM_Invulnerable, AIC_Cheat, true);
+        client.joinParty(leader.username);
+        return false;
+    }
+    FindGameplayEntitiesInRange(entities, thePlayer, 60, 100);
+    for(i = 0; i < entities.Size(); i += 1)
+    {
+        if(entities[i].HasTag('W3CoopMirror') && !bot.scenarioEntities.Contains(entities[i]))
+        {
+            bot.scenarioEntities.PushBack(entities[i]);
+            W3T_Log("ATTACKOBJ copy spawned " + W3T_SurveyEntityName(entities[i]) + " (objects " + coop.objectsSpawned + ", failed "
+                + coop.objectFailures + ", their damage dropped " + coop.mirrorDamageDropped + ", hurts from the leader " + coop.hurtsApplied + ")");
+        }
+    }
+    if(coop.objectFailures > 0 && bot.scenarioStep == 0)
+    {
+        W3T_Log("ATTACKOBJ copy FAIL an object could not be copied: " + coop.lastError);
+        bot.scenarioStep = -1;
+    }
+    if(bot.ElapsedS() - bot.scenarioSeenAt >= 10)
+    {
+        bot.scenarioSeenAt = bot.ElapsedS();
+        W3T_Log("ATTACKOBJ copy objects " + coop.objectsSpawned + " failed " + coop.objectFailures + " damage dropped " + coop.mirrorDamageDropped
+            + " hurts " + coop.hurtsApplied);
+    }
+    return bot.scenarioStep == 0 && coop.objectsSpawned >= 1 && bot.ElapsedS() > 120;
 }

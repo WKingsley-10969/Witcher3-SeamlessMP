@@ -333,6 +333,7 @@ statemachine class W3T_Bot
     public var surveyLabels : array<string>;   // ... the second PC: monsters whose copy appeared
     public var surveyStartZ : array<float>;    // ... and the height it appeared at
     public var surveyCopies : array<CEntity>;  // ... and those copies
+    public var bossScene : string;             // boss_fight: the scene last logged
     public var scenarioActAt : float;    // when it last moved
     public var scenarioSeenAt : float;   // when it last saw an enemy
     public var scenarioFarSince : float; // since when its target has been out of reach
