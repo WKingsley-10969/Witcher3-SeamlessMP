@@ -316,6 +316,13 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
         }
     }
     bot.runIdle += 1;
+    // the hunter is not loaded at all at 16:00 in his pin's area: wait 3 hours each 30 s idle (as meditating), for
+    // a quest character kept to some hours of the day
+    if(bot.runIdle % 10 == 5)
+    {
+        theGame.SetGameTime(theGame.GetGameTime() + GameTimeCreate(0, 3, 0, 0), true);
+        W3T_Log("RUN waits 3 hours: now " + GameTimeHours(theGame.GetGameTime()) + ":00, " + W3T_RunQuestCharacters() + " quest characters loaded");
+    }
     if(bot.runIdle >= 10 && pinned.Size() > 1)
     {
         bot.runIdle = 0;
@@ -326,18 +333,6 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     if(!bot.surveySeen.Contains("idle|" + text + "|" + bot.runObjective))
     {
         bot.surveySeen.PushBack("idle|" + text + "|" + bot.runObjective);
-        // the quest's own characters anywhere loaded (the hunter was not within 300 m of his pin), and the hour
-        actors = thePlayer.GetNPCsAndPlayersInRange(3000, 3000, '', FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
-        for(i = 0; i < actors.Size(); i += 1)
-        {
-            npc = (CNewNPC)actors[i];
-            if(npc && StrFindFirst(npc.GetReadableName(), "quests") >= 0)
-            {
-                W3T_Log("RUN idle quest character " + NpcVoice(npc) + " (" + W3T_SurveyEntityName(npc) + ") dist=" + FloatToStringPrec(VecDistance(
-                    thePlayer.GetWorldPosition(), npc.GetWorldPosition()), 1) + " at " + W3T_VecStr(npc.GetWorldPosition()) + " talk=" + W3T_Talkable(npc));
-            }
-        }
-        W3T_Log("RUN idle hour " + GameTimeHours(theGame.GetGameTime()) + ", " + actors.Size() + " actors loaded");
         actors = thePlayer.GetNPCsAndPlayersInRange(30, 32, '', FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
         for(i = 0; i < actors.Size(); i += 1)
         {
@@ -358,4 +353,24 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
         }
     }
     return false;
+}
+
+// The quest's own characters loaded anywhere (their templates under a quests folder), logged; their count
+function W3T_RunQuestCharacters() : int
+{
+    var actors : array<CActor>;
+    var npc : CNewNPC;
+    var i, n : int;
+    actors = thePlayer.GetNPCsAndPlayersInRange(3000, 3000, '', FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
+    for(i = 0; i < actors.Size(); i += 1)
+    {
+        npc = (CNewNPC)actors[i];
+        if(npc && StrFindFirst(npc.GetReadableName(), "quests") >= 0)
+        {
+            n += 1;
+            W3T_Log("RUN quest character " + NpcVoice(npc) + " (" + W3T_SurveyEntityName(npc) + ") dist=" + FloatToStringPrec(VecDistance(
+                thePlayer.GetWorldPosition(), npc.GetWorldPosition()), 1) + " at " + W3T_VecStr(npc.GetWorldPosition()) + " talk=" + W3T_Talkable(npc));
+        }
+    }
+    return n;
 }
