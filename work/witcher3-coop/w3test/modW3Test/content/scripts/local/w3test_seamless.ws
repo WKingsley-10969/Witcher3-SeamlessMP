@@ -1251,7 +1251,7 @@ function W3T_TalkShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_R
         + " picksApplied=" + talk.picksApplied + " votesSent=" + talk.votesSent + " votesReceived=" + talk.votesReceived + " menusClosed=" + talk.menusClosed
         + " lines=" + talk.linesSeen + " scene=" + talk.GetScenePath());
     if(host) { return bot.scenarioStep == 3 && talk.sceneMismatches == 0 && talk.picksSent >= 1; }
-    return bot.scenarioStep == 4 && talk.picksApplied >= 1 && talk.picksSent == 0;
+    return bot.scenarioStep == 4 && talk.picksApplied >= 1 && talk.picksSent == 0 && talk.alertsShown >= 1;
 }
 
 // scene_probe: lists the save's active quests, the tracked one and its open objectives, so a
