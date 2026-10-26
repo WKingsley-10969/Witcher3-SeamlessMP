@@ -140,6 +140,8 @@ Shared-progress limits: only quest facts and quest-log states travel, so a quest
 
 **A leshen's roots and crows (new).** The roots a leshen sends through the ground and the crows it throws show on both screens, and its crows hurt whichever player they hit. A griffin's landing dust already shows with its flight.
 
+**Attacks that come out of the ground (new).** What a monster's attack makes appear, such as a spriggan's roots bursting out under you, shows on both screens. Only the real one hurts: the other player's copy is just for show.
+
 Inherited limits include the roughly 60 m shared-enemy range, independently started scenes, incomplete enemy animation/spell/summon cases and loot on corpses outside the shared-enemy range. This adaptation does not remove them. The server has no enforced two-player cap or authenticated LAN session; use it on your trusted home network.
 
 To remove the managed mod, close the game/server and use **Remove Mod.cmd**. To discard a separate development copy instead, keep desired co-op saves first, then remove that separate folder. The installer never deletes a game installation or co-op saves.

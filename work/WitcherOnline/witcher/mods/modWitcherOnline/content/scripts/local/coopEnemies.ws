@@ -31,6 +31,11 @@ class r_CoopHostEnemy
     public var projAngle : float;
     public var projSpeed : float;
     public var projRange : float;
+    public var objSeq : int;         // objects its attacks spawned (roots, ice, trails ...): the last few, for members
+    public var objTemplates : array<string>;
+    public var objPositions : array<Vector>;
+    public var objYaws : array<float>;
+    public var objTimes : array<float>;
     public var stride : r_CoopStride;
 }
 
@@ -51,6 +56,7 @@ class r_CoopPuppet
     public var slotAnimAt : float;  // an attack or move started playing (it stands meanwhile)
     public var moveSeq : int;
     public var projSeq : int;
+    public var objSeq : int;
     public var animAiId : int;
     public var hitSeq : int;
     public var wasInHitAnim : bool;
@@ -385,6 +391,10 @@ class r_CoopEnemies
     public var signHitsSent : int;
     public var projectilesFired : int;
     public var projectileFailures : int;
+    public var objectsSeen : int;           // leader: objects its shared monsters' attacks spawned
+    public var objectsSpawned : int;        // member: harmless copies of them spawned here
+    public var objectFailures : int;
+    public var mirrorDamageDropped : int;   // member: damage those copies (and copied projectiles) tried to deal here
     public var lastHurtDelay : float;
     public var hitReactionsMirrored : int;
     public var hitAnimsSeen : int;  // puppets entering a hit animation (shows the reactions really play)
@@ -664,8 +674,9 @@ class r_CoopEnemies
 
     // "en epoch seq area acks{user session lastSeq} templates{path}
     //  enemies{netId tpl appearance x y z yaw hp alive attackSeq attackAnim hitSeq hitBy hitReaction moveSeq moveAnim
-    //  attackTarget stance immortality untargetable states projSeq [projTpl fromX fromY fromZ toX toY toZ angle speed range]}" (projSeq 0 = no projectile in the
-    //  last 1.5 s)
+    //  attackTarget stance immortality untargetable states projSeq [projTpl fromX fromY fromZ toX toY toZ angle speed range]
+    //  objSeq objCount {objTpl x y z yaw}}" (projSeq 0 = no projectile in the last 1.5 s; the objects are those its attacks
+    //  spawned in the last 1.5 s, at most 4, the last one numbered objSeq)
     private function HostSend()
     {
         var templates : array<string>;
@@ -675,7 +686,7 @@ class r_CoopEnemies
         var e : r_CoopHostEnemy;
         var tplIndex : int;
         var alive : int;
-        var i : int;
+        var i, j : int;
         var now : float;
 
         now = theGame.GetEngineTimeAsSeconds();
@@ -725,6 +736,21 @@ class r_CoopEnemies
             else
             {
                 body += " 0";
+            }
+
+            TrimObjects(e, now);
+            body += " " + e.objSeq + " " + e.objTimes.Size();
+            for(j = 0; j < e.objTimes.Size(); j += 1)
+            {
+                tpl = CoopEncode(e.objTemplates[j]);
+                tplIndex = templates.FindFirst(tpl);
+                if(tplIndex < 0)
+                {
+                    templates.PushBack(tpl);
+                    tplIndex = templates.Size() - 1;
+                }
+                body += " " + tplIndex + " " + FloatToStringPrec(e.objPositions[j].X, 2) + " " + FloatToStringPrec(e.objPositions[j].Y, 2)
+                    + " " + FloatToStringPrec(e.objPositions[j].Z, 2) + " " + FloatToStringPrec(e.objYaws[j], 1);
             }
         }
 
@@ -1167,13 +1193,14 @@ class r_CoopEnemies
         attacker = (CActor)act.attacker;
         victim = (CActor)act.victim;
 
-        // a member's puppets only hurt it through the leader's hits
-        if((CNewNPC)attacker && IsPuppet((CNewNPC)attacker) && act.GetBuffSourceName() != "W3CoopHurt")
+        // the projectiles and attack objects copied here for the leader's monsters never hurt (some name no attacker)
+        if(act.causer && ((CEntity)act.causer).HasTag('W3CoopMirror'))
         {
+            mirrorDamageDropped += 1;
             return true;
         }
-        // nor do the projectiles fired here for the leader's monsters (some name no attacker)
-        if(act.causer && ((CEntity)act.causer).HasTag('W3CoopMirror'))
+        // a member's puppets only hurt it through the leader's hits
+        if((CNewNPC)attacker && IsPuppet((CNewNPC)attacker) && act.GetBuffSourceName() != "W3CoopHurt")
         {
             return true;
         }
@@ -1491,6 +1518,10 @@ class r_CoopEnemies
         var attackAnim, moveAnim : name;
         var hitBy, projTpl, attackTarget : string;
         var snapshotEpoch, n, i, idx, netId, tplIndex, attackSeq, hitSeq, hitReaction, moveSeq, projSeq, projIndex, stance, immortality, states : int;
+        var objSeq, objCount, objIndex, j : int;
+        var objTpls : array<string>;
+        var objPositions : array<Vector>;
+        var objYaws : array<float>;
         var hp, yaw, projAngle, projSpeed, projRange : float;
         var projFrom, projTo : Vector;
         var alive, untargetable : bool;
@@ -1594,6 +1625,27 @@ class r_CoopEnemies
                 projRange = StringToFloat(WO_Str(idx + 9), 0);
                 idx += 10;
             }
+            if(idx + 1 >= count)
+            {
+                break;
+            }
+            objSeq = StringToInt(WO_Str(idx), 0);
+            objCount = StringToInt(WO_Str(idx + 1), 0);
+            idx += 2;
+            objTpls.Clear();
+            objPositions.Clear();
+            objYaws.Clear();
+            for(j = 0; j < objCount && idx + 4 < count; j += 1)
+            {
+                objIndex = StringToInt(WO_Str(idx), 0);
+                if(objIndex >= 0 && objIndex < templates.Size())
+                {
+                    objTpls.PushBack(templates[objIndex]);
+                    objPositions.PushBack(Vector(StringToFloat(WO_Str(idx + 1), 0), StringToFloat(WO_Str(idx + 2), 0), StringToFloat(WO_Str(idx + 3), 0), 1));
+                    objYaws.PushBack(StringToFloat(WO_Str(idx + 4), 0));
+                }
+                idx += 5;
+            }
 
             if(tplIndex >= 0 && tplIndex < templates.Size())
             {
@@ -1602,6 +1654,10 @@ class r_CoopEnemies
                 if(projSeq != 0 && projTpl != "")
                 {
                     ApplyProjectile(netId, projSeq, projTpl, projFrom, projTo, projAngle, projSpeed, projRange);
+                }
+                if(objSeq != 0 && objTpls.Size() > 0)
+                {
+                    ApplyObjects(netId, objSeq, objTpls, objPositions, objYaws);
                 }
                 seen.PushBack(netId);
             }
@@ -2017,6 +2073,96 @@ class r_CoopEnemies
         }
         p.npc.NoticeActor(actor);
         attacksPlayed += 1;
+    }
+
+    // A shared monster's attack spawned an object (the spriggan's roots, a giant's ground trail, ice ...): kept 1.5 s for
+    // members to spawn a harmless copy. Actors are left out: a summoned monster is shared as an enemy of its own.
+    public function OnEnemyObject(npc : CNewNPC, entity : CEntity)
+    {
+        var e : r_CoopHostEnemy;
+
+        if(!wasHost || !entity || (CActor)entity)
+        {
+            return;
+        }
+        e = FindHostEnemyByNpc(npc);
+        if(!e)
+        {
+            return;
+        }
+        e.objSeq += 1;
+        e.objTemplates.PushBack(entity.GetReadableName());
+        e.objPositions.PushBack(entity.GetWorldPosition());
+        e.objYaws.PushBack(entity.GetHeading());
+        e.objTimes.PushBack(theGame.GetEngineTimeAsSeconds());
+        TrimObjects(e, theGame.GetEngineTimeAsSeconds());
+        objectsSeen += 1;
+    }
+
+    // Only the last 4 objects of the last 1.5 s.
+    private function TrimObjects(e : r_CoopHostEnemy, now : float)
+    {
+        while(e.objTimes.Size() > 4 || (e.objTimes.Size() > 0 && now - e.objTimes[0] > 1.5))
+        {
+            e.objTemplates.Erase(0);
+            e.objPositions.Erase(0);
+            e.objYaws.Erase(0);
+            e.objTimes.Erase(0);
+        }
+    }
+
+    // The leader's monster's attack objects not spawned here yet: harmless copies where the leader's are (tagged, their
+    // damage never counts here; a damage area's owner is this world's puppet, whose damage is dropped too). The
+    // leader's real ones hurt this player through hurts.
+    private function ApplyObjects(netId : int, seq : int, tpls : array<string>, positions : array<Vector>, yaws : array<float>)
+    {
+        var p : r_CoopPuppet;
+        var template : CEntityTemplate;
+        var ent : CEntity;
+        var area : CDamageAreaEntity;
+        var tags : array<name>;
+        var rot : EulerAngles;
+        var first, i : int;
+
+        p = FindPuppet(netId);
+        if(!p || seq <= p.objSeq)
+        {
+            return;
+        }
+        first = seq - tpls.Size() + 1;
+        for(i = 0; i < tpls.Size() && p.alive; i += 1)
+        {
+            if(first + i <= p.objSeq)
+            {
+                continue;
+            }
+            template = (CEntityTemplate)LoadResource(tpls[i], true);
+            if(!template)
+            {
+                objectFailures += 1;
+                lastError = "object '" + tpls[i] + "' could not be loaded";
+                continue;
+            }
+            tags.Clear();
+            tags.PushBack('W3CoopMirror');
+            rot.Yaw = yaws[i];
+            ent = theGame.CreateEntity(template, positions[i], rot, true, false, false, PM_DontPersist, tags);
+            if(!ent)
+            {
+                objectFailures += 1;
+                lastError = "object '" + tpls[i] + "' could not be spawned";
+                continue;
+            }
+            area = (CDamageAreaEntity)ent;
+            if(area)
+            {
+                area.owner = p.npc;
+            }
+            // they end by themselves; a copy left behind would stay
+            ent.DestroyAfter(20);
+            objectsSpawned += 1;
+        }
+        p.objSeq = seq;
     }
 
     // The leader's monster fired a projectile (in the last 1.5 s): a harmless copy flies from this world's puppet
@@ -3451,6 +3597,45 @@ function CoopReportTaskProjectile(npc : CNewNPC, near : Vector, speed : float, t
         best.AddTag('W3CoopReported');
         client.getCoopEnemies().OnEnemyProjectile(best, 0, speed, target, range);
     }
+}
+
+function CoopReportObject(npc : CNewNPC, entity : CEntity)
+{
+    var client : r_MultiplayerClient;
+
+    client = theGame.r_getMultiplayerClient();
+    if(client && npc && entity)
+    {
+        client.getCoopEnemies().OnEnemyObject(npc, entity);
+    }
+}
+
+// Monster attacks that spawn an object next to the monster or its target (the spriggan's roots, a giant's trail ...).
+@wrapMethod(CBTTaskSpawnEntityOffset)
+function SpawnEntity()
+{
+    wrappedMethod();
+    CoopReportObject(GetNPC(), entity);
+}
+
+@wrapMethod(CBTTaskSpawnMultipleEntitiesAttack)
+function CreateEntity(_SpawnPos : Vector, _Rotation : EulerAngles) : CEntity
+{
+    var spawned : CEntity;
+
+    spawned = wrappedMethod(_SpawnPos, _Rotation);
+    CoopReportObject(GetNPC(), spawned);
+    return spawned;
+}
+
+@wrapMethod(CBTTaskSpawnMultipleEntities3StateAttack)
+function CreateEntity(_SpawnPos : Vector, _Rotation : EulerAngles) : CEntity
+{
+    var spawned : CEntity;
+
+    spawned = wrappedMethod(_SpawnPos, _Rotation);
+    CoopReportObject(GetNPC(), spawned);
+    return spawned;
 }
 
 // The leshen's root: travels underground to its target and bursts out (W3LeshyRootProjectile).
