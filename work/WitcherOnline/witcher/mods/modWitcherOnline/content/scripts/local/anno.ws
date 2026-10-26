@@ -205,6 +205,13 @@ function OnAfterLoadingScreenGameStart()
     theGame.r_getMultiplayerClient().getCoopSession().OnGameStarted();
     theGame.r_getMultiplayerClient().getCoopLobby().OnGameStarted();
     theGame.r_getMultiplayerClient().getCoopCharacter().OnGameStarted();
+    theGame.r_getMultiplayerClient().getCoopTalk().Reset();
+    // a pause lock copied from another player by an older version, saved with the game
+    if(!theGame.IsDialogOrCutscenePlaying() && FactsQuerySum("nge_pause_menu_disabled") > 0)
+    {
+        FactsRemove("nge_pause_menu_disabled");
+        WO_Log("coop removed a stale pause lock (nge_pause_menu_disabled)");
+    }
     theGame.r_getMultiplayerClient().setSpawnTime(theGame.GetEngineTimeAsSeconds());
     theGame.r_getMultiplayerClient().setEmote(-1);
 
@@ -1012,7 +1019,7 @@ function OnDialogChoicesSet(choices : array<SSceneChoice>, alternativeUI : bool)
 @wrapMethod(CR4HudModuleDialog)
 function OnDialogOptionAccepted(index : int)
 {
-    // in a joined conversation the click is a suggestion to the player who started it
+    // in a shared conversation whoever picks first decides (coopTalk sends the pick to the others)
     if(!theGame.r_getMultiplayerClient().getCoopTalk().InterceptChoice(index)
         && !theGame.r_getMultiplayerClient().getSeamlessCampaign().InterceptChoice(index))
     {
