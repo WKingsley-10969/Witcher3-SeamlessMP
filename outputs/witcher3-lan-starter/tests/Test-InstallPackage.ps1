@@ -8,8 +8,10 @@ $fixture = Join-Path ([IO.Path]::GetFullPath($TestRoot)) ([Guid]::NewGuid().ToSt
 $extract = Join-Path $fixture 'package'; [void][IO.Directory]::CreateDirectory($extract)
 $zip=[IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath $Archive).Path)
 try {
+    # every entry under the package's one top folder, named for its version (Witcher3-LAN-0.3.0-alpha/)
+    $prefix=$zip.Entries[0].FullName.Split('/')[0]+'/'
+    if($prefix -notmatch '\AWitcher3-LAN-[0-9A-Za-z.-]+/\z') {throw 'Unexpected package folder'}
     foreach($entry in $zip.Entries) {
-        $prefix='Witcher3-LAN-0.2.0-dev/'
         if(-not $entry.FullName.StartsWith($prefix) -or $entry.FullName.Contains('\') -or $entry.FullName.Split('/') -contains '..') {throw 'Unexpected archive path'}
         $relative=$entry.FullName.Substring($prefix.Length)
         if(-not $relative -or $relative.EndsWith('/')) {continue}
