@@ -425,3 +425,76 @@ function W3T_StatesMember(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
     }
     return bot.scenarioStep == 3;
 }
+
+// monster_objects: what a monster's attacks fire shows on the second PC too. The leader spawns a leshen next to
+// both players and lets it fight for 100 s: its roots (underground, bursting out at the target) and crows are its
+// own projectile classes. The leader must report at least one root it fired; the second PC must see at least one
+// root fired here for it (tagged W3CoopMirror).
+function W3T_ObjectsLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
+{
+    var template : CEntityTemplate;
+    var monster : CNewNPC;
+    var entities : array<CGameplayEntity>;
+    var i : int;
+    var now : float;
+    now = bot.ElapsedS();
+    if(bot.scenarioStep < 0) { return false; }
+    if(bot.scenarioStep == 0)
+    {
+        if(client.getCoopEnemies().GetRole() != 1 || now < 25) { return false; }
+        template = (CEntityTemplate)LoadResource("characters\npc_entities\monsters\lessog_lvl1.w2ent", true);
+        thePlayer.SetImmortalityMode(AIM_Invulnerable, AIC_Cheat, true);
+        bot.scenarioEntity = theGame.CreateEntity(template, thePlayer.GetWorldPosition() + VecFromHeading(thePlayer.GetHeading()) * 8.0,
+            thePlayer.GetWorldRotation(), true, false, false, PM_DontPersist);
+        monster = (CNewNPC)bot.scenarioEntity;
+        if(!monster) { W3T_Log("OBJECTS leader FAIL no leshen"); bot.scenarioStep = -1; return false; }
+        W3T_Log("OBJECTS leader spawned a leshen");
+        bot.scenarioStep = 1;
+        bot.scenarioTime = now;
+        return false;
+    }
+    FindGameplayEntitiesInRange(entities, thePlayer, 60, 100);
+    for(i = 0; i < entities.Size(); i += 1)
+    {
+        if(entities[i].HasTag('W3CoopReported') && !bot.scenarioEntities.Contains(entities[i]))
+        {
+            bot.scenarioEntities.PushBack(entities[i]);
+            if((W3LeshyRootProjectile)entities[i]) { bot.scenarioCount += 1; }
+            W3T_Log("OBJECTS leader fired and reported " + W3T_SurveyEntityName(entities[i]));
+        }
+    }
+    monster = (CNewNPC)bot.scenarioEntity;
+    if(bot.scenarioStep == 1 && now - bot.scenarioTime > 100)
+    {
+        W3T_Log("OBJECTS leader roots reported: " + bot.scenarioCount + ", projectiles seen " + client.getCoopEnemies().projectilesSeen);
+        if(monster) { monster.Kill('W3T', true); }
+        if(bot.scenarioCount < 1) { W3T_Log("OBJECTS leader FAIL its leshen fired no root: nothing to compare"); bot.scenarioStep = -1; return false; }
+        bot.scenarioStep = 2;
+        bot.scenarioTime = now;
+    }
+    return bot.scenarioStep == 2 && now - bot.scenarioTime > 10;
+}
+
+function W3T_ObjectsMember(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_RemotePlayer) : bool
+{
+    var entities : array<CGameplayEntity>;
+    var i : int;
+    if(!client.getInParty())
+    {
+        thePlayer.SetImmortalityMode(AIM_Invulnerable, AIC_Cheat, true);
+        client.joinParty(leader.username);
+        return false;
+    }
+    FindGameplayEntitiesInRange(entities, thePlayer, 60, 100);
+    for(i = 0; i < entities.Size(); i += 1)
+    {
+        if(entities[i].HasTag('W3CoopMirror') && !bot.scenarioEntities.Contains(entities[i]))
+        {
+            bot.scenarioEntities.PushBack(entities[i]);
+            if((W3LeshyRootProjectile)entities[i]) { bot.scenarioCount += 1; }
+            W3T_Log("OBJECTS copy fired " + W3T_SurveyEntityName(entities[i]) + " for the leader's leshen (roots " + bot.scenarioCount
+                + ", fired " + client.getCoopEnemies().projectilesFired + ", failed " + client.getCoopEnemies().projectileFailures + ")");
+        }
+    }
+    return bot.scenarioCount >= 1;
+}

@@ -1172,6 +1172,11 @@ class r_CoopEnemies
         {
             return true;
         }
+        // nor do the projectiles fired here for the leader's monsters (some name no attacker)
+        if(act.causer && ((CEntity)act.causer).HasTag('W3CoopMirror'))
+        {
+            return true;
+        }
 
         if(!wasHost)
         {
@@ -1187,6 +1192,11 @@ class r_CoopEnemies
         {
             ghostHitsSeen += 1;
             e = FindHostEnemyByNpc((CNewNPC)attacker);
+            if(!e)
+            {
+                // a projectile's own damage (the leshen's crows name no attacker): the monster that fired it
+                e = FindHostEnemyByNpc(ProjectileCaster(act.causer));
+            }
             user = GhostOwner(victim);
             if(e && user != "")
             {
@@ -1341,11 +1351,11 @@ class r_CoopEnemies
     // One of its other animated moves (a behavior-tree task that plays an animation: dodge, jump back, taunt,
     // shot, ...); every animation event of it arrives here, a new one is a new name or a restart.
     // A shared monster shot a projectile (arrow, bolt, spit, boulder, ...).
-    public function OnEnemyProjectile(proj : W3AdvancedProjectile, angle : float, speed : float, target : Vector, range : float)
+    public function OnEnemyProjectile(proj : CProjectileTrajectory, angle : float, speed : float, target : Vector, range : float)
     {
         var e : r_CoopHostEnemy;
 
-        if(!wasHost)
+        if(!wasHost || !proj)
         {
             return;
         }
@@ -2016,7 +2026,10 @@ class r_CoopEnemies
     {
         var p : r_CoopPuppet;
         var template : CEntityTemplate;
+        var ent : CEntity;
         var proj : W3AdvancedProjectile;
+        var trajectory : CProjectileTrajectory;
+        var tags : array<name>;
 
         p = FindPuppet(netId);
         if(!p || seq == p.projSeq)
@@ -2031,10 +2044,30 @@ class r_CoopEnemies
         template = (CEntityTemplate)LoadResource(tpl, true);
         if(template)
         {
-            proj = (W3AdvancedProjectile)theGame.CreateEntity(template, from, VecToRotation(to - from));
+            // tagged: its damage here never counts (OnBeforeDamage)
+            tags.PushBack('W3CoopMirror');
+            ent = theGame.CreateEntity(template, from, VecToRotation(to - from), true, false, false, PM_DontPersist, tags);
+        }
+        proj = (W3AdvancedProjectile)ent;
+        trajectory = (CProjectileTrajectory)ent;
+        if(!proj && trajectory)
+        {
+            // a monster's own projectile class (the leshen's roots and crows): fired as the monster's task fires it
+            trajectory.Init(p.npc);
+            trajectory.ShootProjectileAtPosition(angle, speed, to, range);
+            if((W3LeshyRootProjectile)trajectory)
+            {
+                trajectory.PlayEffect('ground_fx');
+            }
+            projectilesFired += 1;
+            return;
         }
         if(!proj)
         {
+            if(ent)
+            {
+                ent.Destroy();
+            }
             projectileFailures += 1;
             lastError = "projectile '" + tpl + "' could not be fired";
             return;
@@ -3375,6 +3408,85 @@ function OnPreAttackEvent(animEventName : name, animEventType : EAnimationEventT
         client.getCoopEnemies().OnEnemyAttack(this, animEventType, animInfo);
     }
     return wrappedMethod(animEventName, animEventType, data, animInfo);
+}
+
+// The monster that fired a projectile (for damage that names no attacker), NULL for anything else.
+function ProjectileCaster(causer : IScriptable) : CNewNPC
+{
+    var proj : CProjectileTrajectory;
+
+    proj = (CProjectileTrajectory)causer;
+    if(!proj)
+    {
+        return NULL;
+    }
+    return (CNewNPC)proj.caster;
+}
+
+// The projectile a monster's task has just fired from about this spot (the task keeps it to itself): the newest
+// one of this caster not reported yet.
+function CoopReportTaskProjectile(npc : CNewNPC, near : Vector, speed : float, target : Vector, range : float)
+{
+    var entities : array<CGameplayEntity>;
+    var proj, best : CProjectileTrajectory;
+    var client : r_MultiplayerClient;
+    var i : int;
+
+    client = theGame.r_getMultiplayerClient();
+    if(!client || !npc)
+    {
+        return;
+    }
+    FindGameplayEntitiesInSphere(entities, near, 2.0, 16);
+    for(i = 0; i < entities.Size(); i += 1)
+    {
+        proj = (CProjectileTrajectory)entities[i];
+        if(proj && (CNewNPC)proj.caster == npc && !proj.HasTag('W3CoopReported'))
+        {
+            best = proj;
+        }
+    }
+    if(best)
+    {
+        best.AddTag('W3CoopReported');
+        client.getCoopEnemies().OnEnemyProjectile(best, 0, speed, target, range);
+    }
+}
+
+// The leshen's root: travels underground to its target and bursts out (W3LeshyRootProjectile).
+@wrapMethod(CBTTaskLeshyRootAttack)
+function ShootProjectile()
+{
+    var npc : CNewNPC;
+    var target : CActor;
+    var from : Vector;
+
+    wrappedMethod();
+    npc = GetNPC();
+    target = GetCombatTarget();
+    if(npc && target)
+    {
+        from = npc.GetWorldPosition() + VecFromHeading(npc.GetHeading()) * 3.0;
+        from.Z += 1.5;
+        CoopReportTaskProjectile(npc, from, 20, target.GetWorldPosition(), attackRange);
+    }
+}
+
+// The leshen's crows (W3LeshyBirdProjectile), fired at its target's torso.
+@wrapMethod(CBTTaskLeshyBirdAttack)
+function ShootProjectile()
+{
+    var npc : CNewNPC;
+    var from : Vector;
+
+    wrappedMethod();
+    npc = GetNPC();
+    if(npc && npc.GetTarget())
+    {
+        from = npc.GetWorldPosition() + VecFromHeading(npc.GetHeading()) * 2.5;
+        from.Z += 1.0;
+        CoopReportTaskProjectile(npc, from, 8, npc.GetTarget().GetBoneWorldPosition('torso'), attackRange);
+    }
 }
 
 function CoopProjectileShot(proj : W3AdvancedProjectile, angle : float, speed : float, target : Vector, range : float)
