@@ -182,7 +182,7 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     {
         bot.scenarioFlag = true;
         bot.scenarioCount += 1;
-        theGame.SaveGame(SGT_ManualSave, -1);
+        theGame.SaveGame(SGT_Manual, -1);
         W3T_Log("RUN saved " + bot.scenarioCount + " for '" + text + "' at " + W3T_VecStr(thePlayer.GetWorldPosition()));
     }
     if(now - bot.scenarioActAt < 3) { return false; }
