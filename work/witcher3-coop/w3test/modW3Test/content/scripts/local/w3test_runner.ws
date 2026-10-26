@@ -152,6 +152,12 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
         return false;
     }
     W3T_TalkLogEvents(talk, "RUN talk");
+    if(now - bot.scenarioSeenAt >= 30)
+    {
+        bot.scenarioSeenAt = now;
+        W3T_Log("RUN state inScene=" + talk.InScene() + " scene='" + talk.GetScenePath() + "' dialogOrCutscene=" + theGame.IsDialogOrCutscenePlaying()
+            + " choices=" + client.hasActiveDialogChoices() + " pos=" + W3T_VecStr(thePlayer.GetWorldPosition()) + " objectives='" + bot.scenarioText + "'");
+    }
     if(talk.InScene())
     {
         // the same menu again (a conversation that loops back): the next choice this time
