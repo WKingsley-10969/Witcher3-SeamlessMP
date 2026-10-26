@@ -340,6 +340,7 @@ statemachine class W3T_Bot
     public var runPicks : array<int>;          // ... and how often: it takes the next choice each time
     public var runObjective : int;             // ... which of the objectives with a pin it goes to
     public var runIdle : int;                  // ... and how many ticks it found nothing to do there
+    public var runTrailTime : float;                  // ... and when it last stepped along a trail of clues
     public var scenarioActAt : float;    // when it last moved
     public var scenarioSeenAt : float;   // when it last saw an enemy
     public var scenarioFarSince : float; // since when its target has been out of reach

@@ -247,7 +247,8 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
         i = pinned[bot.runObjective % pinned.Size()];
         W3T_RunPinAt(objectives[i], at);
     }
-    if(VecDistance(thePlayer.GetWorldPosition(), at) > 5)
+    // off the pin while following a trail (last step less than 20 s ago)
+    if(VecDistance(thePlayer.GetWorldPosition(), at) > 5 && now - bot.runTrailTime > 20)
     {
         spot = at;
         theGame.GetWorld().NavigationFindSafeSpot(at, 0.5, 6.0, spot);
@@ -278,6 +279,28 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
             clue.OnInteraction("Examine", thePlayer);
             return false;
         }
+    }
+    // a trail to follow with the Witcher Senses: the nearest clue not yet examined within 80 m, gone to (examined on
+    // the next tick)
+    FindGameplayEntitiesInSphere(entities, thePlayer.GetWorldPosition(), 80, 200);
+    pick = -1;
+    for(i = 0; i < entities.Size(); i += 1)
+    {
+        if((W3MonsterClue)entities[i] && bot.runEntities.FindFirst(entities[i]) < 0 && (pick < 0 || VecDistance(thePlayer.GetWorldPosition(),
+            entities[i].GetWorldPosition()) < VecDistance(thePlayer.GetWorldPosition(), entities[pick].GetWorldPosition())))
+        {
+            pick = i;
+        }
+    }
+    if(pick >= 0)
+    {
+        spot = entities[pick].GetWorldPosition();
+        theGame.GetWorld().NavigationFindSafeSpot(entities[pick].GetWorldPosition(), 0.5, 4.0, spot);
+        rot.Yaw = VecHeading(entities[pick].GetWorldPosition() - thePlayer.GetWorldPosition());
+        thePlayer.TeleportWithRotation(spot, rot);
+        bot.runTrailTime = now;
+        W3T_Log("RUN follows the trail to " + W3T_SurveyEntityName(entities[pick]) + " at " + W3T_VecStr(spot));
+        return false;
     }
     // a plant (the buckthorn to find on a riverbed is an ordinary herb) or a container holding a quest item: its items
     // taken, as gathering or looting it would
