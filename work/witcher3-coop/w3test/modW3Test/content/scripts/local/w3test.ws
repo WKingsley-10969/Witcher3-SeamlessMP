@@ -222,6 +222,14 @@ function OnConfigUI()
 
     wrappedMethod();
 
+    // W3T_TUTORIALS=off: the game's tutorials off before a save loads, so the prologue's quest takes its
+    // branch without them (its tutorial branch waits for button presses a bot never makes)
+    if(W3T_Active() && W3T_GetEnv("W3T_TUTORIALS") == "off" && theGame.GetInGameConfigWrapper().GetVarValue('Gameplay', 'HudTutorialEnabled') != "false")
+    {
+        theGame.GetInGameConfigWrapper().SetVarValue('Gameplay', 'HudTutorialEnabled', "false");
+        W3T_Log("MENU tutorials off");
+    }
+
     if(!W3T_Active() || !theGame.W3T_ClaimLoad())
     {
         return true;
