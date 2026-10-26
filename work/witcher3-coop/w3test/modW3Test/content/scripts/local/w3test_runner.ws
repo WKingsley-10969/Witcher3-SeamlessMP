@@ -432,6 +432,16 @@ function W3T_RunFreshChoice(list : string) : int
     var rest, item, flags : string;
     var i : int;
     rest = StrAfterFirst(StrAfterFirst(list, " CHOICES "), " ");
+    // a choice that skips a tutorial, first of all (the prologue's sparring offers one)
+    if(StrFindFirst(rest, "SKIP TUTORIAL") >= 0)
+    {
+        item = rest;
+        for(i = 0; item != ""; i += 1)
+        {
+            if(!StrSplitFirst(item, " | ", flags, item)) { flags = item; item = ""; }
+            if(StrFindFirst(flags, "SKIP TUTORIAL") >= 0) { return i; }
+        }
+    }
     for(i = 0; rest != ""; i += 1)
     {
         if(!StrSplitFirst(rest, " | ", item, rest))
