@@ -612,6 +612,29 @@ class r_CoopEnemies
             e.lastSeenAt = now;
         }
 
+        // one already shared stays shared while it is above or around the party: a flying monster circles high
+        // over the fight (a griffin climbs past 80 m), out of the 40 m spheres above
+        for(i = 0; i < hostEnemies.Size(); i += 1)
+        {
+            e = hostEnemies[i];
+            if(!e.npc || !e.npc.IsAlive() || e.lastSeenAt == now)
+            {
+                continue;
+            }
+            if(VecDistance2D(e.npc.GetWorldPosition(), thePlayer.GetWorldPosition()) < 45)
+            {
+                e.lastSeenAt = now;
+                continue;
+            }
+            for(j = 0; j < globals.Size(); j += 1)
+            {
+                if(globals[j] && globals[j].inParty && globals[j].joinedParty == me && VecDistance2D(e.npc.GetWorldPosition(), globals[j].pos) < 45)
+                {
+                    e.lastSeenAt = now;
+                }
+            }
+        }
+
         ArmGhosts(client);
 
         // keep dead enemies for a few seconds so members see the death; drop ones out of range
