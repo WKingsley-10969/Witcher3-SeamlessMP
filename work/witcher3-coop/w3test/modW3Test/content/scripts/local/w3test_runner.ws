@@ -6,8 +6,9 @@
 //   W3T_RUN_TIME   seconds the run may take (600 unless set)
 // Every 3 s, when not in a scene: the first open objective of the quest that has a map pin is gone to (teleport);
 // there the leader talks to a character offering talk within 12 m and examines the monster clues within 15 m
-// (each once a minute). In a scene it takes a choice once the choices have been up 2 s: the first, and the next one
-// each time the same menu comes back (a conversation that loops). Hostiles that are not the boss are killed. Logs:
+// (a character once a minute, a clue once: a trail has dozens). In a scene it takes a choice once the choices have
+// been up 2 s: the first, and the next one each time the same menu comes back (a conversation that loops). Hostiles
+// that are not the boss are killed. Logs:
 //   RUN objectives | <text> ; ...      on change, then a save (ManualSave) once out of scenes and fights
 //   RUN saved <n> for '<objectives>'    each save: the newest save of the run's sandbox is the one before the boss
 //   RUN goes to <x,y,z> / talks to <voice> / examines <clue> / kills <name>
@@ -101,12 +102,12 @@ function W3T_RunPinAt(objective : CJournalQuestObjective, out at : Vector) : boo
     return false;
 }
 
-// Whether the leader did something to this entity in the last minute (and notes it now if not).
-function W3T_RunRecently(bot : W3T_Bot, entity : CEntity, now : float) : bool
+// Whether the leader did something to this entity less than "again" seconds ago (and notes it now if not).
+function W3T_RunRecently(bot : W3T_Bot, entity : CEntity, now : float, again : float) : bool
 {
     var i : int;
     i = bot.runEntities.FindFirst(entity);
-    if(i >= 0 && now - bot.runTimes[i] < 60) { return true; }
+    if(i >= 0 && now - bot.runTimes[i] < again) { return true; }
     if(i < 0)
     {
         bot.runEntities.PushBack(entity);
@@ -242,7 +243,7 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     for(i = 0; i < actors.Size(); i += 1)
     {
         npc = (CNewNPC)actors[i];
-        if(npc && !npc.HasTag('MPEntity') && !npc.HasTag('w3coop_npc_copy') && W3T_Talkable(npc) && !W3T_RunRecently(bot, npc, now))
+        if(npc && !npc.HasTag('MPEntity') && !npc.HasTag('w3coop_npc_copy') && W3T_Talkable(npc) && !W3T_RunRecently(bot, npc, now, 60))
         {
             W3T_Log("RUN talks to " + NpcVoice(npc) + " (" + npc.GetReadableName() + ")");
             W3T_LookAt(npc.GetWorldPosition());
@@ -254,7 +255,7 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     for(i = 0; i < entities.Size(); i += 1)
     {
         clue = (W3MonsterClue)entities[i];
-        if(clue && !W3T_RunRecently(bot, clue, now))
+        if(clue && !W3T_RunRecently(bot, clue, now, 100000))
         {
             W3T_Log("RUN examines " + clue.GetReadableName());
             clue.OnInteraction("Examine", thePlayer);
