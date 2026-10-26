@@ -44,6 +44,8 @@ class r_CoopCharacter
     private var lastStore : float;
     private var ready : bool;       // restored (or started fresh) since the last load: recording
     private var broken : bool;      // the stored record could not be read: never overwrite it
+    private var prologueSerial : int;   // the load of the host's world checked for being in the prologue
+    private var prologueLoad : bool;    // that load was a save from the prologue's dream: a new playthrough
     private var restoredSerial : int;   // the load of the host's world (r_CoopSession.HostLoadSerial) restored for
     private var cpcPending : string;    // a record waiting for Custom Player Characters to switch the character type
     private var cpcPendingSince : float;
@@ -88,6 +90,16 @@ class r_CoopCharacter
     public function OnGameStarted()
     {
         loadedAt = theGame.GetEngineTimeAsSeconds();
+        // a host's save from the prologue's dream (as the owner's playtest started): a new playthrough,
+        // like the lobby's new game. The dream's end sets q001_nightmare_ended, and before, the fact
+        // could arrive from the other PC: then the stored character replaced the prologue's Geralt
+        // as White Orchard loaded, right at the first fight, without a sword.
+        if(Session().HostLoadSerial() != prologueSerial)
+        {
+            prologueSerial = Session().HostLoadSerial();
+            prologueLoad = Session().InHostWorld() && FactsQuerySum("q001_nightmare_ended") <= 0;
+            if(prologueLoad) { Record("PROLOGUE the host's save is in the prologue: this playthrough's character starts fresh"); }
+        }
     }
 
     // Recording and restoring happen only here: in the host's world, as the witcher (not Ciri),
@@ -139,12 +151,12 @@ class r_CoopCharacter
     {
         var text : string;
         text = WO_CharacterLoad();
-        if(text != "" && Session().HostSaveName() == "")
+        if(text != "" && (Session().HostSaveName() == "" || prologueLoad))
         {
             // the host's new game: a new playthrough, so a new character (the old one is backed up)
             if(WO_CharacterBackup()) { backups += 1; }
             freshStarts += 1;
-            Record("FRESH new game with " + Session().HostName() + ": a new character (the previous record is backed up)");
+            Record("FRESH new game (or the prologue) with " + Session().HostName() + ": a new character (the previous record is backed up)");
             theGame.GetGuiManager().ShowNotification("New game with " + Session().HostName() + ": your co-op character starts fresh.");
             ready = true;
             Store();
@@ -155,8 +167,8 @@ class r_CoopCharacter
             // a record without any weapon or armour (made in the wrong world): never strip this character for it
             if(WO_CharacterBackup()) { backups += 1; }
             skippedRecords += 1;
-            Record("SKIPPED the record has no equipped weapon or armour: keeping the current character (record backed up)");
-            theGame.GetGuiManager().ShowNotification("Your stored co-op character had no weapons or armour: kept your current gear instead.");
+            Record("SKIPPED the record has no sword equipped: keeping the current character (record backed up)");
+            theGame.GetGuiManager().ShowNotification("Your stored co-op character had no sword: kept your current gear instead.");
             ready = true;
             Store();
             return;
@@ -292,7 +304,8 @@ class r_CoopCharacter
         FactsAdd("item_use_nr_chameleon_potion", 1);
     }
 
-    // Any weapon or armour equipped in the record ("item" lines with a sword or armour slot)?
+    // A sword equipped in the record ("item" lines with a sword slot)? Armour alone is not enough: a
+    // record without a sword stripped the player's swords (the owner's playtest).
     private function RecordArmed(text : string) : bool
     {
         var lines, f : array<string>;
@@ -303,7 +316,7 @@ class r_CoopCharacter
             f = CoopSplit(lines[i], ";");
             if(f.Size() != 10 || f[0] != "item") { continue; }
             slot = StringToInt(f[4], -1);
-            if(slot == (int)EES_SteelSword || slot == (int)EES_SilverSword || slot == (int)EES_Armor) { return true; }
+            if(slot == (int)EES_SteelSword || slot == (int)EES_SilverSword) { return true; }
         }
         return false;
     }
