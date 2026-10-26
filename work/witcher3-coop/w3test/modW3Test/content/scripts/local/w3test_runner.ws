@@ -133,6 +133,7 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     var at, spot : Vector;
     var rot : EulerAngles;
     var i, k, pick : int;
+    var pinned : array<int>;
     var now : float;
     now = bot.ElapsedS();
     talk = client.getCoopTalk();
@@ -193,6 +194,8 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     {
         bot.scenarioText = text;
         bot.scenarioFlag = false;
+        bot.runObjective = 0;
+        bot.runIdle = 0;
         W3T_Log("RUN objectives | " + text);
     }
     // the hostiles around: the boss ends the run, anything else is in the way
@@ -222,11 +225,12 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     }
     if(now - bot.scenarioActAt < 3) { return false; }
     bot.scenarioActAt = now;
+    // the objectives with a pin here, taken in turn: the next one after 30 s with nothing to do at one
     for(i = 0; i < objectives.Size(); i += 1)
     {
-        if(W3T_RunPinAt(objectives[i], at)) { break; }
+        if(W3T_RunPinAt(objectives[i], at)) { pinned.PushBack(i); }
     }
-    if(i >= objectives.Size())
+    if(pinned.Size() == 0)
     {
         if(bot.scenarioValue != 1) { W3T_Log("RUN no objective has a pin here"); }
         bot.scenarioValue = 1;
@@ -235,6 +239,8 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     else
     {
         bot.scenarioValue = 0;
+        i = pinned[bot.runObjective % pinned.Size()];
+        W3T_RunPinAt(objectives[i], at);
     }
     if(VecDistance(thePlayer.GetWorldPosition(), at) > 5)
     {
@@ -267,6 +273,29 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
             clue.OnInteraction("Examine", thePlayer);
             return false;
         }
+    }
+    // a quest's own character a little off the pin (it walks about): gone to and talked to
+    actors = thePlayer.GetNPCsAndPlayersInRange(40, 32, '', FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
+    for(i = 0; i < actors.Size(); i += 1)
+    {
+        npc = (CNewNPC)actors[i];
+        if(npc && !npc.HasTag('MPEntity') && !npc.HasTag('w3coop_npc_copy') && StrFindFirst(npc.GetReadableName(), "quest_files") >= 0
+            && W3T_Talkable(npc) && !W3T_RunRecently(bot, npc, now, 60))
+        {
+            spot = npc.GetWorldPosition() + VecNormalize(thePlayer.GetWorldPosition() - npc.GetWorldPosition()) * 2.0;
+            rot.Yaw = VecHeading(npc.GetWorldPosition() - spot);
+            thePlayer.TeleportWithRotation(spot, rot);
+            W3T_Log("RUN goes to and talks to " + NpcVoice(npc) + " (" + npc.GetReadableName() + ")");
+            npc.OnInteraction("Talk", thePlayer);
+            return false;
+        }
+    }
+    bot.runIdle += 1;
+    if(bot.runIdle >= 10 && pinned.Size() > 1)
+    {
+        bot.runIdle = 0;
+        bot.runObjective += 1;
+        W3T_Log("RUN nothing to do here for 30 s: the next objective");
     }
     // nothing to do here: once per set of objectives, who is around and whether they offer talk
     if(!bot.surveySeen.Contains("idle|" + text))
