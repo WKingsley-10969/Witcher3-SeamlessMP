@@ -28,7 +28,7 @@ GAME_ARGS = os.environ.get("W3T_GAME_ARGS", "-windowed -width 640 -height 360 -d
 # scenarios where the leader waits for the member to load and join before acting
 LONG_SCENARIOS = ("shared_enemy", "enemy_attacks", "handoff", "reactions", "twin_match", "quest_sync", "dialog_sync",
                   "facts_sync", "puppet_follow", "puppet_walk", "puppet_glide", "enemy_moves", "real_encounter",
-                  "enemy_projectiles", "member_combat", "sign_visuals", "showcase", "attack_view", "corpse_loot", "monster_survey", "monster_flight", "monster_states", "monster_objects", "attack_objects", "boss_fight")
+                  "enemy_projectiles", "member_combat", "sign_visuals", "showcase", "attack_view", "corpse_loot", "monster_survey", "monster_flight", "monster_states", "monster_objects", "attack_objects", "boss_fight", "prologue_coop")
 
 
 def default_duration(scenario):
@@ -384,7 +384,7 @@ def main():
                 env.update(W3T_SCENARIO="session", W3T_SCENARIOS=",".join(session), W3T_CONTROL=control, W3T_DURATION="100000")
             for key in list(env):
                 if key.upper().startswith(("WO_SC_", "W3LAN_SESSION_")): del env[key]
-            if a.scenario in ("session_join", "player_character", "party_leave", "loot_share", "cpc_character") or a.scenario.startswith("lobby_"):
+            if a.scenario in ("session_join", "player_character", "party_leave", "loot_share", "cpc_character", "prologue_coop") or a.scenario.startswith("lobby_"):
                 # the second PC joins the host's co-op session: its game loads the run's save as the host's
                 if i == 0:
                     env.update(W3LAN_SESSION_ROLE="host")

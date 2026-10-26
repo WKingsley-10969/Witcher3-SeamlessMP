@@ -135,6 +135,13 @@ function W3T_ScenarioCheck(bot : W3T_Bot) : bool
         return W3T_PartyMenu(bot, client, players[0]);
     }
 
+    if(scenario == "prologue_coop")
+    {
+        if(players.Size() < 1 && W3T_GetEnv("W3T_ROLE") != "mover") { return false; }
+        if(players.Size() < 1) { return W3T_PrologueCoop(bot, client, NULL); }
+        return W3T_PrologueCoop(bot, client, players[0]);
+    }
+
     if(scenario == "talk_share")
     {
         if(ghosts < 1)
