@@ -137,7 +137,7 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     var text, key : string;
     var at, spot : Vector;
     var rot : EulerAngles;
-    var i, k, pick : int;
+    var i, k, pick, dist : int;
     var pinned : array<int>;
     var now : float;
     now = bot.ElapsedS();
@@ -316,12 +316,21 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
         }
     }
     bot.runIdle += 1;
-    // the hunter is not loaded at all at 16:00 in his pin's area: wait 3 hours each 30 s idle (as meditating), for
-    // a quest character kept to some hours of the day
+    // the hunter is not loaded at any hour while the save starts at his pin: a quest's area trigger fires only on
+    // entering, so each 30 s idle step out (80 m, then 160 m) for the next tick to come back to the pin
     if(bot.runIdle % 10 == 5)
     {
-        theGame.SetGameTime(theGame.GetGameTime() + GameTimeCreate(0, 3, 0, 0), true);
-        W3T_Log("RUN waits 3 hours: now " + GameTimeHours(theGame.GetGameTime()) + ":00, " + W3T_RunQuestCharacters() + " quest characters loaded");
+        dist = 80;
+        if(bot.runIdle % 20 == 15) { dist = 160; }
+        spot = thePlayer.GetWorldPosition() + VecFromHeading(thePlayer.GetHeading()) * dist;
+        if(theGame.GetWorld().NavigationFindSafeSpot(spot, 0.5, 30.0, spot))
+        {
+            rot.Yaw = thePlayer.GetHeading();
+            thePlayer.TeleportWithRotation(spot, rot);
+            W3T_Log("RUN steps out " + dist + " m to " + W3T_VecStr(spot) + ", " + W3T_RunQuestCharacters() + " quest characters loaded");
+            return false;
+        }
+        W3T_Log("RUN no safe spot " + dist + " m out");
     }
     if(bot.runIdle >= 10 && pinned.Size() > 1)
     {
