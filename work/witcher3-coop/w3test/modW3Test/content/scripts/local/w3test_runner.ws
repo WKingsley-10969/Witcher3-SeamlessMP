@@ -7,13 +7,15 @@
 // Every 3 s, when not in a scene: the first open objective of the quest that has a map pin is gone to (teleport);
 // there the leader talks to a character offering talk within 12 m and examines the monster clues within 15 m
 // (a character once a minute, a clue once: a trail has dozens), takes the items of plants and of containers holding
-// a quest item within 50 m, and goes to a quest character that offers talk within 40 m (300 m after 15 s); after
-// 30 s with nothing to do it goes to the next objective with a pin. In a scene it takes a choice once the choices have been up 2 s: the
-// first, and the next one each time the same menu comes back (a conversation that loops). Hostiles that are not the
-// boss are killed. Logs:
+// a quest item within 50 m, follows a trail of clues within 80 m (staying off the pin while on it), and goes to a
+// quest character that offers talk within 40 m (300 m after 15 s); after 30 s with nothing to do it goes to the next
+// objective with a pin, and each 30 s idle steps out 80 or 160 m and comes back (a quest's area trigger fires only on
+// entering: the hunter of White Orchard). In a scene it takes a choice once the choices have been up 2 s: the first
+// one the game marks neither taken before nor leaving, else the next in turn each time the same menu comes back (a
+// conversation that loops). Hostiles that are not the boss are killed. Logs:
 //   RUN objectives | <text> ; ...      on change, then a save (ManualSave) once out of scenes and fights
 //   RUN saved <n> for '<objectives>'    each save: the newest save of the run's sandbox is the one before the boss
-//   RUN goes to <x,y,z> / talks to <voice> / examines <clue> / kills <name>
+//   RUN goes to <x,y,z> / talks to <voice> / examines <clue> / follows the trail to <clue> / steps out <m> / kills <name>
 //   RUN boss <name> shows               the end
 function W3T_RunTime() : float
 {
