@@ -385,7 +385,17 @@ function W3T_ScenarioCheck(bot : W3T_Bot) : bool
         {
             return W3T_RunLeader(bot, client);
         }
-        // the second PC idles (the leader plays alone)
+        // the second PC idles (the leader plays alone), skipping through any scene its own save starts
+        if(theGame.IsDialogOrCutscenePlaying() && theGame.GetStorySceneSystem().IsSkippingLineAllowed() && bot.ElapsedS() - bot.scenarioActAt >= 0.5)
+        {
+            bot.scenarioActAt = bot.ElapsedS();
+            theGame.GetStorySceneSystem().SendSignal(SSST_Skip, 0);
+        }
+        if(client.hasActiveDialogChoices() && client.getCoopTalk().ChoicesAge() > 1)
+        {
+            W3T_DialogModule().OnDialogOptionSelected(0);
+            W3T_DialogModule().OnDialogOptionAccepted(0);
+        }
         return bot.ElapsedS() > W3T_RunTime() + 60;
     }
 
