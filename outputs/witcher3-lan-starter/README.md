@@ -24,6 +24,8 @@ The payload is hash-checked before installation. First backups remain unchanged 
 
 For updates, extract the newer complete package, run **Manage Mod.cmd**, choose the same game folder and select **1**. The restore record lives in that game folder, so updates keep the first backups even when you use a different extracted package directory. For **older/manual installations**, the first managed install treats the files currently present as its baseline; it cannot reconstruct vanilla files that were already overwritten before these backups existed.
 
+**What's new:** `CHANGELOG.md` in this package lists what changed for players in each release, newest first.
+
 To remove, run **Remove Mod.cmd**, or choose **2 — Remove** in **Manage Mod.cmd**. Original file contents are restored, and files newly added by this installer are removed. Co-op saves, original backups and any preserved outside edits are retained. Uninstall does not undo quest progress in a save. Reinstalling in the same folder reuses the co-op save identity and creates fresh original-backup entries.
 
 If another mod, Steam or a manual edit changed a managed file, the operation stops before modifying game files. Manage Mod can offer to keep those changed files under `.w3lan-install/preserved` and continue. It does not merge competing mods. Corrupt/missing originals stop restoration. Keep `.w3lan-install` until you are finished with rollback; deleting it loses the restore history.

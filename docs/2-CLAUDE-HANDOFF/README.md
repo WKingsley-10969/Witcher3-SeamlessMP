@@ -640,3 +640,10 @@ Branch rebased onto `8c920f9` before publication, preserving Claude's additional
 - **Regressions**: `enemy_projectiles` (`20261026-094637`), `enemy_attacks` (`-094843`), `member_combat` (`-095105`) **PASS**. `monster_states` failed (`-095223`): the copy followed every change, but the drowner's own combat tasks clear `AIC_Combat` immortality within a second, so the copy was never seen invulnerable (the first pass was a lucky sample). The test now uses `AIC_Default`, on `feature/monster-states`.
 - **Limits:** other spawned attack objects (area attacks, traps, clouds) are not mirrored: the copy's would deal damage of its own.
 
+
+**26 October 2026 — Claude Code: player changelog.** Branch `feature/changelog` (from `main`).
+
+- `outputs/witcher3-lan-starter/CHANGELOG.md` (new): what changed for players in each release, newest first, in short player-facing bullets. The five GitHub pre-releases so far (`lan-dev-2026-10-25` to `lan-dev-2026-10-25-5`, all shipped as `Witcher3-LAN-0.2.0-dev.zip`) are named by their tags; their contents come from the tag messages, the release notes and the PRs merged into each tagged commit.
+- On top, **Unreleased (0.3.0-alpha)** lists only what is merged on `main` since `lan-dev-2026-10-25-5`: flying monsters (#25), monster phases and knockdowns (#26), a leshen's roots and crows (#27). #23 (corpse loot) was already in that release, built from its branch before the merge; #24 (monster survey) is test tooling. Open PRs (#28 boss test, #29 attack objects from the ground, #30 versions, #31 internet play, #32 join password) are not listed: add each one's player-facing line when it merges.
+- `work/build-lan-package.py` copies `CHANGELOG.md` into the package (one added line, apart from the file list #30 edits); the README's update section points to it.
+- Nothing built, staged or run; no game launched.
