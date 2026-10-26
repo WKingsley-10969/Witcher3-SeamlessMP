@@ -57,19 +57,24 @@ function W3T_BossHostiles() : array<CNewNPC>
     return list;
 }
 
-// The character of W3T_BOSS_NEAR (a voice tag) within 300 m, or NULL.
-function W3T_BossCharacter() : CNewNPC
+// The character of W3T_BOSS_NEAR (a voice tag) within 300 m nearest to "around" (there may be two: White Orchard's
+// Vesemir at the inn and the quest's one at the field of W3T_BOSS_AT), or NULL.
+function W3T_BossCharacter(around : Vector) : CNewNPC
 {
     var actors : array<CActor>;
-    var npc : CNewNPC;
+    var npc, found : CNewNPC;
     var i : int;
     actors = thePlayer.GetNPCsAndPlayersInRange(300, 500, '', FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
     for(i = 0; i < actors.Size(); i += 1)
     {
         npc = (CNewNPC)actors[i];
-        if(npc && !npc.HasTag('MPEntity') && !npc.HasTag('w3coop_npc_copy') && NpcVoice(npc) == W3T_GetEnv("W3T_BOSS_NEAR")) { return npc; }
+        if(npc && !npc.HasTag('MPEntity') && !npc.HasTag('w3coop_npc_copy') && NpcVoice(npc) == W3T_GetEnv("W3T_BOSS_NEAR")
+            && (!found || VecDistance(npc.GetWorldPosition(), around) < VecDistance(found.GetWorldPosition(), around)))
+        {
+            found = npc;
+        }
     }
-    return NULL;
+    return found;
 }
 
 function W3T_BossNearest(list : array<CNewNPC>) : CNewNPC
@@ -179,7 +184,8 @@ function W3T_BossLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
         if(coop.GetRole() != 1) { return false; }
         thePlayer.SetImmortalityMode(AIM_Invulnerable, AIC_Cheat, true);
         at = W3T_BossPos();
-        character = W3T_BossCharacter();
+        if(at.X != 0 || at.Y != 0) { character = W3T_BossCharacter(at); }
+        else { character = W3T_BossCharacter(thePlayer.GetWorldPosition()); }
         if(character)
         {
             at = character.GetWorldPosition() + VecFromHeading(character.GetHeading()) * 2.0;
