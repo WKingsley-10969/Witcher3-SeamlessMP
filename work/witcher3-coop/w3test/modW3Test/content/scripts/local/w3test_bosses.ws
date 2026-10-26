@@ -184,8 +184,8 @@ function W3T_BossLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
         if(coop.GetRole() != 1) { return false; }
         thePlayer.SetImmortalityMode(AIM_Invulnerable, AIC_Cheat, true);
         at = W3T_BossPos();
-        if(at.X != 0 || at.Y != 0) { character = W3T_BossCharacter(at); }
-        else { character = W3T_BossCharacter(thePlayer.GetWorldPosition()); }
+        // with W3T_BOSS_AT the character is looked for there, once it is loaded (below)
+        if(at.X == 0 && at.Y == 0) { character = W3T_BossCharacter(thePlayer.GetWorldPosition()); }
         if(character)
         {
             at = character.GetWorldPosition() + VecFromHeading(character.GetHeading()) * 2.0;
@@ -210,6 +210,21 @@ function W3T_BossLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
         return false;
     }
     W3T_BossQuestAndScene(bot, client, "leader");
+    // at W3T_BOSS_AT, 5 s after arriving (the field's Vesemir is only loaded near it): its W3T_BOSS_NEAR character
+    if(!bot.scenarioEntity && W3T_GetEnv("W3T_BOSS_NEAR") != "" && now - bot.scenarioTime > 5 && bot.scenarioCount == 0)
+    {
+        character = W3T_BossCharacter(thePlayer.GetWorldPosition());
+        if(character)
+        {
+            bot.scenarioEntity = character;
+            spot = character.GetWorldPosition() + VecFromHeading(character.GetHeading()) * 2.0;
+            theGame.GetWorld().NavigationFindSafeSpot(spot, 0.5, 4.0, spot);
+            rot.Yaw = VecHeading(character.GetWorldPosition() - spot);
+            thePlayer.TeleportWithRotation(spot, rot);
+            W3T_Log("BOSS leader goes to " + W3T_GetEnv("W3T_BOSS_NEAR") + " at " + W3T_VecStr(character.GetWorldPosition()));
+            bot.scenarioTime = now - 3;
+        }
+    }
     hostiles = W3T_BossHostiles();
     // the character starts the quest's scene when talked to: again 10 s after each scene while no enemy has come
     // (White Orchard's trap takes two talks to Vesemir), at most three times
