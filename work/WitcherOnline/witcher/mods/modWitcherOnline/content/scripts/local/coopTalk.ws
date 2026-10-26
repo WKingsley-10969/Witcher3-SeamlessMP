@@ -57,6 +57,7 @@ class r_CoopTalk
     private var joinFrom : Vector;     // where this player stood before being brought over
     private var joinFromRot : EulerAngles;
     private var auto : bool;           // the starter's scene was started by the quest, not by Talk
+    private var partyKnown : bool;     // the scene playing here was announced or joined in a party
 
     // an offer to join a party member's conversation, waiting for this player's answer
     private var offerOpen : bool;
@@ -171,6 +172,7 @@ class r_CoopTalk
         answeredSet = 0;
         choicesOpen = false;
         Record("SCENE " + scenePath);
+        partyKnown = InParty();
         // the scene's actors are this world's own NPCs: no stand-ins or hidden copies around it
         if(InParty()) { theGame.r_getMultiplayerClient().getCoopNpcs().HoldAround(thePlayer.GetWorldPosition()); }
         if(role == 2)
@@ -336,6 +338,14 @@ class r_CoopTalk
                 handovers += 1;
                 Record("HANDOVER to " + sender);
                 WO_Send("coop cv joined " + hostConv + " " + CoopEncode(scenePath));
+            }
+            else if(!listeners.Contains(sender))
+            {
+                // this game chooses: announce again, in case the other ignored this game's first
+                // announcement (its scene was not linked to a party yet)
+                Record("REOPEN for " + sender);
+                WO_Send("coop cv open " + convId + " " + CoopEncode(scenePath) + " - - - "
+                    + CoopNpcVec3(thePlayer.GetWorldPosition()) + " " + CoopNpcVec3(thePlayer.GetWorldPosition()));
             }
             return;
         }
@@ -535,6 +545,22 @@ class r_CoopTalk
         var now : float;
         var i : int;
         now = theGame.GetEngineTimeAsSeconds();
+
+        // a scene that was already playing when the party formed (both games loaded a save that starts in
+        // one, as the owner's prologue checkpoint does): announced now, so the two scenes are linked (the
+        // leader's game chooses where both run it; either player's pick still goes through)
+        if(role == 0 && inScene && !partyKnown && scenePath != "" && InParty())
+        {
+            partyKnown = true;
+            convId += 1;
+            role = 1;
+            auto = true;
+            autoOpens += 1;
+            listeners.Clear();
+            Record("LATE_OPEN " + scenePath);
+            WO_Send("coop cv open " + convId + " " + CoopEncode(scenePath) + " - - - "
+                + CoopNpcVec3(thePlayer.GetWorldPosition()) + " " + CoopNpcVec3(thePlayer.GetWorldPosition()));
+        }
 
         if(role == 2 && joinNpc && joinTalkAt > 0 && now >= joinTalkAt)
         {
