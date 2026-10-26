@@ -696,11 +696,12 @@ function CoopBit(value : bool) : string
 @wrapMethod(W3Container)
 function OnInteraction(actionName : string, activator : CEntity)
 {
-    var r : bool;
-    if(activator != thePlayer) { return wrappedMethod(actionName, activator); }
-    theGame.r_getMultiplayerClient().getCoopLoot().BeginPlayerTake();
+    var r, mine : bool;
+    // wrappedMethod is called once (the compiler takes one call per wrapper)
+    mine = activator == thePlayer;
+    if(mine) { theGame.r_getMultiplayerClient().getCoopLoot().BeginPlayerTake(); }
     r = wrappedMethod(actionName, activator);
-    theGame.r_getMultiplayerClient().getCoopLoot().EndPlayerTake();
+    if(mine) { theGame.r_getMultiplayerClient().getCoopLoot().EndPlayerTake(); }
     return r;
 }
 
