@@ -142,6 +142,13 @@ function OnConfigUI()
     if(W3T_Active())
     {
         W3T_Log("MENU open " + NameToString(GetMenuName()));
+        // pause_menu: the pause menu pauses the game, and with it the bot that checks it stays open; the
+        // world runs on here (as the co-op features do every frame) so the check can be made
+        if(GetMenuName() == 'IngameMenu' && W3T_GetEnv("W3T_SCENARIO") == "pause_menu")
+        {
+            theGame.Unpause('IngameMenu');
+            W3T_Log("MENU pause_menu: the game runs on under the pause menu");
+        }
         // talk_share / scene_share: the shop pauses the game, and with it the bot that would close
         // it; the starter (which asked to trade) closes it here. The joiner's is the feature's to close.
         if(GetMenuName() == 'CommonMenu' && ((W3T_GetEnv("W3T_SCENARIO") == "talk_share" && W3T_GetEnv("W3T_ROLE") != "mover")
