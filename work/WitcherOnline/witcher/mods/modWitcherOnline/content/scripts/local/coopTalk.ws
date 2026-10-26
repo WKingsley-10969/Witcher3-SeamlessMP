@@ -130,6 +130,24 @@ class r_CoopTalk
     {
         events.PushBack(FloatToStringPrec(theGame.GetEngineTimeAsSeconds(), 2) + " " + text);
         if(events.Size() > 200) { events.Erase(0); }
+        if(StrFindFirst(text, "LINE ") != 0) { WO_Log("coop talk " + text); }
+    }
+
+    // A load or the main menu: no scene of this game goes on, whatever ended it. A listener whose
+    // scene was cut off by a load stayed one for good, closing every menu (the owner's Esc).
+    public function Reset()
+    {
+        // a scene of the new world already playing (a save that loads into one) is left alone
+        if(theGame.IsDialogOrCutscenePlaying() && role != 3) { return; }
+        if(role != 0 || inScene) { Record("RESET role=" + role + " inScene=" + inScene); }
+        if(role == 1 && convId != 0) { WO_Send("coop cv close " + convId); }
+        LeaveConversation();
+        role = 0;
+        convId = 0;
+        listeners.Clear();
+        inScene = false;
+        choicesOpen = false;
+        offerOpen = false;
     }
 
     // ------------------------------------------------------------ local game
@@ -545,9 +563,10 @@ class r_CoopTalk
         }
         if(role != 3 && !(role == 1 && convId != 0)) { return; }
 
-        // menus the conversation opens are for the one who asked
+        // menus the conversation opens are for the one who asked: closed while its scene plays here,
+        // never the pause menu (Esc built it and this closed it the next frame, from the owner's playtest)
         root = theGame.GetGuiManager().GetRootMenu();
-        if(role == 3 && root)
+        if(role == 3 && root && inScene && root.GetMenuName() != 'CommonIngameMenu')
         {
             // the scene waits (OpenGUIPanelForScene) until the panel reports it opened; closing
             // before that would leave the conversation waiting for good

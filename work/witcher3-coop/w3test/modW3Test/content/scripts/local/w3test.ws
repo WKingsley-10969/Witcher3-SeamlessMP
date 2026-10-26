@@ -314,6 +314,7 @@ statemachine class W3T_Bot
     // free-form scenario state
     public var scenarioVec : Vector;
     public var scenarioFlag : bool;
+    public var pauseOpens : int;                 // pause_menu: pause menus still open 2 s after Esc
     public var scenarioTime : float;
     public var scenarioCount : int;
     public var scenarioEntity : CEntity;
