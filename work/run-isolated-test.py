@@ -26,6 +26,9 @@ ap.add_argument('scenario')
 ap.add_argument('--save', default='ManualSave_4e4da')
 ap.add_argument('--duration', type=int)
 ap.add_argument('--timeout', type=int, default=480, help='seconds the whole run may take (the game slot is held that long plus 5 min)')
+net_options = ('delay', 'jitter', 'loss', 'reorder', 'duplicate', 'who', 'seed')
+for name in net_options:
+    ap.add_argument('--net-' + name, help='passed to run_test.py: the second PC through net_sim.py (W3T_NET_* work too)')
 a = ap.parse_args()
 env = dict(os.environ, W3_GAME_DIR=str(game), W3C_ROOT=str(work), W3C_WORK=str(testing),
            WO_SERVER_IP='127.0.0.1', WO_SERVER_PORT='41000', WO_USERNAME='CompileCheck')
@@ -43,6 +46,9 @@ else:
                '--duration', str(a.duration or (60 if a.scenario in ('see_each_other', 'movement') else 300)), '--timeout', str(a.timeout), '--size', '960x540']
     if a.scenario.startswith('seamless_'):
         command.append('--campaign')
+    for name in net_options:
+        if getattr(a, 'net_' + name) is not None:
+            command += ['--net-' + name, getattr(a, 'net_' + name)]
 slot_source = work / 'coop-playbook/tools/gameslot/gameslot.py'
 assert hashlib.sha256(slot_source.read_bytes()).hexdigest() == '7a939829c6a782c774226a5c72f4137c1b94af60730d02c75b6251bfd2ceaf3d'
 os.environ['GAMESLOT_DIR'] = str(work.parent / 'local/gameslot')
