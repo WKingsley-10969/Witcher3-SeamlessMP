@@ -45,6 +45,12 @@ public final class SaveShare
         return share;
     }
 
+    // the HTTP server, for the log inbox (LogInbox) on the same port
+    HttpServer httpServer()
+    {
+        return server;
+    }
+
     public int port()
     {
         return server.getAddress().getPort();
