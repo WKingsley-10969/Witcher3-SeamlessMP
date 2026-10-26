@@ -139,6 +139,7 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     var rot : EulerAngles;
     var i, k, pick, dist : int;
     var pinned : array<int>;
+    var events : array<string>;
     var now : float;
     now = bot.ElapsedS();
     talk = client.getCoopTalk();
@@ -157,7 +158,12 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
         bot.scenarioTime = now;
         return false;
     }
-    W3T_TalkLogEvents(talk, "RUN talk");
+    events = talk.TakeEvents();
+    for(i = 0; i < events.Size(); i += 1)
+    {
+        W3T_Log("RUN talk " + events[i]);
+        if(StrFindFirst(events[i], " CHOICES ") >= 0) { bot.runChoices = events[i]; }
+    }
     if(now - bot.scenarioSeenAt >= 30)
     {
         bot.scenarioSeenAt = now;
@@ -177,7 +183,10 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
                 bot.runPicks.PushBack(0);
                 k = bot.runPicks.Size() - 1;
             }
-            pick = bot.runPicks[k] % talk.LastChoiceCount();
+            // a choice not taken before and not leaving, first (two menus of a conversation may have as many choices);
+            // else the next in turn
+            pick = W3T_RunFreshChoice(bot.runChoices);
+            if(pick < 0 || pick >= talk.LastChoiceCount()) { pick = bot.runPicks[k] % talk.LastChoiceCount(); }
             bot.runPicks[k] += 1;
             W3T_Log("RUN takes choice " + pick + " of " + talk.LastChoiceCount());
             W3T_DialogModule().OnDialogOptionSelected(pick);
@@ -405,4 +414,24 @@ function W3T_RunQuestCharacters() : int
         }
     }
     return n;
+}
+
+// The first choice of a logged list ("<time> CHOICES <n> <text> [a<action> seen off] | ...") the game marks neither as
+// taken before (seen), off, nor leaving (action 8192); -1 if none
+function W3T_RunFreshChoice(list : string) : int
+{
+    var rest, item, flags : string;
+    var i : int;
+    rest = StrAfterFirst(StrAfterFirst(list, " CHOICES "), " ");
+    for(i = 0; rest != ""; i += 1)
+    {
+        if(!StrSplitFirst(rest, " | ", item, rest))
+        {
+            item = rest;
+            rest = "";
+        }
+        flags = StrAfterFirst(item, "[a");
+        if(StrFindFirst(flags, "seen") < 0 && StrFindFirst(flags, "off") < 0 && StrFindFirst(flags, "8192") != 0) { return i; }
+    }
+    return -1;
 }
