@@ -6,9 +6,11 @@
 //   W3T_RUN_TIME   seconds the run may take (600 unless set)
 // Every 3 s, when not in a scene: the first open objective of the quest that has a map pin is gone to (teleport);
 // there the leader talks to a character offering talk within 12 m and examines the monster clues within 15 m
-// (a character once a minute, a clue once: a trail has dozens). In a scene it takes a choice once the choices have
-// been up 2 s: the first, and the next one each time the same menu comes back (a conversation that loops). Hostiles
-// that are not the boss are killed. Logs:
+// (a character once a minute, a clue once: a trail has dozens), takes the items of containers and plants holding a
+// quest item within 30 m, and goes to a quest character within 40 m that offers talk; after 30 s with nothing to do
+// it goes to the next objective with a pin. In a scene it takes a choice once the choices have been up 2 s: the
+// first, and the next one each time the same menu comes back (a conversation that loops). Hostiles that are not the
+// boss are killed. Logs:
 //   RUN objectives | <text> ; ...      on change, then a save (ManualSave) once out of scenes and fights
 //   RUN saved <n> for '<objectives>'    each save: the newest save of the run's sandbox is the one before the boss
 //   RUN goes to <x,y,z> / talks to <voice> / examines <clue> / kills <name>
@@ -128,6 +130,7 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     var entities : array<CGameplayEntity>;
     var npc : CNewNPC;
     var clue : W3MonsterClue;
+    var container : W3Container;
     var talk : r_CoopTalk;
     var text, key : string;
     var at, spot : Vector;
@@ -271,6 +274,18 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
         {
             W3T_Log("RUN examines " + clue.GetReadableName());
             clue.OnInteraction("Examine", thePlayer);
+            return false;
+        }
+    }
+    // a container or plant holding a quest item (the buckthorn to find): its items taken, as looting it would
+    FindGameplayEntitiesInSphere(entities, thePlayer.GetWorldPosition(), 30, 64);
+    for(i = 0; i < entities.Size(); i += 1)
+    {
+        container = (W3Container)entities[i];
+        if(container && container.GetInventory() && container.GetInventory().HasQuestItem() && !W3T_RunRecently(bot, container, now, 100000))
+        {
+            W3T_Log("RUN takes the quest items of " + W3T_SurveyEntityName(container) + " at " + W3T_VecStr(container.GetWorldPosition()));
+            container.GetInventory().GiveAllItemsTo(thePlayer.inv, true, true);
             return false;
         }
     }
