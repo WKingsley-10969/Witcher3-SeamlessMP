@@ -379,6 +379,16 @@ function W3T_ScenarioCheck(bot : W3T_Bot) : bool
         return W3T_SharedEnemyMember(bot, client, client.getCoopEnemies(), players[0]);
     }
 
+    if(scenario == "quest_run")
+    {
+        if(W3T_GetEnv("W3T_ROLE") == "mover")
+        {
+            return W3T_RunLeader(bot, client);
+        }
+        // the second PC idles (the leader plays alone)
+        return bot.ElapsedS() > W3T_RunTime() + 60;
+    }
+
     if(scenario == "boss_fight")
     {
         if(W3T_GetEnv("W3T_ROLE") == "mover")

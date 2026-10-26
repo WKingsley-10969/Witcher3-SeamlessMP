@@ -76,7 +76,8 @@ def make_sandbox(docs, save_filter=None):
         set_settings(os.path.join(w3, "dx12user.settings"), test_preset())
     if save_filter is None:
         return None
-    saves_dir = os.path.join(OWNER_W3_DOCS, "gamesaves")
+    # W3T_SAVES_DIR: another folder of saves, such as one a quest_run made in its own sandbox
+    saves_dir = os.environ.get("W3T_SAVES_DIR") or os.path.join(OWNER_W3_DOCS, "gamesaves")
     saves = [f for f in os.listdir(saves_dir) if f.endswith(".sav") and save_filter in f]
     newest = max(saves, key=lambda f: os.path.getmtime(os.path.join(saves_dir, f)))
     for ext in (".sav", ".png"):
