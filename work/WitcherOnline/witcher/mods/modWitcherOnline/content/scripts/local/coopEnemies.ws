@@ -1840,6 +1840,12 @@ class r_CoopEnemies
             {
                 twinsBound += 1;
             }
+            else if(LocalNamed(tpl) > 0)
+            {
+                // a named character this world has but could not pair (two of it, or farther off) is
+                // never spawned a second time: two Vesemirs in the owner's playtest
+                return;
+            }
             else
             {
                 npc = SpawnPuppet(tpl, app, pos, yaw);
@@ -1926,7 +1932,7 @@ class r_CoopEnemies
         for(i = 0; i < entities.Size(); i += 1)
         {
             npc = (CNewNPC)entities[i];
-            if(!npc || npc.HasTag('MPEntity') || IsPuppet(npc) || npc.GetReadableName() != tpl)
+            if(!npc || npc.HasTag('MPEntity') || npc.HasTag('w3coop_npc_copy') || IsPuppet(npc) || npc.GetReadableName() != tpl)
             {
                 continue;
             }
@@ -1937,12 +1943,48 @@ class r_CoopEnemies
                 best = npc;
             }
         }
+        // a named character (Vesemir turning hostile for the prologue's sparring) has one twin here even
+        // farther off: the only one of its template with a voicetag within 60 m
+        if(!best) { best = FindNamedTwin(tpl, pos); }
 
         if(best)
         {
             Unsuppress(best);
+            theGame.r_getMultiplayerClient().getCoopNpcs().ReleaseNpc(best);
         }
         return best;
+    }
+
+    private function FindNamedTwin(tpl : string, pos : Vector) : CNewNPC
+    {
+        var entities : array<CGameplayEntity>;
+        var npc, found : CNewNPC;
+        var i, n : int;
+        FindGameplayEntitiesInSphere(entities, pos, 60.0, 64, '', FLAG_OnlyAliveActors, thePlayer);
+        for(i = 0; i < entities.Size(); i += 1)
+        {
+            npc = (CNewNPC)entities[i];
+            if(!npc || npc.HasTag('MPEntity') || npc.HasTag('w3coop_npc_copy') || IsPuppet(npc) || npc.GetReadableName() != tpl || NpcVoice(npc) == "") { continue; }
+            n += 1;
+            found = npc;
+        }
+        if(n == 1) { return found; }
+        return NULL;
+    }
+
+    // This world's own NPCs of the template with a voicetag (a named character) within 100 m.
+    private function LocalNamed(tpl : string) : int
+    {
+        var entities : array<CGameplayEntity>;
+        var npc : CNewNPC;
+        var i, n : int;
+        FindGameplayEntitiesInSphere(entities, thePlayer.GetWorldPosition(), 100.0, 64, '', FLAG_OnlyAliveActors, thePlayer);
+        for(i = 0; i < entities.Size(); i += 1)
+        {
+            npc = (CNewNPC)entities[i];
+            if(npc && !npc.HasTag('MPEntity') && !npc.HasTag('w3coop_npc_copy') && !IsPuppet(npc) && npc.GetReadableName() == tpl && NpcVoice(npc) != "") { n += 1; }
+        }
+        return n;
     }
 
     private function SpawnPuppet(tpl : string, app : string, pos : Vector, yaw : float) : CNewNPC
@@ -1951,6 +1993,8 @@ class r_CoopEnemies
         var ent : CEntity;
         var npc : CNewNPC;
         var rot : EulerAngles;
+        var tags : array<name>;
+        var i : int;
 
         template = (CEntityTemplate)LoadResource(tpl, true);
         if(!template)
@@ -1978,6 +2022,9 @@ class r_CoopEnemies
         {
             npc.ApplyAppearance(app);
         }
+        // no tags: quest scripts that look a character up by tag find this world's own, never the copy
+        tags = npc.GetTags();
+        for(i = 0; i < tags.Size(); i += 1) { npc.RemoveTag(tags[i]); }
         puppetsSpawned += 1;
         return npc;
     }
@@ -2719,13 +2766,19 @@ class r_CoopEnemies
             {
                 suppressed.Erase(i);
             }
+            else if(suppressed[i].npc.GetAttitude(thePlayer) != AIA_Hostile)
+            {
+                // hostile no longer (a sparring partner again): shown as itself
+                Unsuppress(suppressed[i].npc);
+            }
         }
 
         actors = thePlayer.GetNPCsAndPlayersInRange(30, 48, '', FLAG_Attitude_Hostile + FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
         for(i = 0; i < actors.Size(); i += 1)
         {
             npc = (CNewNPC)actors[i];
-            if(!npc || npc.HasTag('MPEntity') || npc.IsHorse() || IsPuppet(npc) || IsSuppressed(npc))
+            // a named character is never hidden as an extra enemy: the leader's is matched to it
+            if(!npc || npc.HasTag('MPEntity') || npc.IsHorse() || IsPuppet(npc) || IsSuppressed(npc) || NpcVoice(npc) != "")
             {
                 continue;
             }

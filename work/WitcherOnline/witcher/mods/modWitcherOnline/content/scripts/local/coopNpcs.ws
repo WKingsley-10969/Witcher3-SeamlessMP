@@ -173,6 +173,7 @@ class r_CoopNpcs
     private var unmatchedIds : array<int>;
     private var hidden : array<r_CoopNpcHidden>;
     private var leaderTemplates : array<string>;
+    public var paired : int;           // this world's NPCs paired late with a stand-in
     private var lastHideScan : float;
     private var nextNetId : int;
     private var seq : int;
@@ -718,6 +719,13 @@ class r_CoopNpcs
                 if(theirs < 4.0 && theirs + 1.0 < mine) { GiveToMember(h, h.matchedBy, now); }
                 continue;
             }
+            // the quest moved the real one away from the stand-in (the owner's playtest: a marker led to
+            // an invisible Ciri): taken back where it is
+            if(h.npc && h.display && VecDistance(h.npc.GetWorldPosition(), h.display.GetWorldPosition()) > 8.0)
+            {
+                TakeBack(h, now);
+                continue;
+            }
             member = PartyMember(client, h.owner);
             if(member && now - h.streamAt <= 2.0)
             {
@@ -751,7 +759,14 @@ class r_CoopNpcs
     private function TakeBack(h : r_CoopHostNpc, now : float)
     {
         if(h.display) { h.target = h.display.GetWorldPosition(); }
-        if(h.npc) { SwapToReal(h.npc, h.display); }
+        if(h.npc && h.display && VecDistance(h.npc.GetWorldPosition(), h.display.GetWorldPosition()) > 8.0)
+        {
+            // its own quest moved it: shown where it is, not pulled back to the stand-in
+            h.target = h.npc.GetWorldPosition();
+            h.display.Destroy();
+            ShowReal(h.npc);
+        }
+        else if(h.npc) { SwapToReal(h.npc, h.display); }
         else if(h.display) { h.display.Destroy(); }
         h.display = NULL;
         h.owner = "";
@@ -1007,17 +1022,27 @@ class r_CoopNpcs
 
         if(voice != "" && voiceUnique)
         {
+            // enemy-sharing copies and other players are not this world's own NPCs. Two of one voice
+            // (White Orchard has a Vesemir at the inn and the quest's in the field): the one nearest the
+            // leader's, within 30 m
             FindGameplayEntitiesInSphere(entities, thePlayer.GetWorldPosition(), 90, 128, '', FLAG_OnlyAliveActors);
+            bestDist = 1000000.0;
             for(i = 0; i < entities.Size(); i += 1)
             {
                 npc = (CNewNPC)entities[i];
-                if(npc && !npc.HasTag('w3coop_npc_copy') && NpcVoice(npc) == voice)
+                if(npc && !npc.HasTag('w3coop_npc_copy') && !npc.HasTag('MPEntity') && !theGame.r_getMultiplayerClient().getCoopEnemies().IsPuppet(npc)
+                    && NpcVoice(npc) == voice)
                 {
                     sameVoice += 1;
-                    best = npc;
+                    d = VecDistance(npc.GetWorldPosition(), pos);
+                    if(d < bestDist)
+                    {
+                        bestDist = d;
+                        best = npc;
+                    }
                 }
             }
-            if(sameVoice != 1) { best = NULL; }
+            if(sameVoice > 1 && bestDist >= 30.0) { best = NULL; }
             if(best) { byVoice = true; }
         }
         if(!best)
@@ -1138,6 +1163,25 @@ class r_CoopNpcs
                 if(p.npc) { worstSwapPop = MaxF(worstSwapPop, VecDistance(p.npc.GetWorldPosition(), p.swapPos)); }
                 p.pinUntil = 0;
             }
+            if(p.npc && (p.npc.IsInNonGameplayCutscene() || p.npc.IsInGameplayScene()))
+            {
+                // in a scene of this world (perhaps brought in from beyond the hold radius): the real
+                // one, where the scene put it, never the stand-in
+                if(p.display)
+                {
+                    p.display.Destroy();
+                    p.display = NULL;
+                    Record("SCENE_SHOWS " + p.voice + " " + p.tpl);
+                }
+                Unhide(p.npc);
+                ShowReal(p.npc);
+                continue;
+            }
+            if(p.npc && !p.display && !IsHidden(p.npc) && !p.npc.GetVisibility())
+            {
+                ShowReal(p.npc);  // hidden with nothing in its place: never leave a character invisible
+                Record("RESHOWN " + p.voice + " " + p.tpl);
+            }
             if(p.owned || InSceneHold(p.npc)) { continue; }
             if(!p.display)
             {
@@ -1187,18 +1231,76 @@ class r_CoopNpcs
         for(i = hidden.Size() - 1; i >= 0; i -= 1)
         {
             if(!hidden[i].npc) { hidden.Erase(i); }
+            else if(!leaderTemplates.Contains(CoopEncode(hidden[i].npc.GetReadableName())))
+            {
+                Record("UNHIDDEN " + NpcVoice(hidden[i].npc) + " " + hidden[i].npc.GetReadableName() + " (the leader lists none of it now)");
+                Unhide(hidden[i].npc);
+            }
         }
         actors = thePlayer.GetNPCsAndPlayersInRange(45, 64, '', FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
         for(i = 0; i < actors.Size(); i += 1)
         {
             npc = (CNewNPC)actors[i];
             if(!Shareable(npc) || FindPuppetByNpc(npc) || IsHidden(npc) || InSceneHold(npc) || !leaderTemplates.Contains(CoopEncode(npc.GetReadableName()))) { continue; }
+            // the owner's playtest: kid Ciri, spawned (or spawned again) by the quest after this world
+            // first saw the leader's, was hidden here for good, and her stand-in went with the leader's list
+            if(PairWithStandIn(npc)) { continue; }
+            if(NpcVoice(npc) != "") { continue; }
             h = new r_CoopNpcHidden in this;
             h.npc = npc;
             h.aiId = NpcForceIdle(npc);
             HideReal(npc);
             hidden.PushBack(h);
         }
+    }
+
+    // An NPC of this world for a puppet that only has a stand-in (no copy here when the leader's was
+    // first listed): same voicetag, or same template and appearance within 15 m. It stays hidden behind
+    // the stand-in, which the leader's stream moves, and is shown again when the leader drops it.
+    private function PairWithStandIn(npc : CNewNPC) : bool
+    {
+        var voice : string;
+        var i : int;
+        voice = NpcVoice(npc);
+        for(i = 0; i < puppets.Size(); i += 1)
+        {
+            if(puppets[i].npc || !puppets[i].display) { continue; }
+            if((voice != "" && puppets[i].voice == voice) || (puppets[i].tpl == npc.GetReadableName() && puppets[i].app == NameToString(npc.GetAppearance())
+                && VecDistance(puppets[i].display.GetWorldPosition(), npc.GetWorldPosition()) < 15.0))
+            {
+                puppets[i].npc = npc;
+                puppets[i].localPos = npc.GetWorldPosition();
+                puppets[i].localPosAt = theGame.GetEngineTimeAsSeconds();
+                HideReal(npc);
+                paired += 1;
+                Record("PAIRED " + voice + " " + npc.GetReadableName() + " with its stand-in");
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Enemy sharing takes this NPC over (it turned hostile, as Vesemir in the prologue's sparring):
+    // NPC sharing lets it go, shown as itself.
+    public function ReleaseNpc(npc : CNewNPC)
+    {
+        var i : int;
+        if(!npc) { return; }
+        for(i = puppets.Size() - 1; i >= 0; i -= 1)
+        {
+            if(puppets[i].npc != npc) { continue; }
+            if(puppets[i].display) { puppets[i].display.Destroy(); }
+            puppets[i].display = NULL;
+            puppets.Erase(i);
+        }
+        Unhide(npc);
+        ShowReal(npc);
+    }
+
+    // For the player's log (uploaded to the host).
+    private function Record(text : string)
+    {
+        WO_Log("coop npcs " + text);
     }
 
     private function IsHidden(npc : CNewNPC) : bool
