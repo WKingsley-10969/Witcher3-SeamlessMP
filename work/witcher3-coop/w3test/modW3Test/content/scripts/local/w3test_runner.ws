@@ -6,8 +6,8 @@
 //   W3T_RUN_TIME   seconds the run may take (600 unless set)
 // Every 3 s, when not in a scene: the first open objective of the quest that has a map pin is gone to (teleport);
 // there the leader talks to a character offering talk within 8 m and examines the monster clues within 15 m
-// (each once a minute). In a scene it takes the first choice once the choices have been up 2 s. Hostiles that are
-// not the boss are killed. Logs:
+// (each once a minute). In a scene it takes a choice once the choices have been up 2 s: the first, and the next one
+// each time the same menu comes back (a conversation that loops). Hostiles that are not the boss are killed. Logs:
 //   RUN objectives | <text> ; ...      on change, then a save (ManualSave) once out of scenes and fights
 //   RUN saved <n> for '<objectives>'    each save: the newest save of the run's sandbox is the one before the boss
 //   RUN goes to <x,y,z> / talks to <voice> / examines <clue> / kills <name>
@@ -114,10 +114,10 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     var npc : CNewNPC;
     var clue : W3MonsterClue;
     var talk : r_CoopTalk;
-    var text : string;
+    var text, key : string;
     var at, spot : Vector;
     var rot : EulerAngles;
-    var i : int;
+    var i, k, pick : int;
     var now : float;
     now = bot.ElapsedS();
     talk = client.getCoopTalk();
@@ -132,15 +132,29 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     if(now - bot.scenarioTime > W3T_RunTime())
     {
         W3T_Log("RUN out of time");
-        return true;
+        bot.scenarioStep = 2;
+        bot.scenarioTime = now;
+        return false;
     }
+    W3T_TalkLogEvents(talk, "RUN talk");
     if(talk.InScene())
     {
+        // the same menu again (a conversation that loops back): the next choice this time
         if(client.hasActiveDialogChoices() && talk.ChoicesAge() > 2)
         {
-            W3T_Log("RUN takes choice 0 of " + talk.LastChoiceCount());
-            W3T_DialogModule().OnDialogOptionSelected(0);
-            W3T_DialogModule().OnDialogOptionAccepted(0);
+            key = talk.GetScenePath() + "|" + talk.LastChoiceCount();
+            k = bot.runPickKeys.FindFirst(key);
+            if(k < 0)
+            {
+                bot.runPickKeys.PushBack(key);
+                bot.runPicks.PushBack(0);
+                k = bot.runPicks.Size() - 1;
+            }
+            pick = bot.runPicks[k] % talk.LastChoiceCount();
+            bot.runPicks[k] += 1;
+            W3T_Log("RUN takes choice " + pick + " of " + talk.LastChoiceCount());
+            W3T_DialogModule().OnDialogOptionSelected(pick);
+            W3T_DialogModule().OnDialogOptionAccepted(pick);
         }
         return false;
     }
