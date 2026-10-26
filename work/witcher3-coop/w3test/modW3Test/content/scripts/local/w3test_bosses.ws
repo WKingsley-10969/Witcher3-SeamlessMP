@@ -2,7 +2,7 @@
 // both PCs, so boss_report.py can list what the second PC got wrong. Measures, does not pass/fail on it.
 //   W3T_BOSS_AT     x,y,z where the fight is (an objective pin of the save's quest, from scene_probe)
 //   W3T_BOSS_QUEST  part of the quest's title: its open objectives are logged on both PCs as they change
-//   W3T_BOSS_NEAR   or the voice tag of a character to go to (VESEMIR) when the objective has no pin
+//   W3T_BOSS_NEAR   or the voice tag of a character to go to and talk to (VESEMIR) when the objective has no pin
 //   W3T_BOSS_TIME   seconds the fight is watched once there (200 unless set)
 // Both players are invulnerable. The leader goes to W3T_BOSS_AT, the second PC follows it. From 25 s on, every 3 s
 // the leader hurts the nearest hostile by 6 % of its health (closing in on it) and the second PC hurts the nearest
@@ -183,6 +183,7 @@ function W3T_BossLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
         if(character)
         {
             at = character.GetWorldPosition() + VecFromHeading(character.GetHeading()) * 2.0;
+            bot.scenarioEntity = character;
         }
         else if(W3T_GetEnv("W3T_BOSS_NEAR") != "")
         {
@@ -203,6 +204,16 @@ function W3T_BossLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
         return false;
     }
     W3T_BossQuestAndScene(bot, client, "leader");
+    // the character starts the quest's scene when talked to (three tries, 10 s apart)
+    character = (CNewNPC)bot.scenarioEntity;
+    if(character && bot.scenarioCount < 3 && !client.getCoopTalk().InScene() && now - bot.scenarioTime > 3 + 10 * bot.scenarioCount)
+    {
+        W3T_Log("BOSS leader talks to " + W3T_GetEnv("W3T_BOSS_NEAR") + " (try " + (bot.scenarioCount + 1) + ")");
+        W3T_LookAt(character.GetWorldPosition());
+        character.OnInteraction("Talk", thePlayer);
+        bot.scenarioCount += 1;
+    }
+    if(client.getCoopTalk().InScene()) { bot.scenarioCount = 3; }
     if(client.hasActiveDialogChoices() && client.getCoopTalk().ChoicesAge() > 2)
     {
         W3T_Log("BOSS leader takes choice 0 of " + client.getCoopTalk().LastChoiceCount());
