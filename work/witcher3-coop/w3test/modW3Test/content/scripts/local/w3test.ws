@@ -334,7 +334,8 @@ statemachine class W3T_Bot
     public var surveyStartZ : array<float>;    // ... and the height it appeared at
     public var surveyCopies : array<CEntity>;  // ... and those copies
     public var bossScene : string;             // boss_fight: the scene last logged
-    public var runTimes : array<float>;        // quest_run: when it last acted on each of scenarioEntities
+    public var runEntities : array<CEntity>;   // quest_run: what it talked to or examined
+    public var runTimes : array<float>;        // ... and when it last did
     public var runPickKeys : array<string>;    // ... the menus it chose in (scene and choice count)
     public var runPicks : array<int>;          // ... and how often: it takes the next choice each time
     public var scenarioActAt : float;    // when it last moved

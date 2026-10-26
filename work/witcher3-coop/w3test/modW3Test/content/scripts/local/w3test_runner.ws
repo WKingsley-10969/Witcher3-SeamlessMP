@@ -5,7 +5,7 @@
 //   W3T_RUN_BOSS   part of the boss's template name: the run ends when it shows (other hostiles are killed)
 //   W3T_RUN_TIME   seconds the run may take (600 unless set)
 // Every 3 s, when not in a scene: the first open objective of the quest that has a map pin is gone to (teleport);
-// there the leader talks to a character offering talk within 8 m and examines the monster clues within 15 m
+// there the leader talks to a character offering talk within 12 m and examines the monster clues within 15 m
 // (each once a minute). In a scene it takes a choice once the choices have been up 2 s: the first, and the next one
 // each time the same menu comes back (a conversation that loops). Hostiles that are not the boss are killed. Logs:
 //   RUN objectives | <text> ; ...      on change, then a save (ManualSave) once out of scenes and fights
@@ -105,11 +105,11 @@ function W3T_RunPinAt(objective : CJournalQuestObjective, out at : Vector) : boo
 function W3T_RunRecently(bot : W3T_Bot, entity : CEntity, now : float) : bool
 {
     var i : int;
-    i = bot.scenarioEntities.FindFirst(entity);
+    i = bot.runEntities.FindFirst(entity);
     if(i >= 0 && now - bot.runTimes[i] < 60) { return true; }
     if(i < 0)
     {
-        bot.scenarioEntities.PushBack(entity);
+        bot.runEntities.PushBack(entity);
         bot.runTimes.PushBack(now);
     }
     else
@@ -238,7 +238,7 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
         W3T_Log("RUN goes to " + W3T_VecStr(spot) + " for '" + GetLocStringById(objectives[i].GetTitleStringId()) + "'");
         return false;
     }
-    actors = thePlayer.GetNPCsAndPlayersInRange(8, 16, '', FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
+    actors = thePlayer.GetNPCsAndPlayersInRange(12, 16, '', FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
     for(i = 0; i < actors.Size(); i += 1)
     {
         npc = (CNewNPC)actors[i];
@@ -259,6 +259,19 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
             W3T_Log("RUN examines " + clue.GetReadableName());
             clue.OnInteraction("Examine", thePlayer);
             return false;
+        }
+    }
+    // nothing to do here: once per set of objectives, who is around and whether they offer talk
+    if(!bot.surveySeen.Contains("idle|" + text))
+    {
+        bot.surveySeen.PushBack("idle|" + text);
+        actors = thePlayer.GetNPCsAndPlayersInRange(30, 32, '', FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
+        for(i = 0; i < actors.Size(); i += 1)
+        {
+            npc = (CNewNPC)actors[i];
+            if(!npc) { continue; }
+            W3T_Log("RUN idle near " + NpcVoice(npc) + " (" + W3T_SurveyEntityName(npc) + ") dist=" + FloatToStringPrec(VecDistance(thePlayer.GetWorldPosition(),
+                npc.GetWorldPosition()), 1) + " scene=" + npc.HasInteractionScene() + " talk=" + (npc.GetComponent('talk') && npc.GetComponent('talk').IsEnabled()));
         }
     }
     return false;
