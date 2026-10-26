@@ -58,7 +58,7 @@ try {
     Write-Host 'Launching Witcher 3 with the LAN mod and a separate co-op save/settings profile.'
     if (-not $joinsHostSave) { Write-Host 'Load matching saves in the same region. In game, interact with the host character and join its party.' }
     $game = [Diagnostics.Process]::Start($info)
-    $game.WaitForExit()
+    Wait-W3LanGame -Game $game -Server $server
     if ($game.ExitCode -ne 0) { throw "Game exited with code $($game.ExitCode). Check the profile's native.log and game logs." }
 } catch {
     Write-Error $_ -ErrorAction Continue

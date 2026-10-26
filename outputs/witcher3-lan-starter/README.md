@@ -93,6 +93,8 @@ A separate full copy remains optional for development:
 
 Steam must be running for the game normally. Mod traffic goes directly over LAN: no Steam relay, VPN or router port forwarding. If Windows Firewall blocks the host's Java process, allow it on your private home network; scripts do not change firewall rules. Guest Wi-Fi can isolate PCs.
 
+**Connection status in the host console (new).** While you play, type `status` in the host console and press Enter. It lists every connected player (your own game too) with their address, how long ago their last packet arrived, packets per second in and out, and the estimated loss of packets on their way to the host. While players are connected, the console also prints a one-line summary every 60 s; set `statusSummarySeconds=0` in `server\server.properties` to turn it off. This helps over internet play (ZeroTier, Tailscale): a second PC that keeps losing more than a few percent, or whose last packet is more than a second old, has a connection problem rather than a game problem. Ping is not shown (`n/a`): the game sends nothing the host could time. `help` lists the other console commands; to stop the server, close the game.
+
 Only the host needs Java 21+. On another host, use `JAVA_HOME`, put a portable JDK under `runtime`, or pass `-JavaPath` to `Play-LAN.ps1`. Java is not installed automatically. Names are 2-16 ASCII letters, digits or underscores; choose different names, and avoid reserved `none`.
 
 ## Saves, settings and controls

@@ -92,6 +92,64 @@ function Stop-W3LanServer {
     }
 }
 
+# The host's server reads console commands from a pipe (the launcher sends it 'stop' at the end), so
+# lines typed in the host console while the game runs are passed on to it: 'status', 'help', ...
+function Wait-W3LanGame {
+    param([Parameter(Mandatory)][Diagnostics.Process]$Game, [Diagnostics.Process]$Server)
+    $interactive = $false
+    if ($Server) { try { $interactive = -not [Console]::IsInputRedirected } catch { } }
+    if ($interactive) {
+        Write-Host "Server console: type status and press Enter to see each player's connection (help lists more)."
+        $line = [Text.StringBuilder]::new()
+        try {
+            while (-not $Game.WaitForExit(200)) {
+                while ([Console]::KeyAvailable) {
+                    $command = Add-W3LanConsoleKey -Line $line -Key ([Console]::ReadKey($true))
+                    if ($null -ne $command) { [void](Send-W3LanServerCommand -Server $Server -Command $command) }
+                }
+            }
+        } catch [InvalidOperationException] { }   # no console to read keys from: just wait
+    }
+    $Game.WaitForExit()
+}
+
+# One key of a typed line: returns the line on Enter, else $null.
+function Add-W3LanConsoleKey {
+    param([Parameter(Mandatory)][Text.StringBuilder]$Line, [Parameter(Mandatory)][ConsoleKeyInfo]$Key)
+    if ($Key.Key -eq [ConsoleKey]::Enter) {
+        Write-Host ''
+        $text = $Line.ToString()
+        [void]$Line.Clear()
+        return $text
+    }
+    if ($Key.Key -eq [ConsoleKey]::Backspace) {
+        if ($Line.Length) { [void]$Line.Remove($Line.Length - 1, 1); Write-Host -NoNewline "`b `b" }
+        return $null
+    }
+    if ($Key.KeyChar -ge [char]' ' -and $Line.Length -lt 200) {
+        [void]$Line.Append($Key.KeyChar)
+        Write-Host -NoNewline $Key.KeyChar
+    }
+    $null
+}
+
+# Passes one typed command to the server; 'stop' stays with the launcher (it stops the server when
+# the game closes).
+function Send-W3LanServerCommand {
+    param([Parameter(Mandatory)]$Server, [AllowEmptyString()][string]$Command)
+    $Command = $Command.Trim()
+    if (-not $Command) { return $false }
+    if ($Command -ieq 'stop') { Write-Host 'Close the game to stop the server.'; return $false }
+    if ($Server.HasExited) { Write-Host 'The server has stopped.'; return $false }
+    try {
+        $Server.StandardInput.WriteLine($Command)
+        $Server.StandardInput.Flush()
+        $true
+    } catch { Write-Host "Could not reach the server: $($_.Exception.Message)"; $false }
+}
+
+Export-ModuleMember -Function Wait-W3LanGame, Add-W3LanConsoleKey, Send-W3LanServerCommand
+
 function Start-W3LanServer {
     param(
         [Parameter(Mandatory)][string]$JarPath,
