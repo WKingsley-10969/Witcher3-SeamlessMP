@@ -321,6 +321,14 @@ class r_CoopTalk
                 Record("HANDOVER to " + sender);
                 WO_Send("coop cv joined " + hostConv + " " + CoopEncode(scenePath));
             }
+            else if(!listeners.Contains(sender))
+            {
+                // this game chooses: announce again, in case the other ignored this game's first
+                // announcement (its scene was not linked to a party yet)
+                Record("REOPEN for " + sender);
+                WO_Send("coop cv open " + convId + " " + CoopEncode(scenePath) + " - - - "
+                    + CoopNpcVec3(thePlayer.GetWorldPosition()) + " " + CoopNpcVec3(thePlayer.GetWorldPosition()));
+            }
             return;
         }
         if(role != 0 || inScene || offerOpen || thePlayer.IsInCombat() || thePlayer.IsUsingVehicle()) { return; }
