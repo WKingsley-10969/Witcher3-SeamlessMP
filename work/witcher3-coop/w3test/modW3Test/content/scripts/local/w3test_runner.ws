@@ -326,6 +326,18 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     if(!bot.surveySeen.Contains("idle|" + text + "|" + bot.runObjective))
     {
         bot.surveySeen.PushBack("idle|" + text + "|" + bot.runObjective);
+        // the quest's own characters anywhere loaded (the hunter was not within 300 m of his pin), and the hour
+        actors = thePlayer.GetNPCsAndPlayersInRange(3000, 3000, '', FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
+        for(i = 0; i < actors.Size(); i += 1)
+        {
+            npc = (CNewNPC)actors[i];
+            if(npc && StrFindFirst(npc.GetReadableName(), "quests") >= 0)
+            {
+                W3T_Log("RUN idle quest character " + NpcVoice(npc) + " (" + W3T_SurveyEntityName(npc) + ") dist=" + FloatToStringPrec(VecDistance(
+                    thePlayer.GetWorldPosition(), npc.GetWorldPosition()), 1) + " at " + W3T_VecStr(npc.GetWorldPosition()) + " talk=" + W3T_Talkable(npc));
+            }
+        }
+        W3T_Log("RUN idle hour " + GameTimeHours(theGame.GetGameTime()) + ", " + actors.Size() + " actors loaded");
         actors = thePlayer.GetNPCsAndPlayersInRange(30, 32, '', FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
         for(i = 0; i < actors.Size(); i += 1)
         {
