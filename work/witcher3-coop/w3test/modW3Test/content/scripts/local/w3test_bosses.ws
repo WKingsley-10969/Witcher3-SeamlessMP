@@ -204,23 +204,26 @@ function W3T_BossLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
         return false;
     }
     W3T_BossQuestAndScene(bot, client, "leader");
-    // the character starts the quest's scene when talked to (three tries, 10 s apart)
+    hostiles = W3T_BossHostiles();
+    // the character starts the quest's scene when talked to: again 10 s after each scene while no enemy has come
+    // (White Orchard's trap takes two talks to Vesemir), at most three times
     character = (CNewNPC)bot.scenarioEntity;
-    if(character && bot.scenarioCount < 3 && !client.getCoopTalk().InScene() && now - bot.scenarioTime > 3 + 10 * bot.scenarioCount)
+    if(client.getCoopTalk().InScene()) { bot.bossTalkAt = now; }
+    if(character && bot.scenarioCount < 3 && hostiles.Size() == 0 && !client.getCoopTalk().InScene() && now - bot.scenarioTime > 3
+        && now - bot.bossTalkAt > 10)
     {
         W3T_Log("BOSS leader talks to " + W3T_GetEnv("W3T_BOSS_NEAR") + " (try " + (bot.scenarioCount + 1) + ")");
         W3T_LookAt(character.GetWorldPosition());
         character.OnInteraction("Talk", thePlayer);
         bot.scenarioCount += 1;
+        bot.bossTalkAt = now;
     }
-    if(client.getCoopTalk().InScene()) { bot.scenarioCount = 3; }
     if(client.hasActiveDialogChoices() && client.getCoopTalk().ChoicesAge() > 2)
     {
         W3T_Log("BOSS leader takes choice 0 of " + client.getCoopTalk().LastChoiceCount());
         W3T_DialogModule().OnDialogOptionSelected(0);
         W3T_DialogModule().OnDialogOptionAccepted(0);
     }
-    hostiles = W3T_BossHostiles();
     // the fight's first seconds are left to the quest (its scene, its enemies coming) and the second PC joining
     if(now - bot.scenarioTime > 25 && now - bot.scenarioActAt >= 3 && !client.getCoopTalk().InScene())
     {
