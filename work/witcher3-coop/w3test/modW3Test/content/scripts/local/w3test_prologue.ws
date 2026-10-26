@@ -28,7 +28,7 @@ function W3T_PrologueObjectives() : string
 {
     var manager : CWitcherJournalManager;
     var quests : array<CJournalBase>;
-    var quest : CJournalQuest;
+    var jq : CJournalQuest;
     var phase : CJournalQuestPhase;
     var objective : CJournalQuestObjective;
     var text : string;
@@ -37,11 +37,11 @@ function W3T_PrologueObjectives() : string
     manager.GetActivatedOfType('CJournalQuest', quests);
     for(i = 0; i < quests.Size(); i += 1)
     {
-        quest = (CJournalQuest)quests[i];
-        if(!quest || manager.GetEntryStatus(quest) != JS_Active) { continue; }
-        for(j = 0; j < quest.GetNumChildren(); j += 1)
+        jq = (CJournalQuest)quests[i];
+        if(!jq || manager.GetEntryStatus(jq) != JS_Active) { continue; }
+        for(j = 0; j < jq.GetNumChildren(); j += 1)
         {
-            phase = (CJournalQuestPhase)quest.GetChild(j);
+            phase = (CJournalQuestPhase)jq.GetChild(j);
             if(!phase) { continue; }
             for(k = 0; k < phase.GetNumChildren(); k += 1)
             {
