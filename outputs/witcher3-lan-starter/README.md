@@ -2,6 +2,8 @@
 
 Two Windows PCs on one home network: one hosts, the other joins by private IPv4 address. Built on **W3Coop v0.2.0**, a fork of **Witcher Online**. This is an experimental LAN adaptation, not a verified seamless campaign.
 
+**Version:** the `VERSION` file in this package (for example `0.3.0-alpha`) is this build's version. The package folder, its zip and its GitHub release carry the same number.
+
 The full development ZIP contains the native mod, its DLC/templates, Java server, LAN launchers, source and licenses. It contains no Witcher 3 installation or Java runtime. Each player needs a matching game. Target: Steam build **25773555**, executable resource version **5.0.0.1048522**; other builds are rejected until checked.
 
 ## On this development PC
@@ -137,6 +139,8 @@ Shared-progress limits: only quest facts and quest-log states travel, so a quest
 **Monster phases and knockdowns (new).** When a monster turns untouchable or untargetable (a noonwraith, an alghoul, a fogling in its fog), it does so on both screens, and you cannot lock on to it on either. A monster knocked down, staggered, frozen, blinded or held by Yrden is so on both screens too.
 
 **A leshen's roots and crows (new).** The roots a leshen sends through the ground and the crows it throws show on both screens, and its crows hurt whichever player they hit. A griffin's landing dust already shows with its flight.
+
+**Attacks that come out of the ground (new).** What a monster's attack makes appear, such as a spriggan's roots bursting out under you, shows on both screens. Only the real one hurts: the other player's copy is just for show.
 
 Inherited limits include the roughly 60 m shared-enemy range, independently started scenes, incomplete enemy animation/spell/summon cases and loot on corpses outside the shared-enemy range. This adaptation does not remove them. The server has no enforced two-player cap or authenticated LAN session; use it on your trusted home network.
 
