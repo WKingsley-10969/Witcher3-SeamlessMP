@@ -131,6 +131,7 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     var npc : CNewNPC;
     var clue : W3MonsterClue;
     var container : W3Container;
+    var items : array<SItemUniqueId>;
     var talk : r_CoopTalk;
     var text, key : string;
     var at, spot : Vector;
@@ -277,14 +278,19 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
             return false;
         }
     }
-    // a container or plant holding a quest item (the buckthorn to find): its items taken, as looting it would
-    FindGameplayEntitiesInSphere(entities, thePlayer.GetWorldPosition(), 30, 64);
+    // a plant (the buckthorn to find on a riverbed is an ordinary herb) or a container holding a quest item: its items
+    // taken, as gathering or looting it would
+    FindGameplayEntitiesInSphere(entities, thePlayer.GetWorldPosition(), 50, 100);
     for(i = 0; i < entities.Size(); i += 1)
     {
         container = (W3Container)entities[i];
-        if(container && container.GetInventory() && container.GetInventory().HasQuestItem() && !W3T_RunRecently(bot, container, now, 100000))
+        if(container && container.GetInventory() && !container.GetInventory().IsEmpty()
+            && ((W3Herb)container || container.GetInventory().HasQuestItem()) && !W3T_RunRecently(bot, container, now, 100000))
         {
-            W3T_Log("RUN takes the quest items of " + W3T_SurveyEntityName(container) + " at " + W3T_VecStr(container.GetWorldPosition()));
+            container.GetInventory().GetAllItems(items);
+            text = "";
+            for(k = 0; k < items.Size() && k < 4; k += 1) { text += " " + NameToString(container.GetInventory().GetItemName(items[k])); }
+            W3T_Log("RUN takes" + text + " from " + W3T_SurveyEntityName(container) + " at " + W3T_VecStr(container.GetWorldPosition()));
             container.GetInventory().GiveAllItemsTo(thePlayer.inv, true, true);
             return false;
         }
@@ -312,10 +318,10 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
         bot.runObjective += 1;
         W3T_Log("RUN nothing to do here for 30 s: the next objective");
     }
-    // nothing to do here: once per set of objectives, who is around and whether they offer talk
-    if(!bot.surveySeen.Contains("idle|" + text))
+    // nothing to do here: once per objective, who is around (and whether they offer talk) and what can be looted
+    if(!bot.surveySeen.Contains("idle|" + text + "|" + bot.runObjective))
     {
-        bot.surveySeen.PushBack("idle|" + text);
+        bot.surveySeen.PushBack("idle|" + text + "|" + bot.runObjective);
         actors = thePlayer.GetNPCsAndPlayersInRange(30, 32, '', FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
         for(i = 0; i < actors.Size(); i += 1)
         {
@@ -323,6 +329,16 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
             if(!npc) { continue; }
             W3T_Log("RUN idle near " + NpcVoice(npc) + " (" + W3T_SurveyEntityName(npc) + ") dist=" + FloatToStringPrec(VecDistance(thePlayer.GetWorldPosition(),
                 npc.GetWorldPosition()), 1) + " scene=" + npc.HasInteractionScene() + " talk=" + (npc.GetComponent('talk') && npc.GetComponent('talk').IsEnabled()));
+        }
+        for(i = 0; i < entities.Size(); i += 1)
+        {
+            container = (W3Container)entities[i];
+            if(!container || !container.GetInventory()) { continue; }
+            container.GetInventory().GetAllItems(items);
+            text = "";
+            for(k = 0; k < items.Size() && k < 3; k += 1) { text += " " + NameToString(container.GetInventory().GetItemName(items[k])); }
+            W3T_Log("RUN idle near container " + W3T_SurveyEntityName(container) + " dist=" + FloatToStringPrec(VecDistance(thePlayer.GetWorldPosition(),
+                container.GetWorldPosition()), 1) + " items:" + text);
         }
     }
     return false;
