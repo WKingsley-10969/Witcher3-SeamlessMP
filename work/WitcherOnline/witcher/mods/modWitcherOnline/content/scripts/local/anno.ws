@@ -1131,14 +1131,11 @@ public function WO_ShowVoteMarks(marks : array<string>)
         choiceFlashObject.SetMemberFlashInt("icon", choice.dialogAction);
         choiceFlashObject.SetMemberFlashBool("read", choice.previouslyChoosen == false);
         choiceFlashObject.SetMemberFlashBool("emphasis", choice.emphasised);
-        if(choice.disabled && choice.dialogAction == DialogAction_CONTENT_MISSING)
-        {
-            choiceFlashObject.SetMemberFlashBool("locked", !theGame.IsContentAvailable(choice.playGoChunk));
-        }
-        else
-        {
-            choiceFlashObject.SetMemberFlashBool("locked", choice.disabled);
-        }
+        // locked for the box: a press on an unlocked option plays its "chosen" animation, which hides the
+        // other options for most of a second (the owner's playtest), and a vote must leave the list as it
+        // is. The press still reaches OnDialogOptionAccepted, where it is the vote; the decision is
+        // accepted from script, which the lock does not stop.
+        choiceFlashObject.SetMemberFlashBool("locked", true);
         choiceFlashArray.SetElementFlashObject(i, choiceFlashObject);
     }
     flashValueStorage.SetFlashArray("hud.dialog.choices", choiceFlashArray);
