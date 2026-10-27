@@ -140,21 +140,48 @@ function W3T_PrologueObjectivePin(out pos : Vector) : bool
 
 // After the wake-up: the second PC kills the ghouls (35 % a hit, every second), then both travel to the
 // quest's new marker, 40 m a step every 5 s, counting any hostile or enemy copy near on the way.
-function W3T_PrologueGhouls(bot : W3T_Bot, client : r_MultiplayerClient, host : bool, side : string, now : float)
+// The hostiles near, by template, each marked copy (the leader's, shown here) or own (this world's), e.g.
+// "3 | q001_starting_scene_ghoul01 own, ghoul_lvl1 copy".
+function W3T_PrologueHostileList(client : r_MultiplayerClient, hostiles : array<CNewNPC>) : string
+{
+    var text, tpl : string;
+    var i : int;
+    text = hostiles.Size() + " |";
+    for(i = 0; i < hostiles.Size(); i += 1)
+    {
+        tpl = StrAfterLast(hostiles[i].GetReadableName(), "\\");
+        if(tpl == "") { tpl = hostiles[i].GetReadableName(); }
+        if(client.getCoopEnemies().IsPuppet(hostiles[i])) { tpl += " copy"; } else { tpl += " own"; }
+        if(!hostiles[i].GetVisibility()) { tpl += " hidden"; }
+        text += " " + tpl;
+    }
+    return text;
+}
+
+function W3T_PrologueGhouls(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_RemotePlayer, host : bool, side : string, now : float)
 {
     var hostiles : array<CNewNPC>;
     var pin, spot, safe : Vector;
     var rot : EulerAngles;
     var near : int;
+    var list : string;
     hostiles = W3T_BossHostiles();
     near = hostiles.Size();
+    // what is near, each time it changes: where the ghouls come from (the quest's, an ambush's, the leader's copies)
+    list = W3T_PrologueHostileList(client, hostiles);
+    if(list != bot.hostilesText)
+    {
+        bot.hostilesText = list;
+        W3T_Log("PRO " + side + " hostiles " + list + " | objectives " + W3T_PrologueObjectives());
+    }
     if(!bot.ghoulsCleared)
     {
         if(near > 0)
         {
             bot.ghoulsSeen += 1;
             bot.ghoulsClearAt = 0;
-            if(!host && now - bot.scenarioActAt >= 1)
+            // the second PC kills them; alone (W3T_PROLOGUE_SOLO=1, the plain game's baseline) the leader does
+            if((!host || W3T_GetEnv("W3T_PROLOGUE_SOLO") == "1") && now - bot.scenarioActAt >= 1)
             {
                 W3T_PrologueHit(W3T_BossNearest(hostiles), 0.35);
                 bot.scenarioActAt = now;
@@ -181,8 +208,17 @@ function W3T_PrologueGhouls(bot : W3T_Bot, client : r_MultiplayerClient, host : 
     if(bot.travelSteps >= 4 || now - bot.travelAt < 5) { return; }
     if(!W3T_PrologueObjectivePin(pin))
     {
-        if(now - bot.travelAt > 30 && bot.travelSteps == 0) { W3T_Log("PRO " + side + " no marker for | " + W3T_PrologueObjectives()); bot.travelAt = now; }
-        return;
+        // no pin here (the last run's second PC: "Follow Vesemir" had none): along with the leader
+        if(leader && leader.area == WO_CurrentAreaCode() && (leader.pos.X != 0 || leader.pos.Y != 0)
+            && VecDistance(leader.pos, thePlayer.GetWorldPosition()) > 5)
+        {
+            pin = leader.pos;
+        }
+        else
+        {
+            if(now - bot.travelAt > 30 && bot.travelSteps == 0) { W3T_Log("PRO " + side + " no marker for | " + W3T_PrologueObjectives()); bot.travelAt = now; }
+            return;
+        }
     }
     spot = thePlayer.GetWorldPosition() + VecNormalize(pin - thePlayer.GetWorldPosition()) * MinF(40.0, VecDistance(pin, thePlayer.GetWorldPosition()));
     if(!theGame.GetWorld().NavigationFindSafeSpot(spot, 0.5, 8.0, safe)) { safe = spot; }
@@ -262,7 +298,7 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
     // free training, after the wake-up: the ghoul fight and the walk on
     else if(!tutorial && bot.scenarioPos.X > 0 && !talk.InScene())
     {
-        W3T_PrologueGhouls(bot, client, host, side, now);
+        W3T_PrologueGhouls(bot, client, leader, host, side, now);
     }
     else if(host)
     {

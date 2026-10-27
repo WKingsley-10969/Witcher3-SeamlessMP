@@ -356,6 +356,7 @@ statemachine class W3T_Bot
     public var travelAt : float;
     public var ghoulsOnTheWay : int;      // samples with hostiles or enemy copies near while travelling
     public var objectivesAfter : string;
+    public var hostilesText : string;     // the hostiles near as last logged
     public var labelSceneChecks : int;   // scene_share: ticks seen inside a scene that hides labels
     public var labelSceneShown : int;    // ... with a player label still on screen
     public var scenarioName : name;

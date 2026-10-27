@@ -26,6 +26,7 @@ ap.add_argument('scenario')
 ap.add_argument('--save', default='ManualSave_4e4da')
 ap.add_argument('--duration', type=int)
 ap.add_argument('--timeout', type=int, default=480, help='seconds the whole run may take (the game slot is held that long plus 5 min)')
+ap.add_argument('--bots', type=int, default=2, help='passed to run_test.py: 1 runs the leader alone (a plain-game baseline)')
 a = ap.parse_args()
 env = dict(os.environ, W3_GAME_DIR=str(game), W3C_ROOT=str(work), W3C_WORK=str(testing),
            WO_SERVER_IP='127.0.0.1', WO_SERVER_PORT='41000', WO_USERNAME='CompileCheck')
@@ -40,7 +41,7 @@ if a.scenario == 'verify':
                '--errors', str(testing / (tag + '-errors.txt')), '--timeout', '240', '--', '-verifyscriptsandexit']
 else:
     command = [sys.executable, str(tools / 'run_test.py'), a.scenario, '--save', a.save,
-               '--duration', str(a.duration or (60 if a.scenario in ('see_each_other', 'movement') else 300)), '--timeout', str(a.timeout), '--size', '960x540']
+               '--duration', str(a.duration or (60 if a.scenario in ('see_each_other', 'movement') else 300)), '--timeout', str(a.timeout), '--size', '960x540', '--bots', str(a.bots)]
     if a.scenario.startswith('seamless_'):
         command.append('--campaign')
 slot_source = work / 'coop-playbook/tools/gameslot/gameslot.py'
