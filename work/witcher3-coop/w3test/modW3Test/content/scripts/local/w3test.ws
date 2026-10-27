@@ -354,6 +354,16 @@ statemachine class W3T_Bot
     public var scenarioFarSince : float; // since when its target has been out of reach
     public var scenarioPos : Vector;     // where it stood when it last moved (stuck checks)
     public var scenarioValue : float;
+    // prologue_coop after the wake-up (the owner's check): the second PC kills the ghouls, the quest moves on,
+    // both travel to its new marker and no ghoul may show up on the way
+    public var ghoulsSeen : int;          // samples with hostiles near, after the wake-up
+    public var ghoulsClearAt : float;     // since when none are near (0: some are, or none seen yet)
+    public var ghoulsCleared : bool;
+    public var travelSteps : int;
+    public var travelAt : float;
+    public var ghoulsOnTheWay : int;      // samples with hostiles or enemy copies near while travelling
+    public var objectivesAfter : string;
+    public var hostilesText : string;     // the hostiles near as last logged
     public var labelSceneChecks : int;   // scene_share: ticks seen inside a scene that hides labels
     public var labelSceneShown : int;    // ... with a player label still on screen
     public var scenarioName : name;
