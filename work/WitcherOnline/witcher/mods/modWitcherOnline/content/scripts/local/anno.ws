@@ -1063,7 +1063,7 @@ function OnDialogSkipped(value : int)
     // in a shared conversation a line goes once both players pressed skip on it
     if(theGame.r_getMultiplayerClient().getCoopTalk().InterceptSkip(value))
     {
-        return;
+        return true;
     }
     theGame.r_getMultiplayerClient().clearActiveDialogChoices();
     theGame.r_getMultiplayerClient().getCoopEnemies().OnLocalSkip(value);
