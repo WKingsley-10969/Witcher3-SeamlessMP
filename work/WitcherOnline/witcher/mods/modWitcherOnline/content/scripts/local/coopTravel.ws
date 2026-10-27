@@ -1,7 +1,10 @@
 // Travel together (party). When a party member fast-travels, everyone in the party who was with
 // them (within COOP_TRAVEL_RANGE of where they stood) fast-travels to the same signpost in their
-// own game, with its own loading screen. When a party member who was with this player changes
-// region some other way (a quest moving them, a boat), this game follows to where they arrived.
+// own game, with its own loading screen. When a party member who was with this player sails to
+// another region, this game follows to where they arrived. A region change a quest makes is not
+// followed: this game's own quest makes it when it gets there (the owner's playtest: the end of the
+// prologue's dream on one PC dragged the other out of its dream mid-quest, and from then on the two
+// stories ran apart: separate ghouls, gear never handed out).
 // Players who were elsewhere are left where they are, so the party can still split up.
 //
 // "coop tr ft seq area pin x y z fromArea": fast travel to signpost pin (area code; 0: same
@@ -23,6 +26,7 @@ class r_CoopTravel
     private var peerPos : array<Vector>;
     private var peerNear : array<bool>;        // within range of this player in the same region
     private var peerTravelAt : array<float>;   // when their last fast travel was announced
+    private var peerSailing : array<bool>;     // on a boat when last seen
     private var lastPeerCheck : float;
 
     public var travelsSent : int;
@@ -42,6 +46,7 @@ class r_CoopTravel
     private function Record(text : string)
     {
         events.PushBack(FloatToStringPrec(theGame.GetEngineTimeAsSeconds(), 2) + " " + text);
+        WO_Log("coop travel " + text);
         if(events.Size() > 100) { events.Erase(0); }
     }
 
@@ -208,12 +213,17 @@ class r_CoopTravel
                 peerPos.PushBack(p.pos);
                 peerNear.PushBack(false);
                 peerTravelAt.PushBack(-100);
+                peerSailing.PushBack(false);
                 k = peerNames.Size() - 1;
             }
             if(p.area != peerAreas[k] && peerAreas[k] == WO_CurrentAreaCode() && peerNear[k] && now - peerTravelAt[k] > 60
                 && !following && followAt == 0)
             {
-                if(CanTravel(p.username))
+                if(!peerSailing[k] || FactsQuerySum("q001_nightmare_ended") <= 0)
+                {
+                    Record("REGION_NOT_FOLLOWED " + p.username + " area=" + p.area + " (not by boat: this game's quest moves this player)");
+                }
+                else if(CanTravel(p.username))
                 {
                     regionFollows += 1;
                     Record("REGION_FOLLOW " + p.username + " area=" + p.area);
@@ -223,6 +233,7 @@ class r_CoopTravel
             }
             peerAreas[k] = p.area;
             peerPos[k] = p.pos;
+            peerSailing[k] = p.isSailing;
             peerNear[k] = p.area == WO_CurrentAreaCode() && VecDistance(p.pos, thePlayer.GetWorldPosition()) <= COOP_TRAVEL_RANGE();
         }
     }

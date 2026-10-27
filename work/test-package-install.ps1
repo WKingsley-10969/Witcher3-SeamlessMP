@@ -1,6 +1,7 @@
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
-$package=Join-Path $root 'outputs\Witcher3-LAN-0.2.0-dev'
+$version=(Get-Content -LiteralPath (Join-Path $root 'outputs\witcher3-lan-starter\VERSION') -Raw).Trim()
+$package=Join-Path $root ('outputs\Witcher3-LAN-' + $version)
 $fixture=Join-Path $PSScriptRoot ('install-fixture-' + [Guid]::NewGuid().ToString('N').Substring(0,8))
 $source=Join-Path $fixture 'source'
 $target=Join-Path $fixture 'copy'

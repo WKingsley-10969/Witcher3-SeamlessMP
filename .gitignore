@@ -53,3 +53,5 @@ build/
 # test output
 /work/seamless/test-results/
 /outputs/witcher3-lan-starter/tests/install-fixtures/
+# co-op logs the second PC sent to this host (LogInbox)
+/outputs/witcher3-lan-starter/server/player-logs/

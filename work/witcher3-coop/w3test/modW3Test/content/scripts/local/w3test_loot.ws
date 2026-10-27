@@ -46,7 +46,10 @@ function W3T_LootShare(bot : W3T_Bot, client : r_MultiplayerClient, other : r_Re
                 return false;
             }
             W3T_Log(label + " empties the container at " + W3T_VecStr(container.GetWorldPosition()) + " (" + container.GetInventory().GetAllItemsQuantity() + " items)");
+            // as the player's take-all (only those are shared; a quest moving items is not)
+            client.getCoopLoot().BeginPlayerTake();
             container.TakeAllItems();
+            client.getCoopLoot().EndPlayerTake();
             W3T_Log(label + " container empty here: " + container.IsEmpty());
             bot.scenarioStep = 2;
         }
@@ -171,7 +174,9 @@ function W3T_CorpseLootLeader(bot : W3T_Bot, client : r_MultiplayerClient) : boo
     {
         if(W3T_CorpseHas(remains, 'Dwarven spirit') != 2) { W3T_Log("CORPSE host FAIL the second PC's take did not reach this corpse"); bot.scenarioStep = -1; return false; }
         W3T_Log("CORPSE host the second PC took a spirit here too; takes everything");
+        client.getCoopLoot().BeginPlayerTake();
         remains.TakeAllItems();
+        client.getCoopLoot().EndPlayerTake();
         bot.scenarioStep = 4;
         bot.scenarioTime = bot.ElapsedS();
     }
@@ -212,7 +217,9 @@ function W3T_CorpseLootMember(bot : W3T_Bot, client : r_MultiplayerClient, leade
             return false;
         }
         W3T_Log("CORPSE member takes a Dwarven spirit");
+        client.getCoopLoot().BeginPlayerTake();
         remains.GetInventory().RemoveItemByName('Dwarven spirit', 1);
+        client.getCoopLoot().EndPlayerTake();
         bot.scenarioStep = 1;
     }
     if(bot.scenarioStep == 1 && loot.lootApplied >= 1 && remains && remains.IsEmpty()) { bot.scenarioStep = 2; }

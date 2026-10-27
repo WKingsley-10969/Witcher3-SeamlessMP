@@ -97,6 +97,8 @@ public class WitcherServer
             if (savePort == null) throw new IllegalArgumentException("--save-port must be a port number");
             SaveShare share = SaveShare.start(Paths.get(saveDir), savePort, option(args, "--host-name"));
             System.out.println("Sharing co-op saves from " + saveDir + " on TCP port " + share.port());
+            // co-op logs from the second PC, next to the server's other data
+            LogInbox.attach(share.httpServer(), appDir().resolve("player-logs"), WitcherServer::clientAddresses);
         }
 
         DatagramSocket socket = new DatagramSocket(port);
@@ -1860,6 +1862,14 @@ public class WitcherServer
         out.add(trim(fields.get(3)));
         out.add(trim(fields.get(4)));
         return out;
+    }
+
+    // the connected game clients' addresses (LogInbox accepts their logs)
+    private static List<java.net.InetAddress> clientAddresses()
+    {
+        List<java.net.InetAddress> addresses = new ArrayList<>();
+        for (PlayerSession session : players.values()) addresses.add(session.endpoint.address);
+        return addresses;
     }
 
     private static String normalizeUsernameKey(String username)

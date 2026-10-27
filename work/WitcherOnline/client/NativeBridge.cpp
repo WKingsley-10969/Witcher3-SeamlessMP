@@ -853,8 +853,12 @@ namespace wo_native
 				g_fetchState = "busy";
 				started = true;
 				std::thread([name, folder] {
+					// the thumbnail and the metadata the game writes beside a save first (both optional:
+					// an older host serves neither .json nor, for some saves, .png), the save last, so
+					// the game never lists a save without its companions
+					FetchSaveFile(folder, name + ".json", false);
+					FetchSaveFile(folder, name + ".png", false);
 					std::string state = FetchSaveFile(folder, name + ".sav", true);
-					if (state.empty()) FetchSaveFile(folder, name + ".png", false);   // the thumbnail is optional
 					std::lock_guard<std::mutex> done(g_lobbyMutex);
 					g_fetchState = state.empty() ? "done" : state;
 					g_fetchBusy = false;
