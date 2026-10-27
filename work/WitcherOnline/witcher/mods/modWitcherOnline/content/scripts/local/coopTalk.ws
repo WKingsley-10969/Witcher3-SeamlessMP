@@ -81,6 +81,11 @@ class r_CoopTalk
     // PauseCutscenes calls while held: the game counts them, and each needs its UnpauseCutscenes (the
     // prologue run: one unpause after many pauses left the leader's nightmare frozen on a black screen)
     private var holdPauses : int;
+    private var openMessage : string;
+    // the last announcement this game said no to: its repeats get the same answer, not a new prompt
+    private var declinedStarter : string;
+    private var declinedConv : int;
+    private var declinedReason : string;  // this game's last announcement, repeated while held (a lost "joined")
 
     // an offer to join a party member's conversation, waiting for this player's answer
     private var offerOpen : bool;
@@ -250,7 +255,7 @@ class r_CoopTalk
             role = 1;
             auto = false;
             listeners.Clear();
-            WO_Send("coop cv open " + convId + " " + CoopEncode(scenePath) + " " + CoopEncode(NpcVoice(talkedTo)) + " "
+            SendOpen("coop cv open " + convId + " " + CoopEncode(scenePath) + " " + CoopEncode(NpcVoice(talkedTo)) + " "
                 + CoopEncode(talkedTo.GetReadableName()) + " " + CoopEncode(NameToString(talkedTo.GetAppearance())) + " "
                 + CoopNpcVec3(talkedTo.GetWorldPosition()) + " " + CoopNpcVec3(thePlayer.GetWorldPosition()));
             StartHold();
@@ -264,7 +269,7 @@ class r_CoopTalk
             autoOpens += 1;
             listeners.Clear();
             Record("AUTO_OPEN " + scenePath);
-            WO_Send("coop cv open " + convId + " " + CoopEncode(scenePath) + " - - - "
+            SendOpen("coop cv open " + convId + " " + CoopEncode(scenePath) + " - - - "
                 + CoopNpcVec3(thePlayer.GetWorldPosition()) + " " + CoopNpcVec3(thePlayer.GetWorldPosition()));
             StartHold();
         }
@@ -462,14 +467,24 @@ class r_CoopTalk
                 // this game chooses: announce again, in case the other ignored this game's first
                 // announcement (its scene was not linked to a party yet)
                 Record("REOPEN for " + sender);
-                WO_Send("coop cv open " + convId + " " + CoopEncode(scenePath) + " - - - "
+                SendOpen("coop cv open " + convId + " " + CoopEncode(scenePath) + " - - - "
                     + CoopNpcVec3(thePlayer.GetWorldPosition()) + " " + CoopNpcVec3(thePlayer.GetWorldPosition()));
             }
             return;
         }
-        // already joining or in this one (an announcement repeated), or asked about it right now
-        if(hostName == sender && conv == hostConv && (role == 2 || role == 3)) { return; }
+        // already joining or in this one (an announcement repeated), or asked about it right now; in it:
+        // say so again, the starter may hold its scene for a "joined" that was lost
+        if(hostName == sender && conv == hostConv && (role == 2 || role == 3))
+        {
+            if(role == 3) { WO_Send("coop cv joined " + hostConv + " " + CoopEncode(scenePath)); }
+            return;
+        }
         if(offerOpen && sender == offerSender && conv == offerConv) { return; }
+        if(sender == declinedStarter && conv == declinedConv)
+        {
+            WO_Send("coop cv decline " + CoopEncode(sender) + " " + conv + " " + declinedReason);
+            return;
+        }
         if(role != 0 || inScene || offerOpen || thePlayer.IsInCombat() || thePlayer.IsUsingVehicle() || theGame.IsDialogOrCutscenePlaying())
         {
             Decline(sender, conv, "busy");
@@ -616,6 +631,13 @@ class r_CoopTalk
     {
         var conv : int;
         conv = StringToInt(WO_Str(2), 0);
+        // a vote for this game's conversation from a party member it is not counting yet: they are in it
+        if(role == 1 && conv == convId && !listeners.Contains(sender) && inScene)
+        {
+            listeners.PushBack(sender);
+            if(!holdAnswers.Contains(sender)) { holdAnswers.PushBack(sender); }
+            Record("LISTENER " + sender + " (by their vote)");
+        }
         if(!(((role == 2 || role == 3) && conv == hostConv) || (role == 1 && conv == convId && listeners.Contains(sender)))) { return; }
         if(!choiceTexts.Contains(CoopDecode(WO_Str(5))) && answeredTexts.Contains(CoopDecode(WO_Str(5))))
         {
@@ -762,6 +784,9 @@ class r_CoopTalk
         // first frame (the prologue's nightmare) is paused too, where one call at the start left it
         // playing behind "Waiting for"
         if(holdFrames % 30 == 0) { PauseCutscenesOnce(); }
+        // every ~1.5 s: the announcement again; a game already in this scene answers "joined" again
+        // (the prologue run: the second PC's "joined" never arrived and the leader waited for good)
+        if(holdFrames % 90 == 0 && openMessage != "") { WO_Send(openMessage); }
         pending = PendingNames();
         if(pending == "") { EndHold("all in"); return; }
         if(now - holdSince > COOP_SCENE_HOLD_MAX() || (float)holdFrames > COOP_SCENE_HOLD_MAX() * 120.0)
@@ -771,6 +796,12 @@ class r_CoopTalk
             return;
         }
         ShowStatus("Waiting for " + pending + " to join the scene");
+    }
+
+    private function SendOpen(message : string)
+    {
+        openMessage = message;
+        WO_Send(message);
     }
 
     private function PauseCutscenesOnce()
@@ -806,6 +837,9 @@ class r_CoopTalk
     {
         WO_Send("coop cv decline " + CoopEncode(starter) + " " + conv + " " + reason);
         Record("DECLINE " + starter + " " + reason);
+        declinedStarter = starter;
+        declinedConv = conv;
+        declinedReason = reason;
     }
 
     private function FadeForJoin()
@@ -1045,7 +1079,7 @@ class r_CoopTalk
             autoOpens += 1;
             listeners.Clear();
             Record("LATE_OPEN " + scenePath);
-            WO_Send("coop cv open " + convId + " " + CoopEncode(scenePath) + " - - - "
+            SendOpen("coop cv open " + convId + " " + CoopEncode(scenePath) + " - - - "
                 + CoopNpcVec3(thePlayer.GetWorldPosition()) + " " + CoopNpcVec3(thePlayer.GetWorldPosition()));
             StartHold();
         }
