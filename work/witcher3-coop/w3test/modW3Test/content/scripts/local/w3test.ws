@@ -212,6 +212,13 @@ function ShowProgressDialog( messageId : int, title : string, message : string, 
         W3T_Log("DIALOG party prompt left open for the player");
         return;
     }
+    // W3T_WATCH_UNANSWERED=1: a Watch prompt is left open, as by a player away from the keyboard (the hold at
+    // the scene's start must give up after COOP_SCENE_HOLD_MAX real seconds)
+    if(W3T_GetEnv("W3T_WATCH_UNANSWERED") == "1" && messageId == COOP_WATCH_DIALOG())
+    {
+        W3T_Log("DIALOG Watch prompt left unanswered");
+        return;
+    }
     // watch_skip: the host answers Skip to the first Watch / Skip prompt and leaves the second open
     if(W3T_GetEnv("W3T_SCENARIO") == "watch_skip" && messageId == COOP_WATCH_DIALOG())
     {
