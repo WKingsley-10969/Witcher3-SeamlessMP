@@ -3346,6 +3346,8 @@ class r_CoopEnemies
                 journalApplied += 1;
                 lastJournalApplied = tag;
                 lastJournalAppliedStatus = status;
+                // for the player's log: which of the other game's quest progress this one took, and when
+                WO_Log("coop quest JOURNAL_APPLIED " + NameToString(tag) + " " + current + "->" + status);
             }
         }
     }
@@ -3468,6 +3470,7 @@ class r_CoopEnemies
                 FactsAdd(id, sum - current);
                 factsApplied += 1;
                 lastFactApplied = id;
+                WO_Log("coop quest FACT_APPLIED " + id + " " + current + "->" + sum + " from " + sender);
             }
         }
     }
