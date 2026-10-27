@@ -480,7 +480,8 @@ class r_CoopTalk
             return;
         }
         if(offerOpen && sender == offerSender && conv == offerConv) { return; }
-        if(sender == declinedStarter && conv == declinedConv)
+        // a Skip stays a Skip for that scene (no prompt every 1.5 s); busy or far is weighed again
+        if(sender == declinedStarter && conv == declinedConv && declinedReason == "skip")
         {
             WO_Send("coop cv decline " + CoopEncode(sender) + " " + conv + " " + declinedReason);
             return;
