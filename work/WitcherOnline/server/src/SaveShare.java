@@ -1,12 +1,15 @@
+import com.sun.net.httpserver.Filter;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -40,11 +43,33 @@ public final class SaveShare
 
     public static SaveShare start(Path directory, int port, String hostName) throws IOException
     {
+        return start(directory, port, hostName, address -> true);
+    }
+
+    // allowed: which PCs may use the share and the lobby (the join password, JoinGate); others get 403.
+    public static SaveShare start(Path directory, int port, String hostName, Predicate<InetAddress> allowed) throws IOException
+    {
         if (!Files.isDirectory(directory)) throw new IllegalArgumentException("Save directory does not exist: " + directory);
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
         SaveShare share = new SaveShare(directory.toRealPath(), hostName == null ? "" : hostName, server);
-        server.createContext("/session", share::handle);
-        CoopLobby.attach(server, share);
+        Filter gate = new Filter()
+        {
+            @Override
+            public void doFilter(HttpExchange exchange, Chain chain) throws IOException
+            {
+                if (allowed.test(exchange.getRemoteAddress().getAddress())) { chain.doFilter(exchange); return; }
+                try { send(exchange, 403, "text/plain; charset=utf-8", "join password required\n".getBytes(StandardCharsets.UTF_8)); }
+                finally { exchange.close(); }
+            }
+
+            @Override
+            public String description()
+            {
+                return "join password";
+            }
+        };
+        server.createContext("/session", share::handle).getFilters().add(gate);
+        CoopLobby.attach(server, share).getFilters().add(gate);
         server.setExecutor(null);
         server.start();
         return share;

@@ -63,10 +63,13 @@ public class WitcherServer
     private static final int DEFAULT_STATUS_PORT = 40001;
 
     private static volatile HttpServer statusServer = null;
+    private static volatile SaveShare saveShare = null;
     private static volatile String cachedStatusFontBase64 = "";
 
     private static final AtomicInteger nextPlayerId = new AtomicInteger(1);
     private static SeamlessCampaign campaign;
+    // Optional join password (W3LAN_JOIN_PASSWORD on this process only; never logged or on the command line)
+    private static JoinGate joinGate = new JoinGate(null);
     // per-player connection health for the "status" command and the periodic summary
     private static final ConnectionStats connectionStats = new ConnectionStats();
 
@@ -90,6 +93,8 @@ public class WitcherServer
 
         loadBannedIps();
         loadWhitelistIps();
+        joinGate = new JoinGate(System.getenv(JoinGate.PASSWORD_ENV));
+        if (joinGate.enabled()) System.out.println("Join password set: other PCs must enter it to join");
 
         // Co-op session: joining players download the host's newest save (SaveShare)
         String saveDir = option(args, "--save-dir");
@@ -98,10 +103,10 @@ public class WitcherServer
             String savePortText = option(args, "--save-port");
             Integer savePort = savePortText == null ? Integer.valueOf(port + 1) : parsePort(savePortText);
             if (savePort == null) throw new IllegalArgumentException("--save-port must be a port number");
-            SaveShare share = SaveShare.start(Paths.get(saveDir), savePort, option(args, "--host-name"));
-            System.out.println("Sharing co-op saves from " + saveDir + " on TCP port " + share.port());
+            saveShare = SaveShare.start(Paths.get(saveDir), savePort, option(args, "--host-name"), joinGate::allows);
+            System.out.println("Sharing co-op saves from " + saveDir + " on TCP port " + saveShare.port());
             // co-op logs from the second PC, next to the server's other data
-            LogInbox.attach(share.httpServer(), appDir().resolve("player-logs"), WitcherServer::clientAddresses);
+            LogInbox.attach(saveShare.httpServer(), appDir().resolve("player-logs"), WitcherServer::clientAddresses);
         }
 
         DatagramSocket socket = new DatagramSocket(port);
@@ -509,6 +514,19 @@ public class WitcherServer
                     continue;
                 }
 
+                if (msg.equals("AUTH") || msg.startsWith("AUTH\t"))
+                {
+                    handleAuth(socket, sender, msg);
+                    continue;
+                }
+
+                // The game shows its "not whitelisted" message; the third field tells launchers why.
+                if (!joinGate.allows(sender.address))
+                {
+                    safeSend(socket, sender, "ERROR\tNOT_WHITELISTED\tPASSWORD_REQUIRED");
+                    continue;
+                }
+
                 connectionStats.packetIn(sender, System.nanoTime());
                 handleMessage(socket, sender, msg);
             }
@@ -524,6 +542,34 @@ public class WitcherServer
             {
                 e.printStackTrace();
             }
+        }
+    }
+
+    // Join password challenge (JoinGate): AUTH, then AUTH <nonce> <proof>.
+    private static void handleAuth(DatagramSocket socket, ClientEndpoint sender, String msg)
+    {
+        if (!joinGate.enabled())
+        {
+            safeSend(socket, sender, "AUTH\tOPEN");
+            return;
+        }
+        String ip = sender.address.getHostAddress();
+        String[] parts = msg.split("\t", -1);
+        long now = System.currentTimeMillis();
+        if (parts.length == 1)
+        {
+            String nonce = joinGate.challenge(ip, now);
+            safeSend(socket, sender, nonce == null ? "ERROR\tTOO_MANY_ATTEMPTS" : "AUTH\tCHALLENGE\t" + nonce);
+        }
+        else if (parts.length == 3 && joinGate.answer(ip, parts[1], parts[2], now))
+        {
+            dbg("Join password accepted from %s\n", ip);
+            safeSend(socket, sender, "AUTH\tOK");
+        }
+        else
+        {
+            dbg("Wrong join password from %s\n", ip);
+            safeSend(socket, sender, "ERROR\tWRONG_PASSWORD");
         }
     }
 
@@ -1356,6 +1402,8 @@ public class WitcherServer
             server.stop(0);
             statusServer = null;
         }
+        // its HTTP thread would otherwise keep the process alive after "stop"
+        if (saveShare != null) saveShare.stop();
         if (campaign != null)
         {
             try { campaign.close(); } catch (IOException e) { e.printStackTrace(); }
