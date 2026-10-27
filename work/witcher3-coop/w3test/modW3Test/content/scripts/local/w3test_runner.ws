@@ -139,7 +139,7 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
     var text, key : string;
     var at, spot : Vector;
     var rot : EulerAngles;
-    var i, k, pick, dist : int;
+    var i, k, pick, dist, g : int;
     var pinned : array<int>;
     var events : array<string>;
     var now : float;
@@ -195,7 +195,16 @@ function W3T_RunLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
             // a choice not taken before and not leaving, first (two menus of a conversation may have as many choices);
             // else the next in turn
             pick = W3T_RunFreshChoice(bot.runChoices);
-            if(pick < 0 || pick >= talk.LastChoiceCount()) { pick = bot.runPicks[k] % talk.LastChoiceCount(); }
+            if(pick < 0 || pick >= talk.LastChoiceCount())
+            {
+                // in turn, past any game of gwent (the bot cannot play it)
+                for(g = 0; g < talk.LastChoiceCount(); g += 1)
+                {
+                    pick = bot.runPicks[k] % talk.LastChoiceCount();
+                    if(!W3T_RunChoiceIsGwent(bot.runChoices, pick)) { break; }
+                    bot.runPicks[k] += 1;
+                }
+            }
             bot.runPicks[k] += 1;
             W3T_Log("RUN takes choice " + pick + " of " + talk.LastChoiceCount());
             W3T_DialogModule().OnDialogOptionSelected(pick);
@@ -426,7 +435,8 @@ function W3T_RunQuestCharacters() : int
 }
 
 // The first choice of a logged list ("<time> CHOICES <n> <text> [a<action> seen off] | ...") the game marks neither as
-// taken before (seen), off, nor leaving (action 8192); -1 if none
+// taken before (seen), off, leaving (action 8192), nor a game of gwent (action 67108864: the White Orchard inn's
+// scholar, "Come, let's play", opened the deck builder and the bot sat there); -1 if none
 function W3T_RunFreshChoice(list : string) : int
 {
     var rest, item, flags : string;
@@ -450,7 +460,26 @@ function W3T_RunFreshChoice(list : string) : int
             rest = "";
         }
         flags = StrAfterFirst(item, "[a");
-        if(StrFindFirst(flags, "seen") < 0 && StrFindFirst(flags, "off") < 0 && StrFindFirst(flags, "8192") != 0) { return i; }
+        if(StrFindFirst(flags, "seen") < 0 && StrFindFirst(flags, "off") < 0 && StrFindFirst(flags, "8192") != 0
+            && StrFindFirst(flags, "67108864") != 0) { return i; }
     }
     return -1;
+}
+
+// Choice <index> of a logged list is a game of gwent (action 67108864).
+function W3T_RunChoiceIsGwent(list : string, index : int) : bool
+{
+    var rest, item : string;
+    var i : int;
+    rest = StrAfterFirst(StrAfterFirst(list, " CHOICES "), " ");
+    for(i = 0; rest != ""; i += 1)
+    {
+        if(!StrSplitFirst(rest, " | ", item, rest))
+        {
+            item = rest;
+            rest = "";
+        }
+        if(i == index) { return StrFindFirst(StrAfterFirst(item, "[a"), "67108864") == 0; }
+    }
+    return false;
 }

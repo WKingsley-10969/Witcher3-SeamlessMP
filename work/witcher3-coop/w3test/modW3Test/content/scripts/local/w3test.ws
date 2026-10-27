@@ -144,6 +144,12 @@ function OnConfigUI()
         W3T_Log("MENU open " + NameToString(GetMenuName()));
         // pause_menu: the pause menu pauses the game, and with it the bot that checks it stays open; the
         // world runs on here (as the co-op features do every frame) so the check can be made
+        // quest_run: the bot cannot play gwent; a game a conversation started anyway is left at its deck builder
+        if((GetMenuName() == 'DeckBuilder' || GetMenuName() == 'GwintGame') && W3T_GetEnv("W3T_SCENARIO") == "quest_run")
+        {
+            W3T_Log("MENU gwent -> close (the bot cannot play it)");
+            CloseMenu();
+        }
         if(GetMenuName() == 'IngameMenu' && W3T_GetEnv("W3T_SCENARIO") == "pause_menu")
         {
             theGame.Unpause('IngameMenu');
