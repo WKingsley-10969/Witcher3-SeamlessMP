@@ -79,6 +79,120 @@ function W3T_PrologueVesemir(bot : W3T_Bot, client : r_MultiplayerClient) : stri
     return "none";
 }
 
+// Hurts npc by part of its health as this player would, from 2.5 m (the second PC's hits on the leader's
+// ghouls go to the leader's game as usual).
+function W3T_PrologueHit(npc : CNewNPC, part : float)
+{
+    var action : W3DamageAction;
+    var spot : Vector;
+    var rot : EulerAngles;
+    if(!npc) { return; }
+    if(VecDistance(thePlayer.GetWorldPosition(), npc.GetWorldPosition()) > 6)
+    {
+        spot = npc.GetWorldPosition() + VecNormalize(thePlayer.GetWorldPosition() - npc.GetWorldPosition()) * 2.5;
+        rot.Yaw = VecHeading(npc.GetWorldPosition() - spot);
+        thePlayer.TeleportWithRotation(spot, rot);
+    }
+    W3T_LookAt(npc.GetWorldPosition());
+    thePlayer.GoToCombatIfNeeded(npc);
+    action = new W3DamageAction in theGame.damageMgr;
+    action.Initialize(thePlayer, npc, thePlayer, "W3TestHit", EHRT_Light, CPS_AttackPower, false, false, true, false);
+    action.AddDamage(theGame.params.DAMAGE_NAME_DIRECT, part * npc.GetMaxHealth());
+    theGame.damageMgr.ProcessAction(action);
+    delete action;
+}
+
+// Where the tracked quest's active objectives have a map pin in this world; false if none.
+function W3T_PrologueObjectivePin(out pos : Vector) : bool
+{
+    var manager : CWitcherJournalManager;
+    var jq : CJournalQuest;
+    var phase : CJournalQuestPhase;
+    var objective : CJournalQuestObjective;
+    var pin : CJournalQuestMapPin;
+    var pins : array<SCommonMapPinInstance>;
+    var i, j, k, m : int;
+    manager = theGame.GetJournalManager();
+    jq = manager.GetTrackedQuest();
+    if(!jq) { return false; }
+    pins = theGame.GetCommonMapManager().GetMapPinInstances(theGame.GetWorld().GetDepotPath());
+    for(j = 0; j < jq.GetNumChildren(); j += 1)
+    {
+        phase = (CJournalQuestPhase)jq.GetChild(j);
+        if(!phase) { continue; }
+        for(k = 0; k < phase.GetNumChildren(); k += 1)
+        {
+            objective = (CJournalQuestObjective)phase.GetChild(k);
+            if(!objective || manager.GetEntryStatus(objective) != JS_Active) { continue; }
+            for(i = 0; i < objective.GetNumChildren(); i += 1)
+            {
+                pin = (CJournalQuestMapPin)objective.GetChild(i);
+                if(!pin) { continue; }
+                for(m = 0; m < pins.Size(); m += 1)
+                {
+                    if(pins[m].tag == pin.GetMapPinID()) { pos = pins[m].position; return true; }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+// After the wake-up: the second PC kills the ghouls (35 % a hit, every second), then both travel to the
+// quest's new marker, 40 m a step every 5 s, counting any hostile or enemy copy near on the way.
+function W3T_PrologueGhouls(bot : W3T_Bot, client : r_MultiplayerClient, host : bool, side : string, now : float)
+{
+    var hostiles : array<CNewNPC>;
+    var pin, spot, safe : Vector;
+    var rot : EulerAngles;
+    var near : int;
+    hostiles = W3T_BossHostiles();
+    near = hostiles.Size();
+    if(!bot.ghoulsCleared)
+    {
+        if(near > 0)
+        {
+            bot.ghoulsSeen += 1;
+            bot.ghoulsClearAt = 0;
+            if(!host && now - bot.scenarioActAt >= 1)
+            {
+                W3T_PrologueHit(W3T_BossNearest(hostiles), 0.35);
+                bot.scenarioActAt = now;
+            }
+        }
+        else if(bot.ghoulsSeen > 0)
+        {
+            if(bot.ghoulsClearAt == 0) { bot.ghoulsClearAt = now; }
+            if(now - bot.ghoulsClearAt >= 10)
+            {
+                bot.ghoulsCleared = true;
+                bot.travelAt = now;
+                bot.objectivesAfter = W3T_PrologueObjectives();
+                W3T_Log("PRO " + side + " ghouls gone; objectives now | " + bot.objectivesAfter);
+            }
+        }
+        return;
+    }
+    if(near > 0 || client.getCoopEnemies().PuppetCount() > 0)
+    {
+        bot.ghoulsOnTheWay += 1;
+        W3T_Log("PRO " + side + " FAIL-MARK on the way: hostiles=" + near + " copies=" + client.getCoopEnemies().PuppetCount());
+    }
+    if(bot.travelSteps >= 4 || now - bot.travelAt < 5) { return; }
+    if(!W3T_PrologueObjectivePin(pin))
+    {
+        if(now - bot.travelAt > 30 && bot.travelSteps == 0) { W3T_Log("PRO " + side + " no marker for | " + W3T_PrologueObjectives()); bot.travelAt = now; }
+        return;
+    }
+    spot = thePlayer.GetWorldPosition() + VecNormalize(pin - thePlayer.GetWorldPosition()) * MinF(40.0, VecDistance(pin, thePlayer.GetWorldPosition()));
+    if(!theGame.GetWorld().NavigationFindSafeSpot(spot, 0.5, 8.0, safe)) { safe = spot; }
+    rot.Yaw = VecHeading(pin - safe);
+    thePlayer.TeleportWithRotation(safe, rot);
+    bot.travelSteps += 1;
+    bot.travelAt = now;
+    W3T_Log("PRO " + side + " travels step " + bot.travelSteps + " to " + W3T_VecStr(safe) + ", " + FloatToStringPrec(VecDistance(pin, safe), 0) + " m from the marker");
+}
+
 function W3T_PrologueSample(bot : W3T_Bot, client : r_MultiplayerClient, side : string)
 {
     var id : SItemUniqueId;
@@ -145,6 +259,11 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
         thePlayer.OnEquipMeleeWeapon(PW_Steel, true);
         bot.scenarioActAt = now;
     }
+    // free training, after the wake-up: the ghoul fight and the walk on
+    else if(!tutorial && bot.scenarioPos.X > 0 && !talk.InScene())
+    {
+        W3T_PrologueGhouls(bot, client, host, side, now);
+    }
     else if(host)
     {
         if(!talk.InScene() && now - bot.scenarioActAt >= 3)
@@ -166,16 +285,20 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
     // done early (the owner: runs too slow): free training once the wake-up scene is over here, the
     // tutorial after 10 samples (20 s) of Vesemir sparring; at the latest at the scenario's time
     if(tutorial) { done = bot.scenarioValue >= 10; }
-    // free training: 90 s past the wake-up, which brings the ghoul attack at the camp (scenarioPos.X: when it ended here)
+    // free training: past the wake-up (scenarioPos.X: when it ended here), the ghouls killed by the second PC
+    // and four steps travelled towards the new marker
     else
     {
         if(bot.scenarioPos.X == 0 && !talk.InScene() && StrFindFirst(talk.GetScenePath(), "q001_5_wake_up") >= 0) { bot.scenarioPos.X = now; }
-        done = bot.scenarioPos.X > 0 && now - bot.scenarioPos.X >= 90;
+        done = bot.ghoulsCleared && bot.travelSteps >= 4 && now - bot.travelAt >= 5;
     }
     if(!done && now < W3T_BossTime()) { return false; }
     W3T_Log("PRO " + side + " end duplicates=" + bot.scenarioCount + " sword=" + bot.scenarioFlag + " vesemirHostileSamples=" + bot.scenarioValue
         + " vesemirSyncedWhileHostile=" + bot.scenarioStep + " holds=" + talk.holds + " holdTimeouts=" + talk.holdTimeouts
-        + " votes=" + talk.votesSent + " decisions=" + talk.picksSent + " applied=" + talk.picksApplied + " ties=" + talk.ties);
+        + " votes=" + talk.votesSent + " decisions=" + talk.picksSent + " applied=" + talk.picksApplied + " ties=" + talk.ties
+        + " ghoulsSeen=" + bot.ghoulsSeen + " cleared=" + bot.ghoulsCleared + " steps=" + bot.travelSteps + " ghoulsOnTheWay=" + bot.ghoulsOnTheWay
+        + " objectivesAfter | " + bot.objectivesAfter);
     // the swords only on the tutorial path: free training and the nightmare take them (a dream), the wake-up gives them back later
-    return bot.scenarioCount == 0 && (bot.scenarioFlag || !tutorial) && bot.scenarioStep == 0 && talk.holdTimeouts == 0 && done;
+    return bot.scenarioCount == 0 && (bot.scenarioFlag || !tutorial) && bot.scenarioStep == 0 && talk.holdTimeouts == 0 && done
+        && (tutorial || (bot.ghoulsSeen > 0 && bot.ghoulsOnTheWay == 0));
 }
