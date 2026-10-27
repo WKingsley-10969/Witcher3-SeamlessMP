@@ -190,6 +190,13 @@ function ShowProgressDialog( messageId : int, title : string, message : string, 
         return;
     }
     if(W3T_GetEnv("W3T_SCENARIO") == "party_menu" && WO_IsPartyPrompt(messageId)) { theGame.W3T_AnswerPartyPrompt(messageId); return; }
+    // anywhere else a party prompt is a person's (Interact on the other Geralt while watching a run): left
+    // open for them. Answered Yes, it took the second PC out of the party mid-run in the owner's playtest
+    if(WO_IsPartyPrompt(messageId))
+    {
+        W3T_Log("DIALOG party prompt left open for the player");
+        return;
+    }
     // watch_skip: the host answers Skip to the first Watch / Skip prompt and leaves the second open
     if(W3T_GetEnv("W3T_SCENARIO") == "watch_skip" && messageId == COOP_WATCH_DIALOG())
     {
@@ -347,6 +354,17 @@ statemachine class W3T_Bot
     public var scenarioFarSince : float; // since when its target has been out of reach
     public var scenarioPos : Vector;     // where it stood when it last moved (stuck checks)
     public var scenarioValue : float;
+    // prologue_coop after the wake-up (the owner's check): the second PC kills the ghouls, the quest moves on,
+    // both travel to its new marker and no ghoul may show up on the way
+    public var ghoulsSeen : int;          // samples with hostiles near, after the wake-up
+    public var ghoulsClearAt : float;     // since when none are near (0: some are, or none seen yet)
+    public var ghoulsCleared : bool;
+    public var travelSteps : int;
+    public var travelAt : float;
+    public var ghoulsOnTheWay : int;      // samples with hostiles or enemy copies near while travelling
+    public var objectivesAfter : string;
+    public var hostilesText : string;     // the hostiles near as last logged
+
     // every scenario: the second PC showing enemies the leader's world doesn't (W3T_FightCheck)
     public var fightMismatchRun : int;   // reports in a row with a mismatch
     public var fightMismatches : int;    // mismatches that lasted 3 reports or more
