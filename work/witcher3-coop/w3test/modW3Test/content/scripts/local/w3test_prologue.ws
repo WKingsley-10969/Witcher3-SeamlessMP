@@ -5,7 +5,9 @@
 // every 3 s; the second PC follows the leader and picks nothing. Every 2 s each logs how many Ciris
 // and Vesemirs it shows (real ones visible, stand-ins and enemy copies), its role, scene and swords.
 // Pass: no sample with two of either character on screen, and the second PC still has a sword (the
-// playtest: a second Vesemir, Ciri gone, no sword).
+// playtest: a second Vesemir, Ciri gone, no sword). While Vesemir spars (hostile), each PC's must be
+// its own, on his own AI: never an enemy-sync copy (the owner's playtest: the second PC's stood in his
+// plain pose). scenarioStep counts samples breaking that, scenarioValue the samples he was hostile in.
 // Logs: PRO <side> ciri=<n> vesemir=<n> role=<r> party=<p> scene=<path> steel=<b> silver=<b> objectives | ...
 // Visible NPCs within 60 m whose template names the character (stand-ins and copies keep the template).
 function W3T_PrologueShown(part : string) : int
@@ -53,6 +55,28 @@ function W3T_PrologueObjectives() : string
     return text;
 }
 
+// The visible Vesemir of this world: hostile, in combat, his stance, and whether enemy sync runs him.
+function W3T_PrologueVesemir(bot : W3T_Bot, client : r_MultiplayerClient) : string
+{
+    var entities : array<CGameplayEntity>;
+    var npc : CNewNPC;
+    var hostile, puppet : bool;
+    var i : int;
+    FindGameplayEntitiesInSphere(entities, thePlayer.GetWorldPosition(), 60, 256, '', FLAG_OnlyAliveActors);
+    for(i = 0; i < entities.Size(); i += 1)
+    {
+        npc = (CNewNPC)entities[i];
+        if(!npc || !npc.GetVisibility() || npc.HasTag('MPEntity') || npc.HasTag('w3coop_npc_copy') || NpcVoice(npc) == "") { continue; }
+        if(StrFindFirst(StrLower(npc.GetReadableName()), "vesemir") < 0) { continue; }
+        hostile = npc.GetAttitude(thePlayer) == AIA_Hostile;
+        puppet = client.getCoopEnemies().IsPuppet(npc);
+        if(hostile) { bot.scenarioValue += 1; }
+        if(hostile && puppet) { bot.scenarioStep += 1; }
+        return "hostile=" + hostile + " combat=" + npc.IsInCombat() + " stance=" + (int)npc.GetCurrentStance() + " synced=" + puppet;
+    }
+    return "none";
+}
+
 function W3T_PrologueSample(bot : W3T_Bot, client : r_MultiplayerClient, side : string)
 {
     var id : SItemUniqueId;
@@ -66,6 +90,7 @@ function W3T_PrologueSample(bot : W3T_Bot, client : r_MultiplayerClient, side : 
     bot.scenarioFlag = steel || silver;
     W3T_Log("PRO " + side + " ciri=" + ciri + " vesemir=" + vesemir + " role=" + client.getCoopEnemies().GetRole() + " party=" + client.getJoinedParty()
         + " area=" + WO_CurrentAreaCode() + " scene=" + client.getCoopTalk().GetScenePath() + " steel=" + steel + " silver=" + silver
+        + " vesemirState=" + W3T_PrologueVesemir(bot, client)
         + " objectives | " + W3T_PrologueObjectives());
 }
 
@@ -113,6 +138,7 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
         thePlayer.TeleportWithRotation(spot, rot);
     }
     if(now < W3T_BossTime()) { return false; }
-    W3T_Log("PRO " + side + " end duplicates=" + bot.scenarioCount + " sword=" + bot.scenarioFlag);
-    return bot.scenarioCount == 0 && bot.scenarioFlag;
+    W3T_Log("PRO " + side + " end duplicates=" + bot.scenarioCount + " sword=" + bot.scenarioFlag + " vesemirHostileSamples=" + bot.scenarioValue
+        + " vesemirSyncedWhileHostile=" + bot.scenarioStep);
+    return bot.scenarioCount == 0 && bot.scenarioFlag && bot.scenarioStep == 0;
 }
