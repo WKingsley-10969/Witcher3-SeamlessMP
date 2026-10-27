@@ -187,10 +187,16 @@ function W3T_PrologueGhouls(bot : W3T_Bot, client : r_MultiplayerClient, leader 
                 bot.scenarioActAt = now;
             }
         }
+        // over after 30 s with none near and no copies: the game's second group comes up to 12 s after the
+        // first (one co-op run; 1 s alone), one by one
+        else if(client.getCoopEnemies().PuppetCount() > 0)
+        {
+            bot.ghoulsClearAt = 0;
+        }
         else if(bot.ghoulsSeen > 0)
         {
             if(bot.ghoulsClearAt == 0) { bot.ghoulsClearAt = now; }
-            if(now - bot.ghoulsClearAt >= 10)
+            if(now - bot.ghoulsClearAt >= 30)
             {
                 bot.ghoulsCleared = true;
                 bot.travelAt = now;
