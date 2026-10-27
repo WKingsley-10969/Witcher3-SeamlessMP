@@ -119,7 +119,9 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
     }
     if(client.hasActiveDialogChoices() && talk.ChoicesAge() > 2 && talk.MyVote() == "" && now - bot.scenarioActAt >= 3)
     {
-        pick = talk.ChoiceContaining("SKIP TUTORIAL");
+        pick = -1;
+        // W3T_PROLOGUE_TUTORIAL=1: the combat tutorial (Vesemir spars); else free training (straight to the nightmare)
+        if(W3T_GetEnv("W3T_PROLOGUE_TUTORIAL") != "1") { pick = talk.ChoiceContaining("SKIP TUTORIAL"); }
         if(pick < 0) { pick = 0; }
         W3T_Log("PRO " + side + " votes choice " + pick + " of " + talk.LastChoiceCount());
         W3T_DialogModule().OnDialogOptionSelected(pick);
