@@ -601,9 +601,9 @@ class r_CoopTalk
         picks.Clear();
         joinFrom = thePlayer.GetWorldPosition();
         joinFromRot = thePlayer.GetWorldRotation();
-        // moved over only from farther off: near the starter its own quest starts the scene where this
-        // player stands, and a move can break that (the prologue runs: the second PC, moved a few metres in
-        // the Kaer Morhen courtyard, never got the nightmare and loaded the wake-up instead)
+        // moved beside the starter: the scene plays where the starter stands, and this game's quest starts
+        // it only with this player there (the prologue runs: the second PC, left 17 m off in the Kaer Morhen
+        // courtyard, never got the nightmare and loaded the wake-up instead; moved, it got it)
         if(VecDistance(joinFrom, starterPos) > COOP_JOIN_MOVE_MIN())
         {
             spot = starterPos + VecFromHeading(VecHeading(joinFrom - starterPos)) * 1.5;
@@ -1289,7 +1289,7 @@ function COOP_SCENE_RANGE() : float
 // How far from the starter a member of a quest-started scene must be to be moved beside it.
 function COOP_JOIN_MOVE_MIN() : float
 {
-    return 20.0;
+    return 3.0;
 }
 
 // How long a brought-over member waits for its own quest to start that scene.
