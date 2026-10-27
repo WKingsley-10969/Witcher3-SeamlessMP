@@ -330,6 +330,8 @@ class r_CoopEnemies
 
     // scenes and the leader's tracking (sent with the journal list)
     private var currentScene : string;
+    private var localScene : bool;      // a blocking scene plays in this game (bots' test scenes aside)
+    private var sceneReleased : bool;   // enemy copies let go for it
     private var sceneSkipSeq : int;
     private var sceneSkipValue : int;
     private var applyingSkip : bool;
@@ -544,8 +546,15 @@ class r_CoopEnemies
             }
 
             // the leader's snapshots also stop while its game sits in a menu; far from the leader, this world
-            // runs its own monsters again
-            if(now - lastSnapshotAt > 8.0 || !LeaderNear())
+            // runs its own monsters again. So it does while a scene plays here: the scene's monsters and
+            // characters are this world's own, and a copy of the leader's beside them shows twice
+            if(InLocalScene())
+            {
+                if(!sceneReleased) { WO_Log("coop enemies scene: copies let go copies=" + PuppetCount() + " suppressed=" + SuppressedCount()); }
+                sceneReleased = true;
+                ReleaseAll();
+            }
+            else if(now - lastSnapshotAt > 8.0 || !LeaderNear())
             {
                 ReleaseAll();
             }
@@ -688,14 +697,16 @@ class r_CoopEnemies
     }
 
     // A friendly story character the quest made hostile for a while, for a sparring or a fistfight
-    // (Vesemir in the prologue): a voicetag, an attitude group other than his own, and immortality
-    // (he cannot die there). Not shared: each game keeps its own, on his own AI and in his own guard
-    // stance, sparring with its own Geralt (the owner's playtest: the second PC's Vesemir, paired with
-    // the leader's and his AI held for it, stood in his plain pose). Once one, he stays one while hostile.
+    // (Vesemir in the prologue): a voicetag and immortality (he cannot die there), and hostile to this
+    // Geralt in person, or in a group other than his own, or one of the recurring story characters
+    // (quests\main_npcs, quests\secondary_npcs). The prologue run showed Vesemir's group unchanged
+    // ("vesemir") and immortality 1. Not shared: each game keeps its own, on his own AI and in his own
+    // guard stance, sparring with its own Geralt (the owner's playtest: the second PC's Vesemir, paired
+    // with the leader's and his AI held for it, stood in his plain pose). Once one, he stays one while hostile.
     private function SparringPartner(npc : CNewNPC) : bool
     {
-        var voice, verdict : string;
-        var temporary, immortal : bool;
+        var voice, verdict, tpl : string;
+        var temporary, immortal, personal, story : bool;
         var i : int;
         for(i = sparring.Size() - 1; i >= 0; i -= 1)
         {
@@ -704,18 +715,22 @@ class r_CoopEnemies
         if(sparring.Contains(npc)) { return true; }
         voice = NpcVoice(npc);
         if(voice == "") { return false; }
+        tpl = StrLower(npc.GetReadableName());
         temporary = npc.GetAttitudeGroup() != npc.GetBaseAttitudeGroup();
+        personal = npc.HasAttitudeTowards(thePlayer);
+        story = StrFindFirst(tpl, "quests\main_npcs\") == 0 || StrFindFirst(tpl, "quests\secondary_npcs\") == 0;
         immortal = npc.GetImmortalityMode() != AIM_None;
         if(!namedSeen.Contains(npc))
         {
             namedSeen.PushBack(npc);
             if(namedSeen.Size() > 32) { namedSeen.Erase(0); }
             verdict = "shared";
-            if(temporary && immortal) { verdict = "sparring partner, each game its own"; }
+            if(immortal && (temporary || personal || story)) { verdict = "sparring partner, each game its own"; }
             WO_Log("coop enemies named hostile " + voice + " " + npc.GetReadableName() + " group=" + NameToString(npc.GetAttitudeGroup())
-                + " base=" + NameToString(npc.GetBaseAttitudeGroup()) + " immortality=" + (int)npc.GetImmortalityMode() + " -> " + verdict);
+                + " base=" + NameToString(npc.GetBaseAttitudeGroup()) + " personal=" + personal + " story=" + story
+                + " immortality=" + (int)npc.GetImmortalityMode() + " -> " + verdict);
         }
-        if(!(temporary && immortal)) { return false; }
+        if(!(immortal && (temporary || personal || story))) { return false; }
         sparring.PushBack(npc);
         return true;
     }
@@ -1596,6 +1611,7 @@ class r_CoopEnemies
             leaderEpoch = snapshotEpoch;
         }
         lastSnapshotAt = theGame.GetEngineTimeAsSeconds();
+        if(InLocalScene()) { return; }  // no copies while a scene plays here (Tick)
 
         idx = 4;
         n = StringToInt(WO_Str(idx), 0);
@@ -3352,11 +3368,28 @@ class r_CoopEnemies
         {
             currentScene = scene.GetPath();
         }
+        localScene = true;
     }
 
     public function OnSceneEnded()
     {
         currentScene = "";
+        localScene = false;
+    }
+
+    // A scene of this game's own is on screen (also one a save loaded into, which never reported a start).
+    private function InLocalScene() : bool
+    {
+        if(localScene || theGame.IsDialogOrCutscenePlaying() || thePlayer.IsInNonGameplayCutscene())
+        {
+            return true;
+        }
+        if(sceneReleased)
+        {
+            WO_Log("coop enemies scene over: copies again");
+        }
+        sceneReleased = false;
+        return false;
     }
 
     // the bots have no quest scene to share; they name one
