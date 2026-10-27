@@ -1,4 +1,13 @@
-# Verification — v0.4.2-alpha, 27 October 2026
+# Verification — v0.4.3-alpha, 27 October 2026
+
+This alpha contains PR #56 (the nightmare on the second PC), #58 (choices stay up when voting) and #59 (the lobby and a save that needs a missing DLC); #57 changes only the test bots. All runs: two game processes on one PC, with Custom Player Characters installed in the shared test game.
+
+- **Nightmare** (`20261027-133010-prologue_coop`, scenes at full length): sparring ended on the second PC at 768.3 s and its own `q001_4_nightmare` started 1.7 s later. It ran its full 100 s and ended within 0.1 s of the first PC's; both PCs then joined `q001_5_wake_up`. Before the fix (`20261027-132407`), the second PC never started the nightmare.
+- **Choices** (`talk_share` from a co-op save in the White Orchard inn, host starts): a real E press was sent to the second PC's window, and both windows were captured every 0.1 s. Before the fix, the other options were gone for about 0.7 s. After it, the list stayed up, the vote counted, the leader's vote decided after the tie, and both PCs ended the scene. The original `talk_share` (second PC starts, Novigrad) passes. A mouse click was not tried.
+- **Missing DLC** (`lobby_save` with `W3T_LOBBY_REFUSE=1`): the test gives the second PC's load the engine's refusal (`RESTORE_DLCRequired`, `dlc_newreplacers`). Both test PCs share one game folder, so a second PC really without CPC was not tested. On the previous lobby code the second PC loaded the refused save 253 times in two minutes; with the fix, once. A normal `lobby_save` join passes.
+- **Open:** a reported long or endless loading when the second PC joins a conversation the host started did not happen in any test (inn and Novigrad, either PC starting; the join took 1–2 s). It needs a log from a session where it happened.
+
+## Verification — v0.4.2-alpha, 27 October 2026
 
 This alpha contains the rider fix in PR #53 and the prologue test changes in PR #54. The build under test (`1bf654f`) has the same tracked contents as main at `8b9db23`; verified with `git diff --quiet` before packaging. Release metadata updates do not change the game scripts.
 

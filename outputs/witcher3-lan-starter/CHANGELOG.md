@@ -4,6 +4,12 @@ What changed for players in each release of the Witcher 3 LAN co-op mod, newest 
 
 From v0.3.0-alpha on, each release is named by its version and ships as `Witcher3-LAN-<version>.zip`. The builds before it all shipped as `Witcher3-LAN-0.2.0-dev.zip`; each one is named here by its GitHub release tag.
 
+## v0.4.3-alpha (27 October 2026)
+
+- **The nightmare plays on both PCs.** After the Kaer Morhen sparring, the second PC plays the nightmare cutscene too, instead of skipping ahead to White Orchard. When a scene ends, the story characters are left as they are for a few seconds, so a scene the quest starts right after plays on both PCs.
+- **Choices stay on screen when you vote.** Picking an option no longer makes the other options disappear for a moment and come back.
+- **A clear message when the host's save needs a mod you don't have.** With Custom Player Characters on the host only, the second PC no longer loops on a "missing dlc_newreplacers" popup in the main menu. It tries the host's save once and says what is missing. Install CPC and its Remaster fix on the second PC too, then choose **Co-op lobby** to join.
+
 ## v0.4.2-alpha (27 October 2026)
 
 - **Vesemir stays on his horse.** Riding story characters use each PC's own character and horse, instead of an on-foot stand-in chasing the other PC's rider. Sync leaves the rider's collisions alone, avoiding sliding and an incorrect riding pace. Characters can be shared again after dismounting.
