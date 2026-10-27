@@ -359,6 +359,7 @@ class r_CoopEnemies
     public var statesMirrored : int;  // untouchable phases started or ended on copies
     public var controlStatesMirrored : int;  // knockdowns, staggers ... put on copies
     public var twinsBound : int;
+    public var twinsAdopted : int;  // copies handed to this world's own enemy once it turned up
     public var spawnFailures : int;
     public var lastError : string;
     public var lastHitFrac : float;
@@ -832,6 +833,7 @@ class r_CoopEnemies
         puppetsSpawned = 0;
         puppetsKilled = 0;
         twinsBound = 0;
+        twinsAdopted = 0;
         spawnFailures = 0;
         lastError = "";
         lastHitFrac = 0;
@@ -1695,6 +1697,7 @@ class r_CoopEnemies
             }
         }
 
+        AdoptOwnTwins();
         SuppressUnmatched();
     }
 
@@ -1956,6 +1959,7 @@ class r_CoopEnemies
         // a named character (Vesemir turning hostile for the prologue's sparring) has one twin here even
         // farther off: the only one of its template with a voicetag within 60 m
         if(!best) { best = FindNamedTwin(tpl, pos); }
+        if(!best) { best = FindOwnTwin(tpl, pos); }
 
         if(best)
         {
@@ -1963,6 +1967,114 @@ class r_CoopEnemies
             theGame.r_getMultiplayerClient().getCoopNpcs().ReleaseNpc(best);
         }
         return best;
+    }
+
+    // This world's own enemy of the same kind that the leader's one stands for: the nearest unpaired hostile
+    // of the template within COOP_TWIN_RANGE, hidden or not. Each game runs its own story and spawns its
+    // own enemies, rarely on the same spots (the prologue's second ghoul group: three of five were more
+    // than 10 m off, hidden here while copies of the leader's appeared beside them). Paired, this world's
+    // enemy goes where the leader's is and dies with it, so this world's quest counts the kill too.
+    // A named character never: FindNamedTwin pairs those.
+    private function FindOwnTwin(tpl : string, pos : Vector) : CNewNPC
+    {
+        var entities : array<CGameplayEntity>;
+        var npc, best : CNewNPC;
+        var dist, bestDist : float;
+        var i : int;
+
+        bestDist = COOP_TWIN_RANGE();
+        FindGameplayEntitiesInSphere(entities, pos, COOP_TWIN_RANGE(), 48, '', FLAG_OnlyAliveActors, thePlayer);
+        for(i = 0; i < entities.Size(); i += 1)
+        {
+            npc = (CNewNPC)entities[i];
+            if(!npc || npc.HasTag('MPEntity') || npc.HasTag('w3coop_npc_copy') || IsPuppet(npc) || npc.IsHorse()
+                || npc.GetReadableName() != tpl || NpcVoice(npc) != "" || npc.GetAttitude(thePlayer) != AIA_Hostile)
+            {
+                continue;
+            }
+            dist = VecDistance(npc.GetWorldPosition(), pos);
+            if(dist < bestDist)
+            {
+                bestDist = dist;
+                best = npc;
+            }
+        }
+        return best;
+    }
+
+    // A copy spawned before this world's own enemy of its kind turned up (the leader's story ran a moment
+    // ahead): the own one takes its place, the copy goes.
+    private function AdoptOwnTwins()
+    {
+        var p, q : r_CoopPuppet;
+        var own : CNewNPC;
+        var i : int;
+
+        for(i = puppets.Size() - 1; i >= 0; i -= 1)
+        {
+            p = puppets[i];
+            if(!p.npc || !p.spawned || !p.alive || p.flying)
+            {
+                continue;
+            }
+            own = FindOwnTwin(p.npc.GetReadableName(), p.target);
+            if(!own)
+            {
+                continue;
+            }
+            Unsuppress(own);
+            theGame.r_getMultiplayerClient().getCoopNpcs().ReleaseNpc(own);
+            q = MakePuppet(own, p.netId, false);
+            q.attackSeq = p.attackSeq;
+            q.hitSeq = p.hitSeq;
+            q.moveSeq = p.moveSeq;
+            q.projSeq = p.projSeq;
+            q.objSeq = p.objSeq;
+            q.target = p.target;
+            q.yaw = p.yaw;
+            q.hp = p.hp;
+            q.targetSpeed = p.targetSpeed;
+            q.lastTargetAt = p.lastTargetAt;
+            WO_Log("coop enemies copy " + p.netId + " handed to this world's own " + own.GetReadableName()
+                + " " + FloatToStringPrec(VecDistance(own.GetWorldPosition(), p.target), 1) + " m off");
+            ReleasePuppet(p);
+            puppets.Erase(i);
+            twinsAdopted += 1;
+        }
+    }
+
+    // For the bot tests, any fight: what this member shows that the leader's world doesn't, "" when it
+    // matches. An own enemy shown here unpaired near the player, or a copy beside a hidden own one of its
+    // kind. Only while the leader's enemies are mirrored here (in the party, near, no scene playing here).
+    public function FightMismatch() : string
+    {
+        var actors : array<CActor>;
+        var npc : CNewNPC;
+        var text : string;
+        var i : int;
+
+        if(GetRole() != 2 || InLocalScene() || theGame.GetEngineTimeAsSeconds() - lastSnapshotAt > 2.0 || !LeaderNear())
+        {
+            return "";
+        }
+        actors = thePlayer.GetNPCsAndPlayersInRange(25, 48, '', FLAG_Attitude_Hostile + FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
+        for(i = 0; i < actors.Size(); i += 1)
+        {
+            npc = (CNewNPC)actors[i];
+            if(!npc || npc.HasTag('MPEntity') || npc.IsHorse() || IsPuppet(npc) || NpcVoice(npc) != "" || !npc.GetVisibility())
+            {
+                continue;
+            }
+            text += " own-shown " + npc.GetReadableName();
+        }
+        for(i = 0; i < puppets.Size(); i += 1)
+        {
+            if(puppets[i].npc && puppets[i].spawned && puppets[i].alive && FindOwnTwin(puppets[i].npc.GetReadableName(), puppets[i].target))
+            {
+                text += " copy-beside-own " + puppets[i].npc.GetReadableName();
+            }
+        }
+        return text;
     }
 
     private function FindNamedTwin(tpl : string, pos : Vector) : CNewNPC
@@ -3634,6 +3746,12 @@ function COOP_FX_DAMAGE() : float
 function COOP_SHARE_RANGE() : float
 {
     return 60.0;
+}
+
+// How far off this world's own enemy may be and still stand for the leader's one of its kind (FindOwnTwin).
+function COOP_TWIN_RANGE() : float
+{
+    return 40.0;
 }
 
 @wrapMethod(CNewNPC)
