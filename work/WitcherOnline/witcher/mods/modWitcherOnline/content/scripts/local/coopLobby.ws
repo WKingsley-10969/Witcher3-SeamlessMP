@@ -28,6 +28,9 @@ statemachine class r_CoopLobby
     private var dialogShown : bool;
     private var dialogText : string;
     private var lastPoll : float;
+    private var loadingName : string;     // the host's save this lobby asked the game to load
+    private var refusedSave : string;     // the game would not load it: not followed again by itself
+    private var refusedContent : array<name>;
 
     // the lobby as the host's server last described it
     public var reachable : bool;
@@ -46,6 +49,7 @@ statemachine class r_CoopLobby
     public var starts : int;
     public var loads : int;
     public var fetches : int;
+    public var refusals : int;
     public var testMenuReturns : int;   // bot tests (lobby_rejoin): times the bot went back to the main menu
     public var newGames : int;
     public var autoStartWhenJoined : bool;   // bot tests: the host starts with its save once someone waits
@@ -83,6 +87,12 @@ statemachine class r_CoopLobby
         reachable = false;
         Record("MENU role=" + Session().Role());
         if(Session().Role() == "host") { WO_LobbyRequest("/lobby/open"); }   // back in the main menu: waiting again
+        // the game refused the host's save (the main menu opens again after that): said once, not loaded again
+        if(Session().Role() == "join" && refusedSave != "")
+        {
+            ShowMessage(RefusedText());
+            return;
+        }
         if(Session().Role() == "join") { waiting = true; }
         // the popup opens by itself for both (the host closes it to use New Game or Load)
         ShowDialog();
@@ -93,13 +103,65 @@ statemachine class r_CoopLobby
     public function OnEntryActivated()
     {
         if(Session().Role() == "join") { waiting = true; }
+        // asked for by the player: a save the game refused is tried again (the missing content may be there now)
+        if(refusedSave != "")
+        {
+            Record("RETRY after " + refusedSave + " was refused");
+            refusedSave = "";
+            refusedContent.Clear();
+            seenSeq = -1;
+        }
         ShowDialog();
+    }
+
+    // The game would not load the host's save this lobby asked for, for content this PC lacks (the
+    // owner's playtest: Custom Player Characters on the host, "missing dlc_newreplacers"). The main
+    // menu opens again after that, and the lobby loaded the same save again, with the game's popup
+    // each time, for good. Now the save is not followed again by itself, and the player is told
+    // what is missing. True: this lobby's load (its message replaces the game's).
+    public function OnLoadRefused(result : ESessionRestoreResult, missing : array<name>) : bool
+    {
+        var names : string;
+        var i : int;
+        if(loadingName == "") { return false; }
+        refusals += 1;
+        refusedSave = loadingName;
+        refusedContent = missing;
+        loadingName = "";
+        waiting = false;
+        for(i = 0; i < missing.Size(); i += 1)
+        {
+            if(names != "") { names += ","; }
+            names += NameToString(missing[i]);
+        }
+        Record("LOAD_REFUSED " + refusedSave + " result=" + (int)result + " missing=" + names);
+        ShowMessage(RefusedText());
+        return true;
+    }
+
+    private function RefusedText() : string
+    {
+        var text, names : string;
+        var cpc : bool;
+        var i : int;
+        for(i = 0; i < refusedContent.Size(); i += 1)
+        {
+            if(names != "") { names += ", "; }
+            names += NameToString(refusedContent[i]);
+            if(StrFindFirst(NameToString(refusedContent[i]), "newreplacers") >= 0) { cpc = true; }
+        }
+        text = "This game could not load " + host + "'s save " + refusedSave;
+        if(names != "") { text += ": it needs " + names + ", which this PC does not have"; }
+        if(cpc) { text += " (from the mod Custom Player Characters)"; }
+        text += ".<br>Install the same mods on this PC (or " + host + " removes it and saves again), then choose Co-op lobby to join.";
+        return text;
     }
 
     // A game was loaded or started: leave the lobby. A host who started the game some other way
     // (Continue, Load) starts the session with its newest save, so waiting players follow.
     public function OnGameStarted()
     {
+        loadingName = "";
         if(!active) { return; }
         active = false;
         waiting = false;
@@ -298,6 +360,7 @@ statemachine class r_CoopLobby
             loads += 1;
             Record("LOAD " + fetchedName + " after " + FloatToStringPrec(now - fetchedAt, 1) + " s");
             HideDialog();
+            loadingName = fetchedName;
             Session().LoadSave(fetchedName);
             fetchedName = "";
             return;
@@ -413,6 +476,7 @@ statemachine class r_CoopLobby
     private function ShowMessage(text : string)
     {
         HideDialog();
+        theGame.GetGuiManager().HideUserDialog(COOP_LOBBY_DIALOG() + 1);   // one message at a time
         theGame.GetGuiManager().ShowUserDialogAdv(COOP_LOBBY_DIALOG() + 1, "Co-op lobby", text, false, UDB_Ok);
     }
 
@@ -540,6 +604,14 @@ function UserDialogCallback(messageId : int, actionId : EUserMessageAction)
     {
         theGame.r_getMultiplayerClient().getCoopLobby().OnDialogAnswer(actionId == UMA_Ok);
     }
+}
+
+// The game would not load a save (missing DLC or content): the lobby's own load is told to the lobby.
+@wrapMethod(CR4GuiManager)
+function OnLoadingFailed(sres : ESessionRestoreResult, missingContent : array< name >) : void
+{
+    if(theGame.r_getMultiplayerClient().getCoopLobby().OnLoadRefused(sres, missingContent)) { return; }
+    wrappedMethod(sres, missingContent);
 }
 
 // The lobby popup's progress requests: the lobby's clock in the main menu.

@@ -587,6 +587,15 @@ def main():
         print(f"STALE_CHECK the second PC's {host_save} is the host's: {same}")
         if not same:
             ok, why = False, "the second PC kept its stale save"
+    if a.scenario == "lobby_save" and os.environ.get("W3T_LOBBY_REFUSE") == "1":
+        # the second PC's game refuses the host's save (w3test_lobby.ws) and stays in the main menu: its
+        # lobby must load it once, where it loaded it again each time the main menu opened
+        member_log = open(os.path.join(run_dir, bot_name(1) + ".log"), encoding="utf-8", errors="replace").read()
+        host_log = open(os.path.join(run_dir, bot_name(0) + ".log"), encoding="utf-8", errors="replace").read()
+        refused = member_log.count("the game refuses")
+        print(f"REFUSE_CHECK the second PC loaded the refused save {refused} times")
+        ok = refused == 1 and "PASS condition met" in host_log
+        why = f"the second PC loaded the refused save {refused} times"
     print(f"RESULT: {'PASS' if ok else 'FAIL'} ({why})")
     return 0 if ok else 1
 

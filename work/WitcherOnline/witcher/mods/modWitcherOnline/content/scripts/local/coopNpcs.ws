@@ -194,6 +194,7 @@ class r_CoopNpcs
     public var lastSnapshotCount : int;
     public var copiesSpawned : int;    // stand-ins for NPCs this world has no copy of
     public var takeovers : int;        // agreeing copies that disagreed and were swapped for a stand-in
+    public var ridersLetGo : int;      // own copies that mounted and were shown as themselves again
     public var handbacks : int;
     public var worstSnapBack : float;  // how far such a copy had got: the stand-in walks back that far
     public var ownershipGiven : int;   // leader: NPCs handed to a member
@@ -450,8 +451,25 @@ class r_CoopNpcs
         }
     }
 
+    // A scene of this game ended: the joined NPC goes back to sync at once, the rest only once no scene
+    // has played here for COOP_SCENE_LINGER (CheckSceneHold). A quest often starts its next scene a moment
+    // later, and prepares it with the characters it finds: the prologue's nightmare, 1.4 s after the
+    // sparring, found the second PC's own Ciri and Vesemir hidden behind stand-ins again and was left out
+    // (that PC went straight to White Orchard while the first PC played the nightmare).
+    public function SceneEnded()
+    {
+        if(!sceneHold)
+        {
+            ReleaseScene();
+            return;
+        }
+        sceneNpc = NULL;
+        if(sceneGoneSince == 0) { sceneGoneSince = theGame.GetEngineTimeAsSeconds(); }
+    }
+
     // Every frame: a scene that started here before the party formed (a save that loads into one) is
-    // held too, and a hold whose scene ended without word (a load cut it off) lets go after 3 s.
+    // held too, and a hold lets go once no scene has played here for COOP_SCENE_LINGER (also one a load
+    // cut off).
     private function CheckSceneHold(role : int, now : float)
     {
         var playing : bool;
@@ -460,7 +478,7 @@ class r_CoopNpcs
         if(!sceneHold) { return; }
         if(playing) { sceneGoneSince = 0; }
         else if(sceneGoneSince == 0) { sceneGoneSince = now; }
-        else if(now - sceneGoneSince > 3.0) { ReleaseScene(); }
+        else if(now - sceneGoneSince > COOP_SCENE_LINGER()) { ReleaseScene(); }
     }
 
     // What this world shows for the NPC with one voicetag: a stand-in or the real one; NULL if neither.
@@ -571,9 +589,13 @@ class r_CoopNpcs
 
     // ---------------------------------------------------------------- leader
 
+    // A rider is not shared: each world shows its own, on its own horse and AI, and they are matched again
+    // once he dismounts. A stand-in has no horse; it ran after the leader's riding Vesemir at a gallop and
+    // teleported every 12 m (the owner's playtest, "Follow Vesemir" in White Orchard).
     private function Shareable(npc : CNewNPC) : bool
     {
         return npc && npc.IsAlive() && !npc.HasTag('MPEntity') && !npc.HasTag('w3coop_npc_copy') && !npc.IsHorse() && !npc.IsInCombat()
+            && !npc.IsUsingHorse()
             && npc.GetAttitude(thePlayer) != AIA_Hostile
             && !theGame.r_getMultiplayerClient().getCoopEnemies().IsPuppet(npc);
     }
@@ -770,9 +792,9 @@ class r_CoopNpcs
     private function TakeBack(h : r_CoopHostNpc, now : float)
     {
         if(h.display) { h.target = h.display.GetWorldPosition(); }
-        if(h.npc && h.display && VecDistance(h.npc.GetWorldPosition(), h.display.GetWorldPosition()) > 8.0)
+        if(h.npc && h.display && (VecDistance(h.npc.GetWorldPosition(), h.display.GetWorldPosition()) > 8.0 || h.npc.IsUsingHorse()))
         {
-            // its own quest moved it: shown where it is, not pulled back to the stand-in
+            // its own quest moved it, or it mounted: shown where it is, not pulled back to the stand-in
             h.target = h.npc.GetWorldPosition();
             h.display.Destroy();
             ShowReal(h.npc);
@@ -1080,6 +1102,8 @@ class r_CoopNpcs
             p.netId = netId;
             return p;
         }
+        // this world's own one rides: shown as itself on its own horse, no stand-in beside it (Shareable)
+        if(best && best.IsUsingHorse() && !FindPuppetByNpc(best)) { return NULL; }
         if(best && (FindPuppetByNpc(best) || !(Shareable(best) || IsHidden(best)))) { best = NULL; }
 
         if(best)
@@ -1173,6 +1197,17 @@ class r_CoopNpcs
             {
                 if(p.npc) { worstSwapPop = MaxF(worstSwapPop, VecDistance(p.npc.GetWorldPosition(), p.swapPos)); }
                 p.pinUntil = 0;
+            }
+            if(p.npc && p.npc.IsUsingHorse())
+            {
+                // this world's own one mounted: let go, shown as itself on its own horse (Shareable)
+                Record("RIDES_OWN " + p.voice + " " + p.tpl);
+                DropDisplay(p.npc, p.display);
+                p.display = NULL;
+                Unhide(p.npc);
+                puppets.Erase(i);
+                ridersLetGo += 1;
+                continue;
             }
             if(p.npc && (p.npc.IsInNonGameplayCutscene() || p.npc.IsInGameplayScene()))
             {
@@ -1338,7 +1373,9 @@ class r_CoopNpcs
 
     private function Release(p : r_CoopNpcPuppet)
     {
-        if(p.npc) { SwapToReal(p.npc, p.display); }
+        // a rider stays on his horse where he is, never moved to the stand-in's spot
+        if(p.npc && p.npc.IsUsingHorse()) { DropDisplay(p.npc, p.display); }
+        else if(p.npc) { SwapToReal(p.npc, p.display); }
         else if(p.display) { p.display.Destroy(); }
         p.display = NULL;
     }
@@ -1439,11 +1476,13 @@ class r_CoopNpcs
         npc.EnableCharacterCollisions(false);
     }
 
+    // A rider's collisions are the riding's own: switched on while he sits on the horse, his body pushes against
+    // it (the owner's playtest: the second PC's own riding Vesemir slid and went at twice the pace)
     private function ShowReal(npc : CNewNPC)
     {
         npc.SetVisibility(true);
         npc.SetGameplayVisibility(true);
-        npc.EnableCharacterCollisions(true);
+        if(!npc.IsUsingHorse()) { npc.EnableCharacterCollisions(true); }
     }
 
     // The real NPC takes the stand-in's place and pose, and the stand-in goes.
@@ -1604,4 +1643,10 @@ function CoopCount(values : array<string>, value : string) : int
     var i, n : int;
     for(i = 0; i < values.Size(); i += 1) { if(values[i] == value) { n += 1; } }
     return n;
+}
+
+// How long the NPCs stay unsynced after a scene here, for a next scene the quest starts right after.
+function COOP_SCENE_LINGER() : float
+{
+    return 8.0;
 }

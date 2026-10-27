@@ -76,8 +76,9 @@ def make_sandbox(docs, save_filter=None):
         set_settings(os.path.join(w3, "dx12user.settings"), test_preset())
     if save_filter is None:
         return None
-    # W3T_SAVES_DIR: another folder of saves, such as one a quest_run made in its own sandbox
-    saves_dir = os.environ.get("W3T_SAVES_DIR") or os.path.join(OWNER_W3_DOCS, "gamesaves")
+    # W3T_SAVE_DIR: another folder to copy the save from (a co-op profile's gamesaves, or one a quest_run
+    # made in its own sandbox); only ever read
+    saves_dir = os.environ.get("W3T_SAVE_DIR") or os.path.join(OWNER_W3_DOCS, "gamesaves")
     saves = [f for f in os.listdir(saves_dir) if f.endswith(".sav") and save_filter in f]
     newest = max(saves, key=lambda f: os.path.getmtime(os.path.join(saves_dir, f)))
     for ext in (".sav", ".png", ".json"):  # .json: the metadata the game writes beside a save it makes

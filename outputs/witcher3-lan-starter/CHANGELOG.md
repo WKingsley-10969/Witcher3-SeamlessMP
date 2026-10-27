@@ -4,12 +4,26 @@ What changed for players in each release of the Witcher 3 LAN co-op mod, newest 
 
 From v0.3.0-alpha on, each release is named by its version and ships as `Witcher3-LAN-<version>.zip`. The builds before it all shipped as `Witcher3-LAN-0.2.0-dev.zip`; each one is named here by its GitHub release tag.
 
-## Unreleased
+## v0.4.3-alpha (27 October 2026)
+
+- **The nightmare plays on both PCs.** After the Kaer Morhen sparring, the second PC plays the nightmare cutscene too, instead of skipping ahead to White Orchard. When a scene ends, the story characters are left as they are for a few seconds, so a scene the quest starts right after plays on both PCs.
+- **Choices stay on screen when you vote.** Picking an option no longer makes the other options disappear for a moment and come back.
+- **A clear message when the host's save needs a mod you don't have.** With Custom Player Characters on the host only, the second PC no longer loops on a "missing dlc_newreplacers" popup in the main menu. It tries the host's save once and says what is missing. Install CPC and its Remaster fix on the second PC too, then choose **Co-op lobby** to join.
+
+## v0.4.2-alpha (27 October 2026)
+
+- **Vesemir stays on his horse.** Riding story characters use each PC's own character and horse, instead of an on-foot stand-in chasing the other PC's rider. Sync leaves the rider's collisions alone, avoiding sliding and an incorrect riding pace. Characters can be shared again after dismounting.
+- **Known alpha issue:** the latest automated prologue run still caught one brief duplicate Vesemir sample just after the ghoul fight. The riding checks recorded no bad stand-ins, jumps or sliding; this release does not claim the entire prologue is free of sync bugs.
+
+## v0.4.1-alpha (27 October 2026)
 
 - **This changelog** is now part of the package.
 - **Story scenes start together.** A story scene or conversation waits on the first PC that reaches it, showing who it waits for, until the other player is in it too. It goes on alone only when the other player skips it, is far away or busy, or their quest is not at that point yet.
 - **Choices are voted on.** At a choice both players vote: the options stay up with each player's name beside the one they picked, and the scene goes on once both picked the same. If your votes differ, either of you can change yours; after 15 seconds the party leader's vote decides. A choice with a timer goes with the first vote. A line is skipped once both players press skip.
 - **No doubled characters in scenes.** While a scene plays, only the scene's own characters show: no second Vesemir over the first in the ghouls cutscene.
+- **Waiting for each other is more reliable.** A loading screen on the way into a scene no longer leaves the other player waiting for good, a cutscene no longer plays behind "Waiting for…", the second PC no longer skips ahead past a scene, and both PCs no longer wait on each other's vote when one is a choice ahead.
+- **Sparring with your own Vesemir.** In the Kaer Morhen training each PC spars with its own Vesemir, in his fighting stance. Real enemies stay shared.
+- **Fights look the same on both PCs.** The second PC's own enemies now take the place of the leader's ones of the same kind, instead of being hidden while copies popped in beside them. The second PC's quest counts those kills too, so both stories move on together (the prologue's ghouls).
 
 ## v0.4.0-alpha (27 October 2026)
 

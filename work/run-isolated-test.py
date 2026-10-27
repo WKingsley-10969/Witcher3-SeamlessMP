@@ -30,6 +30,9 @@ net_options = ('delay', 'jitter', 'loss', 'reorder', 'duplicate', 'who', 'seed')
 for name in net_options:
     ap.add_argument('--net-' + name, help='passed to run_test.py: the second PC through net_sim.py (W3T_NET_* work too)')
 ap.add_argument('--bots', type=int, default=2, help='passed to run_test.py: 1 runs the leader alone (a plain-game baseline)')
+ap.add_argument('--shots', type=float, help='passed to run_test.py: both windows as PNG every this many seconds')
+ap.add_argument('--shots-from', help='passed to run_test.py: start the screenshots at this text in the first bot log')
+ap.add_argument('--shots-for', type=float, help='passed to run_test.py: stop the screenshots after this many seconds')
 a = ap.parse_args()
 env = dict(os.environ, W3_GAME_DIR=str(game), W3C_ROOT=str(work), W3C_WORK=str(testing),
            WO_SERVER_IP='127.0.0.1', WO_SERVER_PORT='41000', WO_USERNAME='CompileCheck')
@@ -47,6 +50,9 @@ else:
                '--duration', str(a.duration or (60 if a.scenario in ('see_each_other', 'movement') else 300)), '--timeout', str(a.timeout), '--size', '960x540', '--bots', str(a.bots)]
     if a.scenario.startswith('seamless_'):
         command.append('--campaign')
+    for name in ('shots', 'shots_from', 'shots_for'):
+        if getattr(a, name) is not None:
+            command += ['--' + name.replace('_', '-'), str(getattr(a, name))]
     for name in net_options:
         if getattr(a, 'net_' + name) is not None:
             command += ['--net-' + name, getattr(a, 'net_' + name)]

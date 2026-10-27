@@ -1,5 +1,5 @@
 // quest_run: plays a quest of the save on, objective by objective, and saves the game at each new objective, so a
-// boss fight's quest can be started from a save made just before it (boss_fight with W3T_SAVES_DIR). The leader
+// boss fight's quest can be started from a save made just before it (boss_fight with W3T_SAVE_DIR). The leader
 // plays alone (no party); the second PC idles.
 //   W3T_RUN_QUEST  parts of the quests' titles, comma-separated: tracked, and played (see W3T_RunQuest)
 //   W3T_RUN_BOSS   part of the boss's template name: the run ends when it shows (other hostiles are killed)

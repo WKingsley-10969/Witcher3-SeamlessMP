@@ -153,6 +153,8 @@ function W3T_PrologueHostileList(client : r_MultiplayerClient, hostiles : array<
         if(tpl == "") { tpl = hostiles[i].GetReadableName(); }
         if(client.getCoopEnemies().IsPuppet(hostiles[i])) { tpl += " copy"; } else { tpl += " own"; }
         if(!hostiles[i].GetVisibility()) { tpl += " hidden"; }
+        // how far off, to 10 m: whether it came to the player or the player went to it
+        tpl += " " + RoundF(VecDistance(hostiles[i].GetWorldPosition(), thePlayer.GetWorldPosition()) / 10) * 10 + "m";
         text += " " + tpl;
     }
     return text;
@@ -179,15 +181,127 @@ function W3T_PrologueJoinFight(client : r_MultiplayerClient, side : string)
     }
 }
 
+// The second PC, after the wake-up: what shows of Vesemir, each time it changes ("own riding", "own",
+// "stand-in"). A rider is each world's own on its own horse; a stand-in that moves faster than 8 m/s (it
+// ran after the leader's rider and teleported every 12 m, the owner's playtest) or shows while this world's
+// own one rides is a failure.
+function W3T_PrologueRide(bot : W3T_Bot, side : string, now : float)
+{
+    var entities : array<CGameplayEntity>;
+    var npc, standIn : CNewNPC;
+    var text : string;
+    var ownRides : bool;
+    var speed, moved, pace, horsePace : float;
+    var own : CNewNPC;
+    var horse : CActor;
+    var i : int;
+    FindGameplayEntitiesInSphere(entities, thePlayer.GetWorldPosition(), 80, 256, '', FLAG_OnlyAliveActors);
+    for(i = 0; i < entities.Size(); i += 1)
+    {
+        npc = (CNewNPC)entities[i];
+        if(!npc || npc.HasTag('MPEntity') || StrFindFirst(StrLower(npc.GetReadableName()), "vesemir") < 0) { continue; }
+        if(npc.HasTag('w3coop_npc_copy'))
+        {
+            if(npc.GetVisibility()) { standIn = npc; text += " stand-in"; }
+            continue;
+        }
+        if(npc.IsUsingHorse()) { ownRides = true; }
+        if(npc.GetVisibility()) { own = npc; }
+        if(!npc.GetVisibility()) { text += " own-hidden"; }
+        else if(npc.IsUsingHorse()) { text += " own-riding"; }
+        else { text += " own"; }
+    }
+    if(ownRides) { bot.rideSeen += 1; }
+    // this world's own Vesemir jumping: the game's own catch-up (a companion teleports after a player far ahead)
+    // or a sync fault; logged with where this player is, to tell the two apart
+    if(own)
+    {
+        if(bot.ownVesemirAt > 0 && now - bot.ownVesemirAt <= 1.5)
+        {
+            moved = VecDistance(own.GetWorldPosition(), bot.ownVesemirPos);
+            if(moved > 25)
+            {
+                bot.ownVesemirJumps += 1;
+                W3T_Log("PRO " + side + " vesemir jumped " + FloatToStringPrec(moved, 0) + " m riding=" + own.IsUsingHorse()
+                    + " to " + FloatToStringPrec(VecDistance(own.GetWorldPosition(), thePlayer.GetWorldPosition()), 0) + " m from the player");
+            }
+        }
+        // his pace over the ground against the pace his horse's own movement gives (its moving agent): a
+        // slide or a double pace moves him much faster than his horse goes (the owner's playtest)
+        pace = 0;
+        horsePace = 0;
+        if(bot.ownVesemirAt > 0 && now - bot.ownVesemirAt > 0.2 && now - bot.ownVesemirAt <= 1.5)
+        {
+            pace = VecDistance2D(own.GetWorldPosition(), bot.ownVesemirPos) / (now - bot.ownVesemirAt);
+        }
+        if(own.IsUsingHorse() && own.GetUsedHorseComponent()) { horse = (CActor)own.GetUsedHorseComponent().GetEntity(); }
+        if(horse) { horsePace = VecLength2D(horse.GetMovingAgentComponent().GetVelocity()); }
+        if(own.IsUsingHorse() && pace > 3 && pace > horsePace * 1.6 + 1.5)
+        {
+            bot.ownVesemirSlideRun += 1;
+            if(bot.ownVesemirSlideRun == 2)
+            {
+                bot.ownVesemirSlides += 1;
+                W3T_Log("PRO " + side + " FAIL-MARK vesemir slides: " + FloatToStringPrec(pace, 1) + " m/s over the ground, his horse "
+                    + FloatToStringPrec(horsePace, 1) + " m/s");
+            }
+        }
+        else { bot.ownVesemirSlideRun = 0; }
+        // every 2 s, on both PCs: where he is, his pace and his horse's, and where this player is
+        if(now - bot.ownVesemirLoggedAt >= 2)
+        {
+            bot.ownVesemirLoggedAt = now;
+            W3T_Log("PRO " + side + " vesemirpos " + W3T_VecStr(own.GetWorldPosition()) + " riding=" + own.IsUsingHorse()
+                + " pace=" + FloatToStringPrec(pace, 1) + " horse=" + FloatToStringPrec(horsePace, 1)
+                + " player " + W3T_VecStr(thePlayer.GetWorldPosition()));
+        }
+        bot.ownVesemirPos = own.GetWorldPosition();
+        bot.ownVesemirAt = now;
+    }
+    if(standIn)
+    {
+        if(bot.rideAt > 0 && now - bot.rideAt > 0.5) { speed = VecDistance2D(standIn.GetWorldPosition(), bot.ridePos) / (now - bot.rideAt); }
+        bot.ridePos = standIn.GetWorldPosition();
+        bot.rideAt = now;
+        if(speed > 8 || ownRides)
+        {
+            bot.rideBad += 1;
+            W3T_Log("PRO " + side + " FAIL-MARK vesemir stand-in at " + FloatToStringPrec(speed, 1) + " m/s, own riding=" + ownRides + " |" + text);
+        }
+    }
+    else { bot.rideAt = 0; }
+    if(text != bot.rideText)
+    {
+        bot.rideText = text;
+        W3T_Log("PRO " + side + " vesemir |" + text + " | objectives " + W3T_PrologueObjectives());
+    }
+}
+
 function W3T_PrologueGhouls(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_RemotePlayer, host : bool, side : string, now : float)
 {
     var hostiles : array<CNewNPC>;
     var pin, spot, safe : Vector;
     var rot : EulerAngles;
-    var near : int;
+    var fought : array<CNewNPC>;
+    var near, copiesNear, i : int;
+    var reach : float;
     var list : string;
+    // only ghouls within W3T_PROLOGUE_REACH (20 m) are fought, waited for and counted on the way: a player at the
+    // camp. White Orchard's own ghouls 40-50 m down the hill never came closer in a one-PC run with the player
+    // standing there; the bots had gone after them (all hostiles within 50 m) and taken them for a second spawn
+    reach = StringToFloat(W3T_GetEnv("W3T_PROLOGUE_REACH"), 20);
+    if(reach <= 0) { reach = 20; }
     hostiles = W3T_BossHostiles();
-    near = hostiles.Size();
+    for(i = 0; i < hostiles.Size(); i += 1)
+    {
+        if(VecDistance(hostiles[i].GetWorldPosition(), thePlayer.GetWorldPosition()) <= reach) { fought.PushBack(hostiles[i]); }
+    }
+    near = fought.Size();
+    for(i = 0; i < client.getCoopEnemies().PuppetCount(); i += 1)
+    {
+        if(client.getCoopEnemies().PuppetAt(i) && client.getCoopEnemies().PuppetAt(i).IsAlive()
+            && VecDistance(client.getCoopEnemies().PuppetAt(i).GetWorldPosition(), thePlayer.GetWorldPosition()) <= reach) { copiesNear += 1; }
+    }
     // what is near, each time it changes: where the ghouls come from (the quest's, an ambush's, the leader's copies)
     list = W3T_PrologueHostileList(client, hostiles);
     if(list != bot.hostilesText)
@@ -214,23 +328,18 @@ function W3T_PrologueGhouls(bot : W3T_Bot, client : r_MultiplayerClient, leader 
             {
                 if(now - bot.scenarioActAt >= 1)
                 {
-                    W3T_PrologueHit(W3T_BossNearest(hostiles), 0.35);
+                    W3T_PrologueHit(W3T_BossNearest(fought), 0.35);
                     bot.scenarioActAt = now;
                 }
             }
             else if(now - bot.scenarioActAt >= 2)
             {
-                W3T_PrologueHit(W3T_BossNearest(hostiles), 0.2);
+                W3T_PrologueHit(W3T_BossNearest(fought), 0.2);
                 bot.scenarioActAt = now;
             }
         }
-        else if(host && client.getCoopEnemies().HostEnemyCount() > 0)
-        {
-            bot.ghoulsClearAt = 0;
-        }
-        // over after 30 s with none near and no copies: the game's second group comes up to 12 s after the
-        // first (one co-op run; 1 s alone), one by one
-        else if(client.getCoopEnemies().PuppetCount() > 0)
+        // over after 30 s with none near and no copies near: the quest's ghouls come one by one
+        else if(copiesNear > 0)
         {
             bot.ghoulsClearAt = 0;
         }
@@ -247,12 +356,12 @@ function W3T_PrologueGhouls(bot : W3T_Bot, client : r_MultiplayerClient, leader 
         }
         return;
     }
-    if(near > 0 || client.getCoopEnemies().PuppetCount() > 0)
+    if(near > 0 || copiesNear > 0)
     {
         bot.ghoulsOnTheWay += 1;
-        W3T_Log("PRO " + side + " FAIL-MARK on the way: hostiles=" + near + " copies=" + client.getCoopEnemies().PuppetCount());
+        W3T_Log("PRO " + side + " FAIL-MARK on the way: hostiles=" + near + " copies=" + copiesNear + " within " + FloatToStringPrec(reach, 0) + " m");
     }
-    if(bot.travelSteps >= 4 || now - bot.travelAt < 5) { return; }
+    if(bot.travelSteps >= 4 || now - bot.travelAt < 8) { return; }
     if(!W3T_PrologueObjectivePin(pin))
     {
         // no pin here (the last run's second PC: "Follow Vesemir" had none): along with the leader
@@ -267,13 +376,14 @@ function W3T_PrologueGhouls(bot : W3T_Bot, client : r_MultiplayerClient, leader 
             return;
         }
     }
-    spot = thePlayer.GetWorldPosition() + VecNormalize(pin - thePlayer.GetWorldPosition()) * MinF(40.0, VecDistance(pin, thePlayer.GetWorldPosition()));
+    // runs there, 30 m a step every 8 s, as a player following Vesemir (teleports made the game's own Vesemir
+    // gallop after this player and teleport to catch up)
+    spot = thePlayer.GetWorldPosition() + VecNormalize(pin - thePlayer.GetWorldPosition()) * MinF(30.0, VecDistance(pin, thePlayer.GetWorldPosition()));
     if(!theGame.GetWorld().NavigationFindSafeSpot(spot, 0.5, 8.0, safe)) { safe = spot; }
-    rot.Yaw = VecHeading(pin - safe);
-    thePlayer.TeleportWithRotation(safe, rot);
+    thePlayer.ActionMoveToAsync(safe, MT_Run);
     bot.travelSteps += 1;
     bot.travelAt = now;
-    W3T_Log("PRO " + side + " travels step " + bot.travelSteps + " to " + W3T_VecStr(safe) + ", " + FloatToStringPrec(VecDistance(pin, safe), 0) + " m from the marker");
+    W3T_Log("PRO " + side + " travels step " + bot.travelSteps + " (runs) to " + W3T_VecStr(safe) + ", " + FloatToStringPrec(VecDistance(pin, safe), 0) + " m from the marker");
 }
 
 function W3T_PrologueSample(bot : W3T_Bot, client : r_MultiplayerClient, side : string)
@@ -317,9 +427,14 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
         bot.scenarioSeenAt = now;
         W3T_PrologueSample(bot, client, side);
     }
+    // every tick, both PCs: what shows of Vesemir, and his jumps
+    if(bot.scenarioPos.X > 0) { W3T_PrologueRide(bot, side, now); }
     // lines are skipped (the owner: the runs were too slow): both bots press skip every second, through the
     // dialogue box as the space bar does, so a line goes once both pressed (scenarioFarSince: the last press)
-    if(talk.InScene() && !client.hasActiveDialogChoices() && now - bot.scenarioFarSince >= 1.0 && theGame.GetStorySceneSystem().IsSkippingLineAllowed())
+    // W3T_PROLOGUE_NOSKIP=1: no skipping, scenes at full length as a player watches them (the owner's two-PC
+    // session, where the second PC lost the nightmare while the first PC's played)
+    if(W3T_GetEnv("W3T_PROLOGUE_NOSKIP") != "1" && talk.InScene() && !client.hasActiveDialogChoices() && now - bot.scenarioFarSince >= 1.0
+        && theGame.GetStorySceneSystem().IsSkippingLineAllowed())
     {
         bot.scenarioFarSince = now;
         W3T_DialogModule().OnDialogSkipped(0);
@@ -373,15 +488,16 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
     else
     {
         if(bot.scenarioPos.X == 0 && !talk.InScene() && StrFindFirst(talk.GetScenePath(), "q001_5_wake_up") >= 0) { bot.scenarioPos.X = now; }
-        done = bot.ghoulsCleared && bot.travelSteps >= 4 && now - bot.travelAt >= 5;
+        // and 40 s more after the travel: Vesemir rides on ahead ("Follow Vesemir")
+        done = bot.ghoulsCleared && bot.travelSteps >= 4 && now - bot.travelAt >= 40;
     }
     if(!done && now < W3T_BossTime()) { return false; }
     W3T_Log("PRO " + side + " end duplicates=" + bot.scenarioCount + " sword=" + bot.scenarioFlag + " vesemirHostileSamples=" + bot.scenarioValue
         + " vesemirSyncedWhileHostile=" + bot.scenarioStep + " holds=" + talk.holds + " holdTimeouts=" + talk.holdTimeouts
         + " votes=" + talk.votesSent + " decisions=" + talk.picksSent + " applied=" + talk.picksApplied + " ties=" + talk.ties
         + " ghoulsSeen=" + bot.ghoulsSeen + " cleared=" + bot.ghoulsCleared + " steps=" + bot.travelSteps + " ghoulsOnTheWay=" + bot.ghoulsOnTheWay
-        + " objectivesAfter | " + bot.objectivesAfter);
+        + " rideSeen=" + bot.rideSeen + " rideBad=" + bot.rideBad + " vesemirJumps=" + bot.ownVesemirJumps + " vesemirSlides=" + bot.ownVesemirSlides + " objectivesAfter | " + bot.objectivesAfter);
     // the swords only on the tutorial path: free training and the nightmare take them (a dream), the wake-up gives them back later
     return bot.scenarioCount == 0 && (bot.scenarioFlag || !tutorial) && bot.scenarioStep == 0 && talk.holdTimeouts == 0 && done
-        && (tutorial || (bot.ghoulsSeen > 0 && bot.ghoulsOnTheWay == 0));
+        && (tutorial || (bot.ghoulsSeen > 0 && bot.ghoulsOnTheWay == 0 && bot.rideBad == 0 && bot.ownVesemirSlides == 0));
 }
