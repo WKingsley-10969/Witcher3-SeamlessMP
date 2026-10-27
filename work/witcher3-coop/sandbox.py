@@ -80,7 +80,7 @@ def make_sandbox(docs, save_filter=None):
     saves_dir = os.environ.get("W3T_SAVES_DIR") or os.path.join(OWNER_W3_DOCS, "gamesaves")
     saves = [f for f in os.listdir(saves_dir) if f.endswith(".sav") and save_filter in f]
     newest = max(saves, key=lambda f: os.path.getmtime(os.path.join(saves_dir, f)))
-    for ext in (".sav", ".png"):
+    for ext in (".sav", ".png", ".json"):  # .json: the metadata the game writes beside a save it makes
         src = os.path.join(saves_dir, newest[:-4] + ext)
         if os.path.exists(src):
             shutil.copy2(src, os.path.join(w3, "gamesaves"))

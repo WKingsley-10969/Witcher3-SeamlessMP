@@ -22,6 +22,8 @@ statemachine class r_CoopLobby
     private var fetchedName : string;     // downloaded: loading it once the game lists it
     private var fetchedAt : float;
     private var listRefreshedAt : float;
+    private var listUpdates : int;      // the game's "save list updated" events since the download
+    private var listCheckedAt : float;
     private var newGameOptions : int;     // the host's new-game choice, sent when it really starts
     private var dialogShown : bool;
     private var dialogText : string;
@@ -164,6 +166,8 @@ statemachine class r_CoopLobby
                 fetchedName = fetchName;
                 fetchedAt = now;
                 listRefreshedAt = now;
+                listCheckedAt = 0;
+                listUpdates = 0;
                 fetchName = "";
                 theGame.RefreshCrossProgressionSavesList();   // the game lists saves it found earlier: look again
             }
@@ -273,10 +277,22 @@ statemachine class r_CoopLobby
         ShowMessage("Could not download " + host + "'s save " + saveName + ". Go back to the main menu to try again.");
     }
 
-    // The downloaded save, once the game's save list has it.
+    // The game re-read its save folder (after RefreshCrossProgressionSavesList): look again now.
+    public function OnSaveListUpdated()
+    {
+        listUpdates += 1;
+        listCheckedAt = 0;
+    }
+
+    // The downloaded save, once the game's save list has it. The owner's rejoin gave up after 10 s
+    // with the save on disk (a folder full of saves takes longer to list than the tests' empty one):
+    // the list is asked for again every 3 s and the save waited for 45 s.
     private function LoadFetched(now : float)
     {
         var info : SSavegameInfo;
+        var saves : array<SSavegameInfo>;
+        if(now - listCheckedAt < 0.5) { return; }
+        listCheckedAt = now;
         if(Session().FindSave(fetchedName, info))
         {
             loads += 1;
@@ -286,14 +302,15 @@ statemachine class r_CoopLobby
             fetchedName = "";
             return;
         }
-        if(now - fetchedAt > 10)
+        if(now - fetchedAt > 45)
         {
-            Record("LOAD_FAILED " + fetchedName + " is not listed");
+            theGame.ListSavedGames(saves);
+            Record("LOAD_FAILED " + fetchedName + " is not listed (" + saves.Size() + " saves listed, " + listUpdates + " list updates)");
             ShowMessage("Downloaded " + host + "'s save " + fetchedName + ", but the game does not list it: load it from Load Game.");
             fetchedName = "";
             return;
         }
-        if(now - listRefreshedAt >= 1)
+        if(now - listRefreshedAt >= 3)
         {
             listRefreshedAt = now;
             theGame.RefreshCrossProgressionSavesList();
@@ -545,4 +562,11 @@ function OnProgressUpdateRequested()
         DisplayProgressBar(100, UMPT_GraphicsRefresh);   // ask again in 200 ms
     }
     return true;
+}
+
+@wrapMethod(CR4Game)
+function OnGameSaveListUpdated()
+{
+    wrappedMethod();
+    theGame.r_getMultiplayerClient().getCoopLobby().OnSaveListUpdated();
 }

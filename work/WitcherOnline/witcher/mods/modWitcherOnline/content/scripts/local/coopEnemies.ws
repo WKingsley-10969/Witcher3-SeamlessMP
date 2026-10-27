@@ -274,6 +274,8 @@ class r_CoopAck
 
 class r_CoopEnemies
 {
+    private var loggedRole : int;
+    private var loggedStatusAt : float;
     private var epoch : int;    // this game as leader: changes on restart so members drop stale ids
     private var session : int;  // this game as member: lets the leader restart hit numbering
     private var nextNetId : int;
@@ -326,6 +328,8 @@ class r_CoopEnemies
 
     // scenes and the leader's tracking (sent with the journal list)
     private var currentScene : string;
+    private var localScene : bool;      // a blocking scene plays in this game (bots' test scenes aside)
+    private var sceneReleased : bool;   // enemy copies let go for it
     private var sceneSkipSeq : int;
     private var sceneSkipValue : int;
     private var applyingSkip : bool;
@@ -487,6 +491,17 @@ class r_CoopEnemies
         RetryFactsBaseline(now);
         LandFallingCopies(now);
         role = GetRole();
+        // for the player's log (uploaded to the host): who runs the enemies, and how many are shared
+        if(role != loggedRole || now - loggedStatusAt >= 10.0 || now < loggedStatusAt)
+        {
+            if(role != loggedRole || HostEnemyCount() + PuppetCount() + SuppressedCount() > 0)
+            {
+                WO_Log("coop enemies role=" + role + " party=" + client.getJoinedParty() + " area=" + WO_CurrentAreaCode() + " shared=" + HostEnemyCount()
+                    + " copies=" + PuppetCount() + " suppressed=" + SuppressedCount() + " hostilesNear=" + CoopHostilesNear(30));
+            }
+            loggedRole = role;
+            loggedStatusAt = now;
+        }
 
         if(role == 1)
         {
@@ -529,8 +544,15 @@ class r_CoopEnemies
             }
 
             // the leader's snapshots also stop while its game sits in a menu; far from the leader, this world
-            // runs its own monsters again
-            if(now - lastSnapshotAt > 8.0 || !LeaderNear())
+            // runs its own monsters again. So it does while a scene plays here: the scene's monsters and
+            // characters are this world's own, and a copy of the leader's beside them shows twice
+            if(InLocalScene())
+            {
+                if(!sceneReleased) { WO_Log("coop enemies scene: copies let go copies=" + PuppetCount() + " suppressed=" + SuppressedCount()); }
+                sceneReleased = true;
+                ReleaseAll();
+            }
+            else if(now - lastSnapshotAt > 8.0 || !LeaderNear())
             {
                 ReleaseAll();
             }
@@ -1548,6 +1570,7 @@ class r_CoopEnemies
             leaderEpoch = snapshotEpoch;
         }
         lastSnapshotAt = theGame.GetEngineTimeAsSeconds();
+        if(InLocalScene()) { return; }  // no copies while a scene plays here (Tick)
 
         idx = 4;
         n = StringToInt(WO_Str(idx), 0);
@@ -1827,6 +1850,12 @@ class r_CoopEnemies
             {
                 twinsBound += 1;
             }
+            else if(LocalNamed(tpl) > 0)
+            {
+                // a named character this world has but could not pair (two of it, or farther off) is
+                // never spawned a second time: two Vesemirs in the owner's playtest
+                return;
+            }
             else
             {
                 npc = SpawnPuppet(tpl, app, pos, yaw);
@@ -1913,7 +1942,7 @@ class r_CoopEnemies
         for(i = 0; i < entities.Size(); i += 1)
         {
             npc = (CNewNPC)entities[i];
-            if(!npc || npc.HasTag('MPEntity') || IsPuppet(npc) || npc.GetReadableName() != tpl)
+            if(!npc || npc.HasTag('MPEntity') || npc.HasTag('w3coop_npc_copy') || IsPuppet(npc) || npc.GetReadableName() != tpl)
             {
                 continue;
             }
@@ -1924,12 +1953,48 @@ class r_CoopEnemies
                 best = npc;
             }
         }
+        // a named character (Vesemir turning hostile for the prologue's sparring) has one twin here even
+        // farther off: the only one of its template with a voicetag within 60 m
+        if(!best) { best = FindNamedTwin(tpl, pos); }
 
         if(best)
         {
             Unsuppress(best);
+            theGame.r_getMultiplayerClient().getCoopNpcs().ReleaseNpc(best);
         }
         return best;
+    }
+
+    private function FindNamedTwin(tpl : string, pos : Vector) : CNewNPC
+    {
+        var entities : array<CGameplayEntity>;
+        var npc, found : CNewNPC;
+        var i, n : int;
+        FindGameplayEntitiesInSphere(entities, pos, 60.0, 64, '', FLAG_OnlyAliveActors, thePlayer);
+        for(i = 0; i < entities.Size(); i += 1)
+        {
+            npc = (CNewNPC)entities[i];
+            if(!npc || npc.HasTag('MPEntity') || npc.HasTag('w3coop_npc_copy') || IsPuppet(npc) || npc.GetReadableName() != tpl || NpcVoice(npc) == "") { continue; }
+            n += 1;
+            found = npc;
+        }
+        if(n == 1) { return found; }
+        return NULL;
+    }
+
+    // This world's own NPCs of the template with a voicetag (a named character) within 100 m.
+    private function LocalNamed(tpl : string) : int
+    {
+        var entities : array<CGameplayEntity>;
+        var npc : CNewNPC;
+        var i, n : int;
+        FindGameplayEntitiesInSphere(entities, thePlayer.GetWorldPosition(), 100.0, 64, '', FLAG_OnlyAliveActors, thePlayer);
+        for(i = 0; i < entities.Size(); i += 1)
+        {
+            npc = (CNewNPC)entities[i];
+            if(npc && !npc.HasTag('MPEntity') && !npc.HasTag('w3coop_npc_copy') && !IsPuppet(npc) && npc.GetReadableName() == tpl && NpcVoice(npc) != "") { n += 1; }
+        }
+        return n;
     }
 
     private function SpawnPuppet(tpl : string, app : string, pos : Vector, yaw : float) : CNewNPC
@@ -1938,6 +2003,8 @@ class r_CoopEnemies
         var ent : CEntity;
         var npc : CNewNPC;
         var rot : EulerAngles;
+        var tags : array<name>;
+        var i : int;
 
         template = (CEntityTemplate)LoadResource(tpl, true);
         if(!template)
@@ -1965,6 +2032,9 @@ class r_CoopEnemies
         {
             npc.ApplyAppearance(app);
         }
+        // no tags: quest scripts that look a character up by tag find this world's own, never the copy
+        tags = npc.GetTags();
+        for(i = 0; i < tags.Size(); i += 1) { npc.RemoveTag(tags[i]); }
         puppetsSpawned += 1;
         return npc;
     }
@@ -2706,13 +2776,19 @@ class r_CoopEnemies
             {
                 suppressed.Erase(i);
             }
+            else if(suppressed[i].npc.GetAttitude(thePlayer) != AIA_Hostile)
+            {
+                // hostile no longer (a sparring partner again): shown as itself
+                Unsuppress(suppressed[i].npc);
+            }
         }
 
         actors = thePlayer.GetNPCsAndPlayersInRange(30, 48, '', FLAG_Attitude_Hostile + FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
         for(i = 0; i < actors.Size(); i += 1)
         {
             npc = (CNewNPC)actors[i];
-            if(!npc || npc.HasTag('MPEntity') || npc.IsHorse() || IsPuppet(npc) || IsSuppressed(npc))
+            // a named character is never hidden as an extra enemy: the leader's is matched to it
+            if(!npc || npc.HasTag('MPEntity') || npc.IsHorse() || IsPuppet(npc) || IsSuppressed(npc) || NpcVoice(npc) != "")
             {
                 continue;
             }
@@ -3251,11 +3327,28 @@ class r_CoopEnemies
         {
             currentScene = scene.GetPath();
         }
+        localScene = true;
     }
 
     public function OnSceneEnded()
     {
         currentScene = "";
+        localScene = false;
+    }
+
+    // A scene of this game's own is on screen (also one a save loaded into, which never reported a start).
+    private function InLocalScene() : bool
+    {
+        if(localScene || theGame.IsDialogOrCutscenePlaying() || thePlayer.IsInNonGameplayCutscene())
+        {
+            return true;
+        }
+        if(sceneReleased)
+        {
+            WO_Log("coop enemies scene over: copies again");
+        }
+        sceneReleased = false;
+        return false;
     }
 
     // the bots have no quest scene to share; they name one
@@ -3836,8 +3929,26 @@ function OnQuestObjectiveEvent(journalQuest : CJournalQuest, journalObjective : 
 // tutorial progress (each player sees their own tutorials). Everything else is shared.
 function CoopFactShared(id : string) : bool
 {
+    // nge_: the game's own UI locks (nge_pause_menu_disabled while a timed choice or a movie plays:
+    // copied, it never went again and Esc did nothing); manual_equipment_changes_blocked likewise
     return id != "game_is_loaded" && StrFindFirst(id, "tutorial") != 0 && StrFindFirst(id, "Tutorial") != 0
+        && StrFindFirst(id, "nge_") != 0 && id != "manual_equipment_changes_blocked"
         && id != "RemasterSkillResetAndRefund" && StrFindFirst(id, "coop_rw_") != 0
         // Custom Player Characters: each player's own character, appearance and creator
         && StrFindFirst(id, "nr_") != 0 && StrFindFirst(id, "item_use_nr_") != 0;
+}
+
+// Hostile NPCs within range of this player (for the log).
+function CoopHostilesNear(range : float) : int
+{
+    var actors : array<CActor>;
+    var npc : CNewNPC;
+    var i, n : int;
+    actors = thePlayer.GetNPCsAndPlayersInRange(range, 50, '', FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
+    for(i = 0; i < actors.Size(); i += 1)
+    {
+        npc = (CNewNPC)actors[i];
+        if(npc && npc.GetAttitude(thePlayer) == AIA_Hostile) { n += 1; }
+    }
+    return n;
 }
