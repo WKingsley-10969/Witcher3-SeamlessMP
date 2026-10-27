@@ -69,6 +69,9 @@ class r_CoopTalk
     private var joinFrom : Vector;     // where this player stood before being brought over
     private var joinFromRot : EulerAngles;
     private var joinFaded : bool;      // the screen is black for the move to the scene
+    private var mirrorTried : bool;    // this join played the starter's scene here itself (MirrorHostScene)
+    private var seenScenes : array<string>;   // scenes played here this session: a quest's own scene is not shared twice
+    private var seenAt : array<float>;        // ... and when each last played
     private var auto : bool;           // the starter's scene was started by the quest, not by Talk
     private var partyKnown : bool;     // the scene playing here was announced or joined in a party
 
@@ -141,6 +144,8 @@ class r_CoopTalk
     public var autoOpens : int;        // quest-started scenes this game announced
     public var autoJoins : int;        // quest-started scenes joined
     public var autoMissed : int;       // brought over, but this game's quest started no scene
+    public var mirrors : int;          // the starter's scene played here by this game itself
+    public var seenDeclines : int;     // a quest's scene offered again after it played here: declined
     public var handovers : int;        // both games started it: this one became the listener
     public var offersShown : int;      // Watch / Skip prompts shown
     public var offersSkipped : int;    // answered Skip, or declined by the Never setting
@@ -228,10 +233,13 @@ class r_CoopTalk
     public function OnSceneStarted(scene : CStoryScene)
     {
         var now : float;
+        var seen : bool;
         now = theGame.GetEngineTimeAsSeconds();
         inScene = true;
         scenePath = "";
         if(scene) { scenePath = scene.GetPath(); }
+        seen = SeenRecently(scenePath);
+        SetSeen(scenePath);
         choiceSet = 0;
         answeredSet = 0;
         choicesOpen = false;
@@ -266,6 +274,12 @@ class r_CoopTalk
                 + CoopEncode(talkedTo.GetReadableName()) + " " + CoopEncode(NameToString(talkedTo.GetAppearance())) + " "
                 + CoopNpcVec3(talkedTo.GetWorldPosition()) + " " + CoopNpcVec3(thePlayer.GetWorldPosition()));
             StartHold();
+        }
+        else if(role == 0 && InParty() && seen)
+        {
+            // this game's quest got to a scene that already played here (another PC's, played here by
+            // MirrorHostScene): it plays on here alone, the party saw it
+            Record("AUTO_SEEN " + scenePath);
         }
         else if(role == 0 && InParty())
         {
@@ -487,8 +501,9 @@ class r_CoopTalk
             return;
         }
         if(offerOpen && sender == offerSender && conv == offerConv) { return; }
-        // a Skip stays a Skip for that scene (no prompt every 1.5 s); busy or far is weighed again
-        if(sender == declinedStarter && conv == declinedConv && declinedReason == "skip")
+        // a Skip stays a Skip for that scene (no prompt every 1.5 s), as does a scene seen here already; busy or
+        // far is weighed again
+        if(sender == declinedStarter && conv == declinedConv && (declinedReason == "skip" || declinedReason == "seen"))
         {
             WO_Send("coop cv decline " + CoopEncode(sender) + " " + conv + " " + declinedReason);
             return;
@@ -507,6 +522,15 @@ class r_CoopTalk
         offerNpcPos = Vector(StringToFloat(WO_Str(7), 0), StringToFloat(WO_Str(8), 0), StringToFloat(WO_Str(9), 0));
         offerStarterPos = Vector(StringToFloat(WO_Str(10), 0), StringToFloat(WO_Str(11), 0), StringToFloat(WO_Str(12), 0));
         offerAuto = offerVoice == "" && offerTpl == "";
+        // a quest's scene that already played here (this game played the other's, and now the other's quest got
+        // to it too): not played twice
+        if(offerAuto && SeenRecently(offerScene))
+        {
+            seenDeclines += 1;
+            Record("OFFER_SEEN " + sender + " " + offerScene);
+            Decline(sender, conv, "seen");
+            return;
+        }
         if((offerAuto && VecDistance(thePlayer.GetWorldPosition(), offerStarterPos) > COOP_SCENE_RANGE())
             || (!offerAuto && VecDistance(thePlayer.GetWorldPosition(), offerNpcPos) > COOP_TALK_RANGE()))
         {
@@ -570,18 +594,24 @@ class r_CoopTalk
         var spot, safe : Vector;
         var rot : EulerAngles;
         npc = theGame.r_getMultiplayerClient().getCoopNpcs().HoldForScene(offerVoice, offerTpl, offerApp, offerNpcPos);
-        if(!npc)
-        {
-            joinFailures += 1;
-            Record("JOIN_FAILED no copy of " + offerVoice);
-            Decline(offerSender, offerConv, "failed");
-            return;
-        }
         hostName = offerSender;
         hostConv = offerConv;
         hostScene = offerScene;
         joinNpc = npc;
         picks.Clear();
+        mirrorTried = false;
+        if(!npc)
+        {
+            // no copy of that NPC here to press Talk on: this game plays the starter's scene itself
+            Record("JOIN_NO_COPY of " + offerVoice + ": playing the scene here");
+            joinTalkAt = 0;
+            joinStartedAt = theGame.GetEngineTimeAsSeconds();
+            joinAuto = false;
+            role = 2;
+            mirrorTried = true;
+            MirrorHostScene();
+            return;
+        }
         // stand beside the starter, facing the NPC, as if walking up together (out of sight: the
         // owner saw Geralt jump across the screen)
         spot = offerStarterPos + VecFromHeading(VecHeading(offerNpcPos - offerStarterPos) + 90) * 1.2;
@@ -606,6 +636,7 @@ class r_CoopTalk
         hostScene = offerScene;
         joinNpc = NULL;
         picks.Clear();
+        mirrorTried = false;
         joinFrom = thePlayer.GetWorldPosition();
         joinFromRot = thePlayer.GetWorldRotation();
         // moved beside the starter: the scene plays where the starter stands, and this game's quest starts
@@ -1096,6 +1127,8 @@ class r_CoopTalk
         }
         TickHold(now);
         if(joinFaded && role != 2) { FadeBack(); }  // never left black
+        // the move to the starter is done behind the fade; the wait for the scene is not
+        if(joinFaded && role == 2 && joinTalkAt == 0 && now - joinStartedAt > 1.0) { FadeBack(); }
 
         if(role == 2 && joinNpc && joinTalkAt > 0 && now >= joinTalkAt)
         {
@@ -1106,7 +1139,15 @@ class r_CoopTalk
             joinNpc.OnInteraction("Talk", thePlayer);
             applying = false;
         }
-        if(role == 2 && !joinAuto && joinTalkAt == 0 && !inScene && now - joinStartedAt > 4.0)
+        // this game's own quest or Talk did not start the starter's scene within COOP_MIRROR_AFTER (its quest is at
+        // another step: the co-op quest runs, the White Orchard inn's scholar and the Nilfgaardian guard, which
+        // the second PC never got, after 10 s on a black screen): this game plays that scene itself
+        if(role == 2 && joinTalkAt == 0 && !inScene && !mirrorTried && now - joinStartedAt > COOP_MIRROR_AFTER())
+        {
+            mirrorTried = true;
+            MirrorHostScene();
+        }
+        if(role == 2 && !joinAuto && joinTalkAt == 0 && !inScene && now - joinStartedAt > COOP_MIRROR_AFTER() + 4.0)
         {
             joinFailures += 1;
             Record("JOIN_FAILED no scene");
@@ -1186,6 +1227,45 @@ class r_CoopTalk
                 Record("APPLIED " + applyIndex);
             }
         }
+    }
+
+    // Plays the starter's scene in this world, from the scene's default input: the one a quest-started
+    // scene and a Talk scene both begin at (the scholar's scene, played this way in the scene_play probe,
+    // began with the same line as the leader's). An input the scene does not have starts nothing.
+    private function MirrorHostScene()
+    {
+        var scene : CStoryScene;
+        scene = (CStoryScene)LoadResource(hostScene, true);
+        if(!scene)
+        {
+            Record("MIRROR_NOT_LOADED " + hostScene);
+            return;
+        }
+        mirrors += 1;
+        Record("MIRROR " + hostScene);
+        theGame.GetStorySceneSystem().PlayScene(scene, "Input");
+    }
+
+    // A scene played here within the last 10 minutes (seenScenes, with seenAt the time of each).
+    private function SeenRecently(path : string) : bool
+    {
+        var i : int;
+        i = seenScenes.FindFirst(path);
+        return path != "" && i >= 0 && theGame.GetEngineTimeAsSeconds() - seenAt[i] < 600;
+    }
+
+    private function SetSeen(path : string)
+    {
+        var i : int;
+        if(path == "") { return; }
+        i = seenScenes.FindFirst(path);
+        if(i < 0)
+        {
+            seenScenes.PushBack(path);
+            seenAt.PushBack(theGame.GetEngineTimeAsSeconds());
+            return;
+        }
+        seenAt[i] = theGame.GetEngineTimeAsSeconds();
     }
 
     private function ReturnFromJoin()
@@ -1299,10 +1379,18 @@ function COOP_JOIN_MOVE_MIN() : float
     return 3.0;
 }
 
-// How long a brought-over member waits for its own quest to start that scene.
+// How long a brought-over member waits for that scene to start here: its own quest's, or the one it plays
+// itself after COOP_MIRROR_AFTER.
 function COOP_SCENE_WAIT() : float
 {
-    return 10.0;
+    return 8.0;
+}
+
+// How long a joining game gives its own quest (or Talk) to start the starter's scene before playing it
+// itself. A quest that is at that step starts it within a second (the nightmare, the commander).
+function COOP_MIRROR_AFTER() : float
+{
+    return 2.0;
 }
 
 // The longest a scene is held at its start for party members who neither join nor decline.
