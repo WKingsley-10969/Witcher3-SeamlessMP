@@ -282,6 +282,7 @@ class r_CoopEnemies
     private var nextHitSeq : int;
 
     private var hostEnemies : array<r_CoopHostEnemy>;
+    private var questOnlyLogged : array<string>;  // quest enemy templates already logged as not spawned
     private var acks : array<r_CoopAck>;
     private var hurts : array<r_CoopHurt>;
     private var nextHurtSeq : int;
@@ -1856,6 +1857,19 @@ class r_CoopEnemies
                 // never spawned a second time: two Vesemirs in the owner's playtest
                 return;
             }
+            else if(QuestSpawned(tpl))
+            {
+                // an enemy a quest spawns (its template under quests\) is shown here only as this world's
+                // own, which this world's quest spawns: the owner's playtest, where the second PC's own
+                // ghoul fight was over and Vesemir talked of travelling while copies of the leader's
+                // further ghouls kept coming
+                if(!questOnlyLogged.Contains(tpl))
+                {
+                    questOnlyLogged.PushBack(tpl);
+                    WO_Log("coop enemies quest enemy not spawned (this world's quest has none of it here): " + tpl);
+                }
+                return;
+            }
             else
             {
                 npc = SpawnPuppet(tpl, app, pos, yaw);
@@ -1963,6 +1977,12 @@ class r_CoopEnemies
             theGame.r_getMultiplayerClient().getCoopNpcs().ReleaseNpc(best);
         }
         return best;
+    }
+
+    // A template a quest spawns (quests\...), not an open-world monster's.
+    private function QuestSpawned(tpl : string) : bool
+    {
+        return StrBeginsWith(StrLower(tpl), "quests");
     }
 
     private function FindNamedTwin(tpl : string, pos : Vector) : CNewNPC
