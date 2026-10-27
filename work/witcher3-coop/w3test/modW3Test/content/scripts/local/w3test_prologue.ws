@@ -179,6 +179,53 @@ function W3T_PrologueJoinFight(client : r_MultiplayerClient, side : string)
     }
 }
 
+// The second PC, after the wake-up: what shows of Vesemir, each time it changes ("own riding", "own",
+// "stand-in"). A rider is each world's own on its own horse; a stand-in that moves faster than 8 m/s (it
+// ran after the leader's rider and teleported every 12 m, the owner's playtest) or shows while this world's
+// own one rides is a failure.
+function W3T_PrologueRide(bot : W3T_Bot, side : string, now : float)
+{
+    var entities : array<CGameplayEntity>;
+    var npc, standIn : CNewNPC;
+    var text : string;
+    var ownRides : bool;
+    var speed : float;
+    var i : int;
+    FindGameplayEntitiesInSphere(entities, thePlayer.GetWorldPosition(), 80, 256, '', FLAG_OnlyAliveActors);
+    for(i = 0; i < entities.Size(); i += 1)
+    {
+        npc = (CNewNPC)entities[i];
+        if(!npc || npc.HasTag('MPEntity') || StrFindFirst(StrLower(npc.GetReadableName()), "vesemir") < 0) { continue; }
+        if(npc.HasTag('w3coop_npc_copy'))
+        {
+            if(npc.GetVisibility()) { standIn = npc; text += " stand-in"; }
+            continue;
+        }
+        if(npc.IsUsingHorse()) { ownRides = true; }
+        if(!npc.GetVisibility()) { text += " own-hidden"; }
+        else if(npc.IsUsingHorse()) { text += " own-riding"; }
+        else { text += " own"; }
+    }
+    if(ownRides) { bot.rideSeen += 1; }
+    if(standIn)
+    {
+        if(bot.rideAt > 0 && now - bot.rideAt > 0.5) { speed = VecDistance2D(standIn.GetWorldPosition(), bot.ridePos) / (now - bot.rideAt); }
+        bot.ridePos = standIn.GetWorldPosition();
+        bot.rideAt = now;
+        if(speed > 8 || ownRides)
+        {
+            bot.rideBad += 1;
+            W3T_Log("PRO " + side + " FAIL-MARK vesemir stand-in at " + FloatToStringPrec(speed, 1) + " m/s, own riding=" + ownRides + " |" + text);
+        }
+    }
+    else { bot.rideAt = 0; }
+    if(text != bot.rideText)
+    {
+        bot.rideText = text;
+        W3T_Log("PRO " + side + " vesemir |" + text + " | objectives " + W3T_PrologueObjectives());
+    }
+}
+
 function W3T_PrologueGhouls(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_RemotePlayer, host : bool, side : string, now : float)
 {
     var hostiles : array<CNewNPC>;
@@ -316,6 +363,7 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
     {
         bot.scenarioSeenAt = now;
         W3T_PrologueSample(bot, client, side);
+        if(!host && bot.scenarioPos.X > 0) { W3T_PrologueRide(bot, side, now); }
     }
     // lines are skipped (the owner: the runs were too slow): both bots press skip every second, through the
     // dialogue box as the space bar does, so a line goes once both pressed (scenarioFarSince: the last press)
@@ -373,15 +421,16 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
     else
     {
         if(bot.scenarioPos.X == 0 && !talk.InScene() && StrFindFirst(talk.GetScenePath(), "q001_5_wake_up") >= 0) { bot.scenarioPos.X = now; }
-        done = bot.ghoulsCleared && bot.travelSteps >= 4 && now - bot.travelAt >= 5;
+        // and 40 s more after the travel: Vesemir rides on ahead ("Follow Vesemir")
+        done = bot.ghoulsCleared && bot.travelSteps >= 4 && now - bot.travelAt >= 40;
     }
     if(!done && now < W3T_BossTime()) { return false; }
     W3T_Log("PRO " + side + " end duplicates=" + bot.scenarioCount + " sword=" + bot.scenarioFlag + " vesemirHostileSamples=" + bot.scenarioValue
         + " vesemirSyncedWhileHostile=" + bot.scenarioStep + " holds=" + talk.holds + " holdTimeouts=" + talk.holdTimeouts
         + " votes=" + talk.votesSent + " decisions=" + talk.picksSent + " applied=" + talk.picksApplied + " ties=" + talk.ties
         + " ghoulsSeen=" + bot.ghoulsSeen + " cleared=" + bot.ghoulsCleared + " steps=" + bot.travelSteps + " ghoulsOnTheWay=" + bot.ghoulsOnTheWay
-        + " objectivesAfter | " + bot.objectivesAfter);
+        + " rideSeen=" + bot.rideSeen + " rideBad=" + bot.rideBad + " objectivesAfter | " + bot.objectivesAfter);
     // the swords only on the tutorial path: free training and the nightmare take them (a dream), the wake-up gives them back later
     return bot.scenarioCount == 0 && (bot.scenarioFlag || !tutorial) && bot.scenarioStep == 0 && talk.holdTimeouts == 0 && done
-        && (tutorial || (bot.ghoulsSeen > 0 && bot.ghoulsOnTheWay == 0));
+        && (tutorial || (bot.ghoulsSeen > 0 && bot.ghoulsOnTheWay == 0 && bot.rideBad == 0));
 }
