@@ -1,6 +1,8 @@
 # Witcher 3 LAN — development build
 
-Two Windows PCs on one home network: one hosts, the other joins by private IPv4 address. Built on **W3Coop v0.2.0**, a fork of **Witcher Online**. This is an experimental LAN adaptation, not a verified seamless campaign.
+Two Windows PCs on one home network, or in different places over ZeroTier or Tailscale (see **Playing over the internet**): one hosts, the other joins by IPv4 address. Built on **W3Coop v0.2.0**, a fork of **Witcher Online**. This is an experimental LAN adaptation, not a verified seamless campaign.
+
+**Version:** the `VERSION` file in this package (for example `0.3.0-alpha`) is this build's version. The package folder, its zip and its GitHub release carry the same number.
 
 The full development ZIP contains the native mod, its DLC/templates, Java server, LAN launchers, source and licenses. It contains no Witcher 3 installation or Java runtime. Each player needs a matching game. Target: Steam build **25773555**, executable resource version **5.0.0.1048522**; other builds are rejected until checked.
 
@@ -24,6 +26,8 @@ The payload is hash-checked before installation. First backups remain unchanged 
 
 For updates, extract the newer complete package, run **Manage Mod.cmd**, choose the same game folder and select **1**. The restore record lives in that game folder, so updates keep the first backups even when you use a different extracted package directory. For **older/manual installations**, the first managed install treats the files currently present as its baseline; it cannot reconstruct vanilla files that were already overwritten before these backups existed.
 
+**What's new:** `CHANGELOG.md` in this package lists what changed for players in each release, newest first.
+
 To remove, run **Remove Mod.cmd**, or choose **2 — Remove** in **Manage Mod.cmd**. Original file contents are restored, and files newly added by this installer are removed. Co-op saves, original backups and any preserved outside edits are retained. Uninstall does not undo quest progress in a save. Reinstalling in the same folder reuses the co-op save identity and creates fresh original-backup entries.
 
 If another mod, Steam or a manual edit changed a managed file, the operation stops before modifying game files. Manage Mod can offer to keep those changed files under `.w3lan-install/preserved` and continue. It does not merge competing mods. Corrupt/missing originals stop restoration. Keep `.w3lan-install` until you are finished with rollback; deleting it loses the restore history.
@@ -44,7 +48,7 @@ A separate full copy remains optional for development:
    - Keep the console open. It runs the server: UDP 40000 for the game, and TCP 40001, which shares your co-op saves with joining players.
    - Load or start your game and **save**. Joining players get your newest co-op save.
    - **Join password (optional):** the host launcher asks for one each time. Type a password and tell it to the player on the second PC; their launcher asks for it before joining, and a wrong or missing password is refused (no game, no save download). Press Enter for none: then anyone who can reach your PC can join, as before. Use one when you play over the internet through a virtual network such as ZeroTier or Tailscale. It is never saved or shown; it lasts until you close the host console.
-2. **Second PC:** run **Play Join LAN.cmd** with a different name such as `GuestWitcher`, and enter the host's home-network IPv4 address shown in its console.
+2. **Second PC:** run **Play Join LAN.cmd** with a different name such as `GuestWitcher`, and enter the host's home-network IPv4 address shown in its console (over the internet: its ZeroTier or Tailscale address, see **Playing over the internet**).
 
    The launchers remember your name and the host's address (in `%LOCALAPPDATA%\W3LAN\player.json`, so a newer package folder still knows them): next time, press Enter to keep them. Keep the same name: it picks your co-op saves and character. The game starts with your own graphics settings (no forced window or resolution).
 3. **The co-op session takes over.** The launcher downloads the host's newest co-op save, and the game then:
@@ -54,6 +58,8 @@ A separate full copy remains optional for development:
    - follows the host's difficulty, also when the host changes it mid-session.
 
    Both players then play the same game: the same story point, choices and place. Your own solo saves are untouched; the host's save goes into your co-op profile only.
+
+   The launcher shows the download's progress. If the connection drops (more likely over the internet), it says so and resumes where it stopped, up to 3 tries; it only uses a save that arrived intact, checked against the host's checksum.
 4. **If the host has no save yet,** your game waits in the co-op lobby (below) until the host starts a new game. **If the download fails,** the launcher says so and you play as before:
    - load a save yourself;
    - meet the host;
@@ -90,11 +96,35 @@ A separate full copy remains optional for development:
 
 **Shared quest progress (new).** In a party, quest progress made on either PC reaches the other: the quest facts and quest-log updates each PC makes are sent to the other, which applies the ones that move it forward, so the other PC's own quests start and advance too (for example, taking a notice from a board). Story choices are shared the same way; a romance outcome is shared, the romance scene itself only plays on the PC that played it. Tutorial progress stays per player. Progress only moves forward: nothing is undone on the other PC.
 
-**Talk together (new).** In a party, when one player talks to an NPC, the other player (within about 40 m, not fighting or riding) joins the same conversation: their Geralt is moved beside the speaker and their own game plays the same scene, so they see the camera, hear the voices and read the subtitles. The player who started the conversation chooses the answers. The other player's clicks are not answers: they show up for the speaker as suggestions ("name > choice"). The chosen answer then plays on both PCs. A shop, barber or other menu the conversation opens stays with the speaker; it is closed on the other PC.
+**Talk together (new).** In a party, when one player talks to an NPC, the other player (within about 40 m, not fighting or riding) joins the same conversation: their Geralt is moved beside the speaker and their own game plays the same scene, so they see the camera, hear the voices and read the subtitles. A story scene waits until both players are in it: the PC that reaches it first holds it at the start and shows who it waits for (new). At a choice both players vote: the options stay up with each player's name beside the one they picked, and the scene goes on once both voted the same. If your votes differ, either of you can change yours; after 15 seconds the party leader's vote decides. A choice with a timer goes with the first vote. A line is skipped once both players press skip (new). A shop, barber or other menu the conversation opens stays with the speaker; it is closed on the other PC.
 
-Steam must be running for the game normally. Mod traffic goes directly over LAN: no Steam relay, VPN or router port forwarding. If Windows Firewall blocks the host's Java process, allow it on your private home network; scripts do not change firewall rules. Guest Wi-Fi can isolate PCs.
+**Co-op logs go to the host (new).** So the host can look into a problem without going to the second PC, **Play Join LAN.cmd** sends the second PC's co-op logs to the host PC after the game closes.
+- **What is sent:** only this player's own logs. These are the co-op profile's `native.log`, the profile's `The Witcher 3\scriptslog.txt` (if there is one and it changed) and the mod's own log `bin\WitcherOnline\WitcherOnline_<your name>.log` in the game folder. A log over 8 MB is cut to its last 8 MB. Nothing else is sent: no saves, settings or other files.
+- **What they contain:** player names, LAN addresses and what the game and mod did. They contain no passwords.
+- **To whom:** only the host you joined, over your home network (TCP port 40001). The host accepts logs only from a PC that is in its game or was in the last 30 minutes.
+- **When:** after the game closes. If it never got there (a crash, a closed window), the logs are kept in your profile's `log-upload\outbox` and sent at your next launch, in the background so the game starts at once (or after that game, if the host does not take them yet). A log is sent once. The launcher prints *Sent your co-op log to …* or *Could not send your co-op log: …*. If the host does not answer, it gives up after 5 s.
+- **Where they land:** on the host PC, in `server\player-logs\<name>\` next to the host's `WitcherServer.jar` (for the package, `<package folder>\server\player-logs`). The host's console names the folder when the first log arrives. The host keeps the newest 20 per player. The host's own logs are not sent anywhere; **Play Host LAN.cmd** prints where they are.
+- **To opt out:** start with `.\Play-LAN.ps1 -Mode Join ... -NoLogUpload`, or set `"SendLogs": false` in `%LOCALAPPDATA%\W3LAN\player.json`.
+
+Steam must be running for the game normally. Mod traffic goes directly between the two PCs, over your home network or over a ZeroTier or Tailscale network (below). It does not use Steam's relay or router port forwarding. If Windows Firewall blocks the host's Java process, allow it on your private home network (or on the ZeroTier/Tailscale network); scripts do not change firewall rules. Guest Wi-Fi can isolate PCs.
+
+**Connection status in the host console (new).** While you play, type `status` in the host console and press Enter. It lists every connected player (your own game too) with their address, how long ago their last packet arrived, packets per second in and out, and the estimated loss of packets on their way to the host. While players are connected, the console also prints a one-line summary every 60 s; set `statusSummarySeconds=0` in `server\server.properties` to turn it off. This helps over internet play (ZeroTier, Tailscale): a second PC that keeps losing more than a few percent, or whose last packet is more than a second old, has a connection problem rather than a game problem. Ping is not shown (`n/a`): the game sends nothing the host could time. `help` lists the other console commands; to stop the server, close the game.
 
 Only the host needs Java 21+. On another host, use `JAVA_HOME`, put a portable JDK under `runtime`, or pass `-JavaPath` to `Play-LAN.ps1`. Java is not installed automatically. Names are 2-16 ASCII letters, digits or underscores; choose different names, and avoid reserved `none`.
+
+## Playing over the internet
+
+Two players in different places can play through a virtual LAN: **ZeroTier** or **Tailscale**. It gives each PC an address on a private network that works like a home network, so the mod's traffic still goes between the two PCs, without router port forwarding. Neither tool is included or installed by this package.
+
+1. **Both PCs join the same network.** ZeroTier: install ZeroTier One on both PCs, join the same network, and authorize both PCs in it (in ZeroTier Central for a private network). Tailscale: install Tailscale on both PCs and sign in to the same tailnet. Use one of the two on both PCs.
+2. **Host:** run **Play Host LAN.cmd** as usual. Its console lists your addresses with their adapters: share the one on the ZeroTier adapter (often 10.x, 172.16-31.x or 192.168.x) or the Tailscale adapter (100.x).
+3. **Second PC:** first run **Join LAN.cmd** with that address. It checks that UDP reaches the host's server (and shows the round trip in ms); it does not start the game. If the host does not answer, check that both PCs are on the same ZeroTier network (or Tailscale tailnet) and online there, and that the host's console is open.
+4. **Then run Play Join LAN.cmd** with the same address. It is remembered for next time.
+5. **Windows Firewall:** when the host's Java server first starts, Windows may ask whether to allow it: allow it. Windows often lists a ZeroTier network as a public network; if the second PC still cannot reach the host, allow Java for the network type Windows shows for it.
+
+**Twingate** is zero-trust access to selected resources, not a shared network between two players' PCs, so it does not replace ZeroTier or Tailscale. It can keep running alongside them; do not share a Twingate address.
+
+Latency matters more than on a home network. ZeroTier and Tailscale connect the PCs directly where they can and through a relay otherwise, which is slower; shared enemies, NPCs and the other player may lag behind more. Not yet tested over the internet on two physical PCs. The server has no login of its own: only put people you trust on the network.
 
 ## Saves, settings and controls
 
@@ -119,7 +149,7 @@ The older **Host LAN.cmd** and **Join LAN.cmd** are server/probe tools; they do 
 .\Build-Server.ps1 -JdkPath 'C:\path\to\jdk-21'
 ```
 
-See **TEST-RESULTS.md** for actual checks. Real game tests use two clients on one PC. A second-PC LAN session, full quest playthrough, travel/death/rejoin recovery and expansion coverage are not yet established.
+See **TEST-RESULTS.md** for actual checks. Real game tests use two clients on one PC. A second-PC LAN or internet session, full quest playthrough, travel/death/rejoin recovery and expansion coverage are not yet established.
 
 Nearby-NPC limits: at most 24 shared NPCs and 12 stand-ins at a time (any beyond that are left on each game's own routine); only in a party and within about 45 m; a quest character's own script may still move or teleport it right after it is handed back. Tested with two clients on one PC on one Novigrad street, not yet on two physical PCs.
 
@@ -139,7 +169,9 @@ Shared-progress limits: only quest facts and quest-log states travel, so a quest
 
 **A leshen's roots and crows (new).** The roots a leshen sends through the ground and the crows it throws show on both screens, and its crows hurt whichever player they hit. A griffin's landing dust already shows with its flight.
 
-Inherited limits include the roughly 60 m shared-enemy range, independently started scenes, incomplete enemy animation/spell/summon cases and loot on corpses outside the shared-enemy range. This adaptation does not remove them. The server has no enforced two-player cap or authenticated LAN session; use it on your trusted home network.
+**Attacks that come out of the ground (new).** What a monster's attack makes appear, such as a spriggan's roots bursting out under you, shows on both screens. Only the real one hurts: the other player's copy is just for show.
+
+Inherited limits include the roughly 60 m shared-enemy range, independently started scenes, incomplete enemy animation/spell/summon cases and loot on corpses outside the shared-enemy range. This adaptation does not remove them. The server has no enforced two-player cap or authenticated LAN session; use it on your trusted home network or ZeroTier/Tailscale network.
 
 To remove the managed mod, close the game/server and use **Remove Mod.cmd**. To discard a separate development copy instead, keep desired co-op saves first, then remove that separate folder. The installer never deletes a game installation or co-op saves.
 

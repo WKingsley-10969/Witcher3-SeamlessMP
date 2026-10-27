@@ -25,7 +25,7 @@ if($Mode -eq 'Host'){
     if($password.Length){$arguments['JoinPassword']=$password}
 }
 if($Mode -eq 'Join'){
-    $address=Read-W3LanValue -Prompt "Host PC's LAN IPv4 address" -Default $remembered['HostAddress'] -Check {param($value) [void](Resolve-W3LanAddress $value)}
+    $address=Read-W3LanValue -Prompt "Host PC's IPv4 address (home network, ZeroTier or Tailscale)" -Default $remembered['HostAddress'] -Check {param($value) [void](Resolve-W3LanAddress $value)}
     $remembered['HostAddress']=$address
     $arguments['Address']=$address
 }

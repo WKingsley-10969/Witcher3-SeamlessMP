@@ -15,7 +15,7 @@ try {
     if (-not $PlayerName) { $PlayerName = if ($Mode -eq 'Host') { 'HostWitcher' } else { 'GuestWitcher' } }
     Assert-W3LanName $PlayerName
     if ($Mode -eq 'Host') { $Address = '127.0.0.1' }
-    elseif (-not $Address) { $Address = Read-Host "Host PC's LAN IPv4 address" }
+    elseif (-not $Address) { $Address = Read-Host "Host PC's IPv4 address (home network, ZeroTier or Tailscale)" }
     $Address = Resolve-W3LanAddress $Address
     $clientEnvironment = New-W3LanClientEnvironment -PlayerName $PlayerName -Address $Address -Port $Port
     if ($Plan) {
@@ -32,13 +32,13 @@ try {
         Write-Host "LAN server ready on UDP $Port. This is a server transport test, not proof of working gameplay."
         $addresses = @(Get-W3LanAddresses)
         if ($addresses.Count) {
-            Write-Host 'On the other PC, run Join LAN.cmd and enter the address for your home network:'
+            Write-Host 'On the second PC, run Join LAN.cmd and enter your home-network address, or your ZeroTier or Tailscale address over the internet:'
             $addresses | Format-Table Adapter, Address | Out-Host
         } else { Write-Host 'No private LAN adapter detected. Local tests can use 127.0.0.1.' }
         Write-Host 'The upstream server listens on all IPv4 interfaces. No firewall settings were changed.'
     } else {
-        $probe = Test-W3LanEndpoint -Address $Address -Port $Port
-        if (-not $probe.Reachable) { throw "No compatible server response from ${Address}:${Port}: $($probe.Reply). Check the host, port, Windows Firewall and Wi-Fi client isolation." }
+        $probe = Test-W3LanEndpoint -Address $Address -Port $Port -TimeoutMs 2000 -Attempts 3
+        if (-not $probe.Reachable) { throw "No compatible server response from ${Address}:${Port}: $($probe.Reply). $(Get-W3LanUnreachableHint $Address)" }
         Write-Host "Compatible Witcher Online server reachable at ${Address}:${Port} ($($probe.ElapsedMs) ms)."
         Write-Host 'This confirms UDP transport only; it does not join a game or verify co-op gameplay.'
         if ($probe.PasswordRequired) { Write-Host 'The host set a join password: Play Join LAN.cmd asks for it.' }

@@ -11,6 +11,8 @@ param(
     [switch]$NoSessionSave,
     # Host: the password the second PC must enter (empty: anyone may join). Join: asked when needed.
     [Security.SecureString]$JoinPassword,
+    # Do not send this PC's co-op logs to the host (also: "SendLogs": false in player.json)
+    [switch]$NoLogUpload,
     [switch]$Plan
 )
 $ErrorActionPreference = 'Stop'
@@ -18,10 +20,12 @@ Import-Module (Join-Path $PSScriptRoot 'W3Lan.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'W3LanProfile.psm1') -Force
 $server = $null
 $game = $null
+$logUpload = $null
+$sendLogs = $false
 try {
     if (-not $PlayerName) { $PlayerName = if ($Mode -eq 'Host') {'HostWitcher'} else {'GuestWitcher'} }
     if ($Mode -eq 'Host') { $Address = '127.0.0.1' }
-    elseif (-not $Address) { $Address = Read-Host "Host PC's LAN IPv4 address" }
+    elseif (-not $Address) { $Address = Read-Host "Host PC's IPv4 address (home network, ZeroTier or Tailscale)" }
     $info = New-W3LanProfileStartInfo -GameDir $GameDir -PlayerName $PlayerName -Address $Address -Port $Port
     if ($Plan) {
         [pscustomobject]@{Mode=$Mode; Executable=$info.FileName; Address=$Address; Port=$Port; PlayerName=$PlayerName; Documents=$info.EnvironmentVariables['W3LAN_DOCUMENTS']; Launch=$false} | ConvertTo-Json
@@ -33,12 +37,15 @@ try {
         # Co-op session: joining players download this host's newest co-op save (TCP port Port+1)
         $server = Start-W3LanServer -JarPath (Join-Path $PSScriptRoot 'server\WitcherServer.jar') -JavaPath $JavaPath -Port $Port -SaveDirectory $saves -HostName $PlayerName -JoinPassword $JoinPassword
         $info.EnvironmentVariables['W3LAN_SESSION_ROLE'] = 'host'
-        Write-Host 'Host server ready. The second PC uses the home-network address below:'
+        Write-Host 'Host server ready. The second PC uses one of the addresses below: your home-network address on the same network, or your ZeroTier or Tailscale address over the internet:'
         Get-W3LanAddresses | Format-Table Adapter,Address | Out-Host
         Write-Host "Joining players load your newest co-op save. Save before they join to share your latest progress."
+        # the host's own logs stay on this PC; the second PC's arrive in server\player-logs
+        $modLog = Join-Path (Resolve-Path -LiteralPath $GameDir).Path "bin\WitcherOnline\WitcherOnline_$PlayerName.log"
+        Write-Host "Your co-op logs: $($info.EnvironmentVariables['W3T_LOG']) and $modLog. The second PC's arrive in $(Join-Path $PSScriptRoot 'server\player-logs')."
     } else {
-        $probe = Test-W3LanEndpoint -Address $Address -Port $Port
-        if (-not $probe.Reachable) { throw "Host did not answer the UDP check: $($probe.Reply)." }
+        $probe = Test-W3LanEndpoint -Address $Address -Port $Port -TimeoutMs 2000 -Attempts 3
+        if (-not $probe.Reachable) { throw "Host ${Address}:${Port} did not answer the UDP check ($($probe.Reply)). $(Get-W3LanUnreachableHint $Address)" }
         if ($probe.PasswordRequired) {
             Import-Module (Join-Path $PSScriptRoot 'W3LanJoin.psm1') -Force
             if (-not $JoinPassword -or -not $JoinPassword.Length) { $JoinPassword = Read-Host 'The host set a join password. Enter it' -AsSecureString }
@@ -65,10 +72,24 @@ try {
             }
         }
     }
+    if ($Mode -eq 'Join' -and (Test-W3LanLogUploadWanted -NoLogUpload:$NoLogUpload)) {
+        # the last session's logs if they never reached the host (a crash, a closed window), in the background
+        try {
+            [void](Add-W3LanLogsToOutbox -Documents $info.EnvironmentVariables['W3LAN_DOCUMENTS'] -GameDir $GameDir -PlayerName $PlayerName)
+            $logUpload = Start-W3LanLogUpload -Address $Address -Port ($Port + 1) -PlayerName $PlayerName -Documents $info.EnvironmentVariables['W3LAN_DOCUMENTS']
+        } catch { Write-Warning "Could not queue your co-op log: $($_.Exception.Message)" }
+        $sendLogs = $true
+    }
     Write-Host 'Launching Witcher 3 with the LAN mod and a separate co-op save/settings profile.'
     if (-not $joinsHostSave) { Write-Host 'Load matching saves in the same region. In game, interact with the host character and join its party.' }
     $game = [Diagnostics.Process]::Start($info)
-    $game.WaitForExit()
+    Wait-W3LanGame -Game $game -Server $server
+    if ($sendLogs) {
+        # this session's logs (and any the background upload did not deliver) to the host
+        $line = Send-W3LanSessionLogs -Address $Address -Port ($Port + 1) -PlayerName $PlayerName -Documents $info.EnvironmentVariables['W3LAN_DOCUMENTS'] -GameDir $GameDir -Background $logUpload
+        $logUpload = $null
+        if ($line) { Write-Host $line }
+    }
     if ($game.ExitCode -ne 0) { throw "Game exited with code $($game.ExitCode). Check the profile's native.log and game logs." }
 } catch {
     Write-Error $_ -ErrorAction Continue
@@ -78,5 +99,6 @@ try {
         if (-not $game.HasExited) { $game.Kill(); [void]$game.WaitForExit(5000) }
         $game.Dispose()
     }
+    if ($logUpload) { $logUpload.Shell.Dispose() }
     if ($server) { Stop-W3LanServer $server; $server.Dispose() }
 }

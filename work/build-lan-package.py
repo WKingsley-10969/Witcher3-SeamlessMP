@@ -9,13 +9,18 @@ import zipfile
 work=Path(__file__).resolve().parent
 root=work.parent
 starter=root/'outputs/witcher3-lan-starter'
-package=root/'outputs/Witcher3-LAN-0.2.0-dev'
+# the release version (outputs/witcher3-lan-starter/VERSION): the package's folder, archive and manifest carry it
+version=(starter/'VERSION').read_text(encoding='utf-8').strip()
+assert version and all(c.isalnum() or c in '.-' for c in version), 'VERSION must look like 0.3.0-alpha'
+package=root/('outputs/Witcher3-LAN-'+version)
 package.mkdir(exist_ok=True)
-for name in ('W3Lan.psm1','W3LanJoin.psm1','W3LanProfile.psm1','W3ModInstall.psm1','Play-LAN.ps1','Launch-Game.ps1','Install-LAN.ps1','Install-Copy.ps1','Remove-LAN.ps1','Manage-Mod.ps1','Manage Mod.cmd','Remove Mod.cmd','Play Host LAN.cmd','Play Join LAN.cmd','Setup LAN.cmd','Host LAN.cmd','Join LAN.cmd','Lan.ps1','Build-Server.ps1','README.md','INSTALL-UPDATE-REMOVE.md','LICENSE.txt','PROVENANCE.json','BUILD-NATIVE.md'):
+for name in ('W3Lan.psm1','W3LanJoin.psm1','W3LanProfile.psm1','W3ModInstall.psm1','Play-LAN.ps1','Launch-Game.ps1','Install-LAN.ps1','Install-Copy.ps1','Remove-LAN.ps1','Manage-Mod.ps1','Manage Mod.cmd','Remove Mod.cmd','Play Host LAN.cmd','Play Join LAN.cmd','Setup LAN.cmd','Host LAN.cmd','Join LAN.cmd','Lan.ps1','Build-Server.ps1','README.md','INSTALL-UPDATE-REMOVE.md','LICENSE.txt','PROVENANCE.json','BUILD-NATIVE.md','VERSION'):
     shutil.copy2(starter/name,package/name)
 shutil.copy2(starter/'GAME-TEST-RESULTS.md',package/'TEST-RESULTS.md')
+# The player-facing changelog, newest release first.
+shutil.copy2(starter/'CHANGELOG.md',package/'CHANGELOG.md')
 for name in ('server','licenses','tests'):
-    shutil.copytree(starter/name,package/name,dirs_exist_ok=True,ignore=shutil.ignore_patterns('profile-fixture-*','w3lan-profile-fixture-*','install-fixtures'))
+    shutil.copytree(starter/name,package/name,dirs_exist_ok=True,ignore=shutil.ignore_patterns('profile-fixture-*','w3lan-profile-fixture-*','install-fixtures','player-logs'))
 # Play-LAN.ps1 hosts with server/WitcherServer.jar: the current build, with its source.
 shutil.copy2(work/'WitcherOnline/server/build/WitcherServer.jar',package/'server/WitcherServer.jar')
 shutil.copytree(work/'WitcherOnline/server/src',package/'server/src',dirs_exist_ok=True)
@@ -75,7 +80,7 @@ for relative in ('src/ScriptStringResult.h', 'src/FactOperationJournal.h'):
         shutil.copy2(new_header,source/repo/relative)
 shutil.copytree(work/'native-tests',source/'native-tests',dirs_exist_ok=True,ignore=shutil.ignore_patterns('*.exe','*.obj','*.lib','*.exp','*.log','documents'))
 shutil.copytree(work/'witcher3-coop/w3test/modW3Test',helper/'modW3Test',dirs_exist_ok=True)
-manifest={'version':'0.2.0-dev','files':[]}
+manifest={'version':version,'files':[]}
 for file in sorted((package/'mod').rglob('*')):
     if file.is_file():
         manifest['files'].append({'path':file.relative_to(package/'mod').as_posix(),'sha256':hashlib.sha256(file.read_bytes()).hexdigest()})
@@ -83,7 +88,8 @@ for file in sorted((package/'mod').rglob('*')):
 archive=Path(str(package)+'.zip')
 with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
     for file in sorted(package.rglob('*')):
-        if file.is_file():
+        # logs the second PC sent to a host run from this package folder stay out
+        if file.is_file() and 'player-logs' not in file.parts:
             assert not any(p in file.parts for p in ('.git','.w3lan-profiles','game-copy','game-testing'))
             assert file.name not in ('launcher.settings.json','install-copy.log')
             z.write(file, str(Path(package.name)/file.relative_to(package)))
