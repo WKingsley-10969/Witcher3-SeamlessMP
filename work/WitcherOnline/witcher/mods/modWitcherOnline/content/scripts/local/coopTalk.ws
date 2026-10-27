@@ -78,6 +78,9 @@ class r_CoopTalk
     private var holdFrames : int;      // frames held: a second clock, in case engine time stands with the game's
     private var holdAnswers : array<string>;  // party members that joined this scene or declined it
     private var holdLines : int;      // lines the scene set while held
+    // PauseCutscenes calls while held: the game counts them, and each needs its UnpauseCutscenes (the
+    // prologue run: one unpause after many pauses left the leader's nightmare frozen on a black screen)
+    private var holdPauses : int;
 
     // an offer to join a party member's conversation, waiting for this player's answer
     private var offerOpen : bool;
@@ -729,7 +732,7 @@ class r_CoopTalk
         holdFrames = 0;
         holdLines = 0;
         holds += 1;
-        theGame.PauseCutscenes();
+        PauseCutscenesOnce();
         theGame.SetTimeScale(0.001, 'w3coop_scene_wait', 100, false, true);
         theSound.SoundEvent("system_pause");
         Record("HOLD " + scenePath + " for " + PendingNames());
@@ -740,7 +743,11 @@ class r_CoopTalk
         if(!holding) { return; }
         holding = false;
         theGame.RemoveTimeScale('w3coop_scene_wait');
-        theGame.UnpauseCutscenes();
+        while(holdPauses > 0)
+        {
+            theGame.UnpauseCutscenes();
+            holdPauses -= 1;
+        }
         theSound.SoundEvent("system_resume");
         ClearStatus();
         Record("HOLD_END " + reason + " after " + FloatToStringPrec(theGame.GetEngineTimeAsSeconds() - holdSince, 1) + " s");
@@ -751,9 +758,10 @@ class r_CoopTalk
         var pending : string;
         if(!holding) { return; }
         holdFrames += 1;
-        // every frame: a cutscene the scene starts after its first frame (the prologue's nightmare) is
-        // paused too, where one call at the start left it playing behind "Waiting for"
-        theGame.PauseCutscenes();
+        // again every half second (real frames: game time stands): a cutscene the scene starts after its
+        // first frame (the prologue's nightmare) is paused too, where one call at the start left it
+        // playing behind "Waiting for"
+        if(holdFrames % 30 == 0) { PauseCutscenesOnce(); }
         pending = PendingNames();
         if(pending == "") { EndHold("all in"); return; }
         if(now - holdSince > COOP_SCENE_HOLD_MAX() || (float)holdFrames > COOP_SCENE_HOLD_MAX() * 120.0)
@@ -763,6 +771,12 @@ class r_CoopTalk
             return;
         }
         ShowStatus("Waiting for " + pending + " to join the scene");
+    }
+
+    private function PauseCutscenesOnce()
+    {
+        theGame.PauseCutscenes();
+        holdPauses += 1;
     }
 
     // Lets a held scene go now (console: coopgo).
