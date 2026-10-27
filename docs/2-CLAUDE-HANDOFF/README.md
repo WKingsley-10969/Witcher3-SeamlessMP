@@ -682,3 +682,11 @@ Branch rebased onto `8c920f9` before publication, preserving Claude's additional
 - **Skips:** `OnDialogSkipped` asks `InterceptSkip` first; in a shared conversation a line goes once both pressed skip on it (`cv skip <id> <line text>`), with a short notification for the one waiting.
 - The older leader-follows popup (`updateLeaderDialogReadyPopup`) stays quiet while a shared conversation runs.
 - **Not verified in the game** (the owner tests it): whether time scale 0.001 plus `PauseCutscenes` really holds a dialogue scene (if lines advance while `HOLD` is logged, it does not), whether the redrawn list takes input, and the bots: the test scenarios that pick on one PC only (`talk_share`, `scene_share`, `prologue_coop`) now wait for a second vote and need a vote from the other bot.
+
+**26 October 2026 — Claude Code: player changelog.** Branch `feature/changelog` (from `main`, then `main` merged in after the v0.3.0-alpha release).
+
+- `outputs/witcher3-lan-starter/CHANGELOG.md` (new): what changed for players in each release, newest first, in short player-facing bullets. The five GitHub pre-releases before it (`lan-dev-2026-10-25` to `lan-dev-2026-10-25-5`, all shipped as `Witcher3-LAN-0.2.0-dev.zip`) are named by their tags; their contents come from the tag messages, the release notes and the PRs merged into each tagged commit.
+- **v0.3.0-alpha (26 October 2026)** (tag `v0.3.0-alpha` on `e077fb5`) lists exactly what its published notes list: flying monsters (#25), monster phases and knockdowns (#26), a leshen's roots (#27) and attacks that come out of the ground (#29). The leshen's crows are left out: no crows were thrown in `monster_objects`, so their path is untested. #23 (corpse loot) shipped in `lan-dev-2026-10-25-5`, built from its branch before the merge; #24 (monster survey) and #28 (boss fight test) are test tooling; #30 (versions) is release tooling.
+- On top, **Unreleased** lists the changelog itself. Add each later PR's player-facing line there when it merges (open: #31 internet play, #32 join password).
+- `work/build-lan-package.py` copies `CHANGELOG.md` into the package (one added line, apart from the file list #30 edited); the README's update section points to it.
+- Nothing built, staged or run; no game launched.

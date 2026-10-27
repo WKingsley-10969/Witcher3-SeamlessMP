@@ -17,6 +17,8 @@ package.mkdir(exist_ok=True)
 for name in ('W3Lan.psm1','W3LanProfile.psm1','W3ModInstall.psm1','Play-LAN.ps1','Launch-Game.ps1','Install-LAN.ps1','Install-Copy.ps1','Remove-LAN.ps1','Manage-Mod.ps1','Manage Mod.cmd','Remove Mod.cmd','Play Host LAN.cmd','Play Join LAN.cmd','Setup LAN.cmd','Host LAN.cmd','Join LAN.cmd','Lan.ps1','Build-Server.ps1','README.md','INSTALL-UPDATE-REMOVE.md','LICENSE.txt','PROVENANCE.json','BUILD-NATIVE.md','VERSION'):
     shutil.copy2(starter/name,package/name)
 shutil.copy2(starter/'GAME-TEST-RESULTS.md',package/'TEST-RESULTS.md')
+# The player-facing changelog, newest release first.
+shutil.copy2(starter/'CHANGELOG.md',package/'CHANGELOG.md')
 for name in ('server','licenses','tests'):
     shutil.copytree(starter/name,package/name,dirs_exist_ok=True,ignore=shutil.ignore_patterns('profile-fixture-*','w3lan-profile-fixture-*','install-fixtures','player-logs'))
 # Play-LAN.ps1 hosts with server/WitcherServer.jar: the current build, with its source.
