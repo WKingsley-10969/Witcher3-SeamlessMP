@@ -52,6 +52,21 @@ try {
     $outside = $false
     try { Invoke-WebRequest -Uri "http://127.0.0.1:$($Port + 1)/session/save/..%2Fsecret.sav" -UseBasicParsing -TimeoutSec 5 | Out-Null } catch { $outside = $_.Exception.Response.StatusCode.value__ -eq 404 }
     Check $outside 'nothing outside the host save folder is served'
+
+    # a host with a join password: a second PC (this PC's LAN address) downloads only after joining
+    Stop-W3LanServer $server; $server.Dispose(); $server = $null
+    $lan = @(Get-W3LanAddresses | Select-Object -ExpandProperty Address -First 1)
+    if ($lan.Count) {
+        Import-Module (Join-Path (Split-Path -Parent $PSScriptRoot) 'W3LanJoin.psm1') -Force
+        $secret = ConvertTo-SecureString 'silver sword 7' -AsPlainText -Force
+        $server = Start-W3LanServer -JarPath $JarPath -JavaPath $JavaPath -Port $Port -SaveDirectory $hostSaves -HostName 'HostWitcher' -JoinPassword $secret
+        $refused = $false
+        try { Copy-W3LanSessionSave -Address $lan[0] -Port ($Port + 1) -SaveDirectory $joinSaves | Out-Null } catch { $refused = $_.Exception.Response.StatusCode.value__ -eq 403 }
+        Check $refused 'a second PC without the join password cannot download the save'
+        Check ((Request-W3LanJoin -Address $lan[0] -Port $Port -Password $secret) -ceq 'OK') 'the join password is accepted'
+        $session = Copy-W3LanSessionSave -Address $lan[0] -Port ($Port + 1) -SaveDirectory $joinSaves
+        Check ($session.Save -eq 'AutoSave_6a7b8c') 'after joining it downloads the save'
+    } else { Write-Output 'SKIP no LAN address on this PC: join password download check needs one' }
 } finally {
     if ($server) { Stop-W3LanServer $server; $server.Dispose() }
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue

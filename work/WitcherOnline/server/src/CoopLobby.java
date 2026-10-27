@@ -1,3 +1,4 @@
+import com.sun.net.httpserver.HttpContext;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
@@ -41,10 +42,10 @@ final class CoopLobby
         this.saves = saves;
     }
 
-    static void attach(HttpServer server, SaveShare saves)
+    static HttpContext attach(HttpServer server, SaveShare saves)
     {
         CoopLobby lobby = new CoopLobby(saves);
-        server.createContext("/lobby", lobby::handle);
+        return server.createContext("/lobby", lobby::handle);
     }
 
     private void handle(HttpExchange exchange) throws IOException

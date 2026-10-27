@@ -1,12 +1,15 @@
+import com.sun.net.httpserver.Filter;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -14,10 +17,14 @@ import java.util.stream.Stream;
  * Co-op session: shares the host's co-op saves over the LAN, read-only, so joining players load the
  * same game as the host. Serves one directory (the host's gamesaves) and nothing else.
  *
- * GET /session                 "host=NAME\nsave=BASENAME\nsize=BYTES\nmodified=EPOCHMS\n" for the
- *                              newest .sav (save= empty when there is none)
+ * GET /session                 "host=NAME\nsave=BASENAME\nsize=BYTES\nsha256=HEX\nmodified=EPOCHMS\n"
+ *                              for the newest .sav (save= empty when there is none)
  * GET /session/save/FILE       a .sav, .png or .json file of that directory, by plain file name (the game
- *                              writes a .json of metadata beside each save it makes)
+ *                              writes a .json of metadata beside each save it makes), with
+ *                              "X-Content-SHA256: HEX" (of the whole file) and "Accept-Ranges: bytes":
+ *                              a single "Range: bytes=FIRST-[LAST]" or "bytes=-SUFFIX" is answered 206
+ *                              with Content-Range (416 outside the file), so a second PC whose
+ *                              connection dropped resumes instead of starting over
  */
 public final class SaveShare
 {
@@ -36,11 +43,33 @@ public final class SaveShare
 
     public static SaveShare start(Path directory, int port, String hostName) throws IOException
     {
+        return start(directory, port, hostName, address -> true);
+    }
+
+    // allowed: which PCs may use the share and the lobby (the join password, JoinGate); others get 403.
+    public static SaveShare start(Path directory, int port, String hostName, Predicate<InetAddress> allowed) throws IOException
+    {
         if (!Files.isDirectory(directory)) throw new IllegalArgumentException("Save directory does not exist: " + directory);
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
         SaveShare share = new SaveShare(directory.toRealPath(), hostName == null ? "" : hostName, server);
-        server.createContext("/session", share::handle);
-        CoopLobby.attach(server, share);
+        Filter gate = new Filter()
+        {
+            @Override
+            public void doFilter(HttpExchange exchange, Chain chain) throws IOException
+            {
+                if (allowed.test(exchange.getRemoteAddress().getAddress())) { chain.doFilter(exchange); return; }
+                try { send(exchange, 403, "text/plain; charset=utf-8", "join password required\n".getBytes(StandardCharsets.UTF_8)); }
+                finally { exchange.close(); }
+            }
+
+            @Override
+            public String description()
+            {
+                return "join password";
+            }
+        };
+        server.createContext("/session", share::handle).getFilters().add(gate);
+        CoopLobby.attach(server, share).getFilters().add(gate);
         server.setExecutor(null);
         server.start();
         return share;
@@ -137,8 +166,10 @@ public final class SaveShare
         else
         {
             String name = newest.getFileName().toString();
+            byte[] bytes = Files.readAllBytes(newest);
             text.append("save=").append(name, 0, name.length() - ".sav".length()).append('\n');
-            text.append("size=").append(Files.size(newest)).append('\n');
+            text.append("size=").append(bytes.length).append('\n');
+            text.append("sha256=").append(sha256(bytes)).append('\n');
             text.append("modified=").append(newestTime).append('\n');
         }
         return text.toString();
@@ -152,7 +183,59 @@ public final class SaveShare
             send(exchange, 404, "text/plain; charset=utf-8", "not found\n".getBytes(StandardCharsets.UTF_8));
             return;
         }
-        send(exchange, 200, "application/octet-stream", Files.readAllBytes(file));
+        // one read: the checksum header and the bytes served are of the same file contents
+        byte[] bytes = Files.readAllBytes(file);
+        exchange.getResponseHeaders().set("Accept-Ranges", "bytes");
+        exchange.getResponseHeaders().set("X-Content-SHA256", sha256(bytes));
+        long[] range = range(exchange.getRequestHeaders().getFirst("Range"), bytes.length);
+        if (range == null)
+        {
+            send(exchange, 200, "application/octet-stream", bytes);
+        }
+        else if (range.length == 0)
+        {
+            exchange.getResponseHeaders().set("Content-Range", "bytes */" + bytes.length);
+            send(exchange, 416, "text/plain; charset=utf-8", "range not satisfiable\n".getBytes(StandardCharsets.UTF_8));
+        }
+        else
+        {
+            exchange.getResponseHeaders().set("Content-Range", "bytes " + range[0] + "-" + range[1] + "/" + bytes.length);
+            send(exchange, 206, "application/octet-stream", java.util.Arrays.copyOfRange(bytes, (int) range[0], (int) range[1] + 1));
+        }
+    }
+
+    // A Range header for a file of length bytes: {first, last} (inclusive) for one range in it, an
+    // empty array for one wholly outside it (416), null for no header or one this share ignores
+    // (several ranges, other units, malformed: the whole file, 200).
+    static long[] range(String header, long length)
+    {
+        if (header == null) return null;
+        java.util.regex.Matcher spec = RANGE.matcher(header.trim());
+        if (!spec.matches() || (spec.group(1).isEmpty() && spec.group(2).isEmpty())) return null;
+        if (spec.group(1).isEmpty())
+        {
+            long suffix = Long.parseLong(spec.group(2));
+            if (suffix == 0 || length == 0) return new long[0];
+            return new long[] { Math.max(0, length - suffix), length - 1 };
+        }
+        long first = Long.parseLong(spec.group(1));
+        if (first >= length) return new long[0];
+        long last = spec.group(2).isEmpty() ? length - 1 : Math.min(Long.parseLong(spec.group(2)), length - 1);
+        return last < first ? null : new long[] { first, last };
+    }
+
+    private static final Pattern RANGE = Pattern.compile("bytes=(\\d{0,18})-(\\d{0,18})");
+
+    static String sha256(byte[] bytes)
+    {
+        try
+        {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+        }
+        catch (java.security.NoSuchAlgorithmException e)
+        {
+            throw new IllegalStateException("SHA-256 is part of every Java runtime", e);
+        }
     }
 
     static void send(HttpExchange exchange, int status, String type, byte[] body) throws IOException
