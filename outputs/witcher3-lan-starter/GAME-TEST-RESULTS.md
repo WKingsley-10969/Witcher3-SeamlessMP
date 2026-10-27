@@ -1,4 +1,15 @@
-# Verification — v0.4.4-alpha, 27 October 2026
+# Verification — v0.4.5-alpha, 27 October 2026
+
+This alpha contains PRs #63 (Custom Player Characters' scenes are never shared), #64 (the second PC keeps its own CPC voice setting) and #65 (the hold at a scene's start is timed in real seconds). It was released at the owner's request **without game tests**. Main compiled with CPC installed (`run-isolated-test.py verify`, rc=3, no errors); the build without CPC was not compiled here.
+
+The fixes come from the owner's two-PC session of 27 October and the second PC's uploaded logs:
+- **The lock:**
+  - In the session from 18:00, the host (female, CPC) talked to Gaunter, and its last message reached the second PC at 18:08:04.
+  - The second PC started Gaunter's scene at 18:08:05 and held it for the host until 18:11:17, a hold its log measured as "0.2 s" in slowed engine time.
+- **The CPC scenes:** CPC's `player_change_male` / `_female` scenes were announced and held like story scenes (host log, from 18:12).
+- **The mute:** a co-op quest run logged `speech_control=1 speech_switch=1` on both PCs: the host's "always female" setting, carried by its save.
+
+## Verification — v0.4.4-alpha, 27 October 2026
 
 This alpha contains PR #61: a PC whose own quest does not start the other PC's scene plays it itself. All runs: two game processes on one PC, Custom Player Characters installed in the shared test game, the co-op quest runner of PR #38 (not merged) from a co-op save in the White Orchard inn.
 
