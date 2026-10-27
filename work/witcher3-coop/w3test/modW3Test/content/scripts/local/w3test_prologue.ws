@@ -431,7 +431,10 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
     if(bot.scenarioPos.X > 0) { W3T_PrologueRide(bot, side, now); }
     // lines are skipped (the owner: the runs were too slow): both bots press skip every second, through the
     // dialogue box as the space bar does, so a line goes once both pressed (scenarioFarSince: the last press)
-    if(talk.InScene() && !client.hasActiveDialogChoices() && now - bot.scenarioFarSince >= 1.0 && theGame.GetStorySceneSystem().IsSkippingLineAllowed())
+    // W3T_PROLOGUE_NOSKIP=1: no skipping, scenes at full length as a player watches them (the owner's two-PC
+    // session, where the second PC lost the nightmare while the first PC's played)
+    if(W3T_GetEnv("W3T_PROLOGUE_NOSKIP") != "1" && talk.InScene() && !client.hasActiveDialogChoices() && now - bot.scenarioFarSince >= 1.0
+        && theGame.GetStorySceneSystem().IsSkippingLineAllowed())
     {
         bot.scenarioFarSince = now;
         W3T_DialogModule().OnDialogSkipped(0);
