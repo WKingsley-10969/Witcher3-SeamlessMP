@@ -161,6 +161,21 @@ function OnConfigUI()
     }
 }
 
+// A tutorial popup that pauses the game waits for Continue, and the paused bot never presses it:
+// Custom Player Characters' welcome (W3T_CPC=1 runs) stopped both games after the prologue's ghouls.
+// Closed here as a player would close it.
+@wrapMethod(CR4TutorialPopup)
+function UpdateData(TutData : W3TutorialPopupData, optional showAnimation : bool) : void
+{
+    wrappedMethod(TutData, showAnimation);
+
+    if(W3T_Active() && TutData && (TutData.pauseGame || TutData.fullscreen))
+    {
+        W3T_Log("POPUP closed a pausing tutorial popup: " + TutData.messageTitle);
+        RequestClose(true);
+    }
+}
+
 // Logs every system dialog and answers it (OK / Yes) so nothing waits for a human.
 @wrapMethod(CR4GuiManager)
 function ShowProgressDialog( messageId : int, title : string, message : string, localizationNeeded:bool, type : EUserDialogButtons, progressValue:float, progressType:EUserMessageProgressType, progressTag:name)
