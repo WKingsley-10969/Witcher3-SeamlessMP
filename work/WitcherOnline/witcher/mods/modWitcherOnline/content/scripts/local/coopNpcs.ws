@@ -451,8 +451,25 @@ class r_CoopNpcs
         }
     }
 
+    // A scene of this game ended: the joined NPC goes back to sync at once, the rest only once no scene
+    // has played here for COOP_SCENE_LINGER (CheckSceneHold). A quest often starts its next scene a moment
+    // later, and prepares it with the characters it finds: the prologue's nightmare, 1.4 s after the
+    // sparring, found the second PC's own Ciri and Vesemir hidden behind stand-ins again and was left out
+    // (that PC went straight to White Orchard while the first PC played the nightmare).
+    public function SceneEnded()
+    {
+        if(!sceneHold)
+        {
+            ReleaseScene();
+            return;
+        }
+        sceneNpc = NULL;
+        if(sceneGoneSince == 0) { sceneGoneSince = theGame.GetEngineTimeAsSeconds(); }
+    }
+
     // Every frame: a scene that started here before the party formed (a save that loads into one) is
-    // held too, and a hold whose scene ended without word (a load cut it off) lets go after 3 s.
+    // held too, and a hold lets go once no scene has played here for COOP_SCENE_LINGER (also one a load
+    // cut off).
     private function CheckSceneHold(role : int, now : float)
     {
         var playing : bool;
@@ -461,7 +478,7 @@ class r_CoopNpcs
         if(!sceneHold) { return; }
         if(playing) { sceneGoneSince = 0; }
         else if(sceneGoneSince == 0) { sceneGoneSince = now; }
-        else if(now - sceneGoneSince > 3.0) { ReleaseScene(); }
+        else if(now - sceneGoneSince > COOP_SCENE_LINGER()) { ReleaseScene(); }
     }
 
     // What this world shows for the NPC with one voicetag: a stand-in or the real one; NULL if neither.
@@ -1626,4 +1643,10 @@ function CoopCount(values : array<string>, value : string) : int
     var i, n : int;
     for(i = 0; i < values.Size(); i += 1) { if(values[i] == value) { n += 1; } }
     return n;
+}
+
+// How long the NPCs stay unsynced after a scene here, for a next scene the quest starts right after.
+function COOP_SCENE_LINGER() : float
+{
+    return 8.0;
 }

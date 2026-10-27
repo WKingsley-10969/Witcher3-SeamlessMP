@@ -301,7 +301,7 @@ class r_CoopTalk
         }
         if(role == 3) { WO_Send("coop cv left " + CoopEncode(hostName) + " " + hostConv); }
         if(role == 3 || role == 2) { LeaveConversation(); }
-        else { theGame.r_getMultiplayerClient().getCoopNpcs().ReleaseScene(); }
+        else { theGame.r_getMultiplayerClient().getCoopNpcs().SceneEnded(); }
         role = 0;
     }
 
@@ -1196,7 +1196,7 @@ class r_CoopTalk
 
     private function LeaveConversation()
     {
-        theGame.r_getMultiplayerClient().getCoopNpcs().ReleaseScene();
+        theGame.r_getMultiplayerClient().getCoopNpcs().SceneEnded();
         ClearStatus();
         joinNpc = NULL;
         picks.Clear();
