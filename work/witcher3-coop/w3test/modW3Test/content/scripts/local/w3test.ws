@@ -190,6 +190,13 @@ function ShowProgressDialog( messageId : int, title : string, message : string, 
         return;
     }
     if(W3T_GetEnv("W3T_SCENARIO") == "party_menu" && WO_IsPartyPrompt(messageId)) { theGame.W3T_AnswerPartyPrompt(messageId); return; }
+    // anywhere else a party prompt is a person's (Interact on the other Geralt while watching a run): left
+    // open for them. Answered Yes, it took the second PC out of the party mid-run in the owner's playtest
+    if(WO_IsPartyPrompt(messageId))
+    {
+        W3T_Log("DIALOG party prompt left open for the player");
+        return;
+    }
     // watch_skip: the host answers Skip to the first Watch / Skip prompt and leaves the second open
     if(W3T_GetEnv("W3T_SCENARIO") == "watch_skip" && messageId == COOP_WATCH_DIALOG())
     {
