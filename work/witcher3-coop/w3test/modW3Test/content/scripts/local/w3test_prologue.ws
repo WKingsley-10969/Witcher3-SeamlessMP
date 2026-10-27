@@ -158,6 +158,27 @@ function W3T_PrologueHostileList(client : r_MultiplayerClient, hostiles : array<
     return text;
 }
 
+// The leader: to within a few metres of its party member when more than 15 m off.
+function W3T_PrologueJoinFight(client : r_MultiplayerClient, side : string)
+{
+    var globals : array<r_RemotePlayer>;
+    var spot, safe : Vector;
+    var rot : EulerAngles;
+    var i : int;
+    globals = client.getGlobalPlayers();
+    for(i = 0; i < globals.Size(); i += 1)
+    {
+        if(!globals[i] || !globals[i].inParty || globals[i].joinedParty != client.getUsername() || globals[i].area != WO_CurrentAreaCode()) { continue; }
+        if(VecDistance(globals[i].pos, thePlayer.GetWorldPosition()) <= 15) { return; }
+        spot = globals[i].pos + VecNormalize(thePlayer.GetWorldPosition() - globals[i].pos) * 4.0;
+        if(!theGame.GetWorld().NavigationFindSafeSpot(spot, 0.5, 6.0, safe)) { safe = spot; }
+        rot.Yaw = VecHeading(globals[i].pos - safe);
+        thePlayer.TeleportWithRotation(safe, rot);
+        W3T_Log("PRO " + side + " goes to the fight beside " + globals[i].username + " at " + W3T_VecStr(safe));
+        return;
+    }
+}
+
 function W3T_PrologueGhouls(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_RemotePlayer, host : bool, side : string, now : float)
 {
     var hostiles : array<CNewNPC>;
@@ -176,16 +197,36 @@ function W3T_PrologueGhouls(bot : W3T_Bot, client : r_MultiplayerClient, leader 
     }
     if(!bot.ghoulsCleared)
     {
+        // the leader goes where the second PC fights (the owner watched both screens: the second group came
+        // down the hill, out of the standing leader's view)
+        if(host && W3T_GetEnv("W3T_PROLOGUE_SOLO") != "1" && client.getCoopEnemies().HostEnemyCount() > 0)
+        {
+            W3T_PrologueJoinFight(client, side);
+        }
         if(near > 0)
         {
             bot.ghoulsSeen += 1;
             bot.ghoulsClearAt = 0;
-            // the second PC kills them; alone (W3T_PROLOGUE_SOLO=1, the plain game's baseline) the leader does
-            if((!host || W3T_GetEnv("W3T_PROLOGUE_SOLO") == "1") && now - bot.scenarioActAt >= 1)
+            // the second PC kills them (35 % a hit, every second); the leader helps (20 % every 2 s), so most
+            // kills still come from the second PC; alone (W3T_PROLOGUE_SOLO=1, the plain game's baseline) the
+            // leader at the second PC's pace
+            if(!host || W3T_GetEnv("W3T_PROLOGUE_SOLO") == "1")
             {
-                W3T_PrologueHit(W3T_BossNearest(hostiles), 0.35);
+                if(now - bot.scenarioActAt >= 1)
+                {
+                    W3T_PrologueHit(W3T_BossNearest(hostiles), 0.35);
+                    bot.scenarioActAt = now;
+                }
+            }
+            else if(now - bot.scenarioActAt >= 2)
+            {
+                W3T_PrologueHit(W3T_BossNearest(hostiles), 0.2);
                 bot.scenarioActAt = now;
             }
+        }
+        else if(host && client.getCoopEnemies().HostEnemyCount() > 0)
+        {
+            bot.ghoulsClearAt = 0;
         }
         // over after 30 s with none near and no copies: the game's second group comes up to 12 s after the
         // first (one co-op run; 1 s alone), one by one
