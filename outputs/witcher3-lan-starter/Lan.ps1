@@ -41,6 +41,7 @@ try {
         if (-not $probe.Reachable) { throw "No compatible server response from ${Address}:${Port}: $($probe.Reply). $(Get-W3LanUnreachableHint $Address)" }
         Write-Host "Compatible Witcher Online server reachable at ${Address}:${Port} ($($probe.ElapsedMs) ms)."
         Write-Host 'This confirms UDP transport only; it does not join a game or verify co-op gameplay.'
+        if ($probe.PasswordRequired) { Write-Host 'The host set a join password: Play Join LAN.cmd asks for it.' }
     }
     if ($server) {
         Write-Host 'No game launched. Keep this console open while testing from the other PC.'

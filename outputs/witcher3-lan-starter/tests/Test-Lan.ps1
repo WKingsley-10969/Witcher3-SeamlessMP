@@ -193,6 +193,53 @@ try {
     foreach ($socket in @($alice,$bob,$late)) { if ($socket) { $socket.Dispose() } }
     if ($server) { Stop-W3LanServer $server; $server.Dispose() }
 }
+
+# Join password: the second PC is this PC's own LAN address (loopback is the host's PC, never asked).
+Import-Module (Join-Path $root 'W3LanJoin.psm1') -Force
+$locked = $null; $open = $null
+try {
+    $java = Find-W3LanJava $JavaPath
+    $jar = Join-Path $root 'server\WitcherServer.jar'
+    $lan = @(Get-W3LanAddresses | Select-Object -ExpandProperty Address -First 1)
+    $secret = ConvertTo-SecureString 'silver sword 7' -AsPlainText -Force
+    $wrongSecret = ConvertTo-SecureString 'steel sword' -AsPlainText -Force
+    $openPort = FreePort
+    $open = Start-W3LanServer -JarPath $jar -JavaPath $java -Port $openPort
+    Check 'no join password: the probe does not ask for one and AUTH reports an open host' {
+        Assert (-not (Test-W3LanEndpoint -Address 127.0.0.1 -Port $openPort).PasswordRequired) 'Open host asked for a password.'
+        Assert ((Request-W3LanJoin -Address 127.0.0.1 -Port $openPort -Password $secret) -ceq 'OPEN') 'Open host did not say so.'
+    }
+    $lockedPort = FreePort
+    $locked = Start-W3LanServer -JarPath $jar -JavaPath $java -Port $lockedPort -JoinPassword $secret
+    Check 'the join password is not on the server command line' {
+        Assert ($locked.StartInfo.Arguments -notmatch 'silver') 'Password on the command line.'
+    }
+    Check 'the host PC itself needs no join password' {
+        $probe = Test-W3LanEndpoint -Address 127.0.0.1 -Port $lockedPort
+        Assert ($probe.Reachable -and -not $probe.PasswordRequired) "Loopback refused: $($probe.Reply)"
+    }
+    if ($lan.Count) {
+        Check 'a second PC is told a join password is required' {
+            $probe = Test-W3LanEndpoint -Address $lan[0] -Port $lockedPort
+            Assert ($probe.Reachable -and $probe.PasswordRequired) "Wrong probe: $($probe.Reply)"
+        }
+        Check 'a wrong join password is refused and the PC stays locked out' {
+            # sent to this PC's LAN address, so it also comes from it: not loopback
+            Assert ((Request-W3LanJoin -Address $lan[0] -Port $lockedPort -Password $wrongSecret) -ceq 'WRONG_PASSWORD') 'Wrong password accepted.'
+            Assert (Test-W3LanEndpoint -Address $lan[0] -Port $lockedPort).PasswordRequired 'Let in after a wrong password.'
+        }
+        Check 'the right join password lets the second PC in' {
+            Assert ((Request-W3LanJoin -Address $lan[0] -Port $lockedPort -Password $secret) -ceq 'OK') 'Right password refused.'
+            $probe = Test-W3LanEndpoint -Address $lan[0] -Port $lockedPort
+            Assert ($probe.Reachable -and -not $probe.PasswordRequired) "Still refused: $($probe.Reply)"
+        }
+    } else { Write-Host 'SKIP no LAN address on this PC: second-PC join password checks need one' }
+} catch {
+    $script:failures += "Join password setup: $_"
+    Write-Host "FAIL join password: $_"
+} finally {
+    foreach ($process in @($open, $locked)) { if ($process) { Stop-W3LanServer $process; $process.Dispose() } }
+}
 Write-Host "RESULT: $($script:checks - $script:failures.Count)/$script:checks checks passed"
 if ($script:failures.Count) { $script:failures | ForEach-Object { Write-Host $_ }; exit 1 }
 exit 0

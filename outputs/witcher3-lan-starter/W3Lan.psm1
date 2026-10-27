@@ -80,10 +80,12 @@ function Test-W3LanEndpoint {
             [void]$udp.Send($data, $data.Length)
             $remote = [Net.IPEndPoint]::new([Net.IPAddress]::Any, 0)
             $reply = [Text.Encoding]::UTF8.GetString($udp.Receive([ref]$remote))
-            $ok = $reply -ceq "ERROR`tINVALID_USERNAME"
-            $result = [pscustomobject]@{ Reachable = $ok; Address = $ip; Port = $Port; Reply = $reply; ElapsedMs = $timer.ElapsedMilliseconds }
+            # a host with a join password refuses this PC until it answers (W3LanJoin.psm1)
+            $locked = $reply -ceq "ERROR`tNOT_WHITELISTED`tPASSWORD_REQUIRED"
+            $ok = $locked -or $reply -ceq "ERROR`tINVALID_USERNAME"
+            $result = [pscustomobject]@{ Reachable = $ok; PasswordRequired = $locked; Address = $ip; Port = $Port; Reply = $reply; ElapsedMs = $timer.ElapsedMilliseconds }
         } catch [Net.Sockets.SocketException] {
-            $result = [pscustomobject]@{ Reachable = $false; Address = $ip; Port = $Port; Reply = $_.Exception.SocketErrorCode.ToString(); ElapsedMs = $timer.ElapsedMilliseconds }
+            $result = [pscustomobject]@{ Reachable = $false; PasswordRequired = $false; Address = $ip; Port = $Port; Reply = $_.Exception.SocketErrorCode.ToString(); ElapsedMs = $timer.ElapsedMilliseconds }
         } finally { $udp.Dispose() }
         if ($result.Reachable -or $attempt -ge $Attempts) { return $result }
         Start-Sleep -Milliseconds 250
@@ -178,7 +180,9 @@ function Start-W3LanServer {
         [ValidateRange(1,65535)][int]$Port = 40000,
         # Co-op session: joining players download the host's newest save from this folder (TCP Port+1)
         [string]$SaveDirectory,
-        [string]$HostName
+        [string]$HostName,
+        # empty: anyone may join
+        [Security.SecureString]$JoinPassword
     )
     if (-not (Test-Path -LiteralPath $JarPath -PathType Leaf)) { throw 'Server JAR missing. Run Build-Server.ps1 first.' }
     $jar = (Resolve-Path -LiteralPath $JarPath).Path
@@ -203,6 +207,9 @@ function Start-W3LanServer {
     $info.UseShellExecute = $false
     $info.CreateNoWindow = $true
     $info.RedirectStandardInput = $true
+    # only the server process gets the join password: never its command line, a file or a log
+    [void]$info.EnvironmentVariables.Remove('W3LAN_JOIN_PASSWORD')
+    if ($JoinPassword -and $JoinPassword.Length) { $info.EnvironmentVariables['W3LAN_JOIN_PASSWORD'] = [Net.NetworkCredential]::new('', $JoinPassword).Password }
     $process = [Diagnostics.Process]::new()
     $process.StartInfo = $info
     $started = $false

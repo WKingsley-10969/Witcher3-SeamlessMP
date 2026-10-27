@@ -9,6 +9,8 @@ param(
     [string]$JavaPath,
     # Join with this player's own save instead of the host's newest one
     [switch]$NoSessionSave,
+    # Host: the password the second PC must enter (empty: anyone may join). Join: asked when needed.
+    [Security.SecureString]$JoinPassword,
     # Do not send this PC's co-op logs to the host (also: "SendLogs": false in player.json)
     [switch]$NoLogUpload,
     [switch]$Plan
@@ -33,7 +35,7 @@ try {
     $joinsHostSave = $false
     if ($Mode -eq 'Host') {
         # Co-op session: joining players download this host's newest co-op save (TCP port Port+1)
-        $server = Start-W3LanServer -JarPath (Join-Path $PSScriptRoot 'server\WitcherServer.jar') -JavaPath $JavaPath -Port $Port -SaveDirectory $saves -HostName $PlayerName
+        $server = Start-W3LanServer -JarPath (Join-Path $PSScriptRoot 'server\WitcherServer.jar') -JavaPath $JavaPath -Port $Port -SaveDirectory $saves -HostName $PlayerName -JoinPassword $JoinPassword
         $info.EnvironmentVariables['W3LAN_SESSION_ROLE'] = 'host'
         Write-Host 'Host server ready. The second PC uses one of the addresses below: your home-network address on the same network, or your ZeroTier or Tailscale address over the internet:'
         Get-W3LanAddresses | Format-Table Adapter,Address | Out-Host
@@ -44,6 +46,14 @@ try {
     } else {
         $probe = Test-W3LanEndpoint -Address $Address -Port $Port -TimeoutMs 2000 -Attempts 3
         if (-not $probe.Reachable) { throw "Host ${Address}:${Port} did not answer the UDP check ($($probe.Reply)). $(Get-W3LanUnreachableHint $Address)" }
+        if ($probe.PasswordRequired) {
+            Import-Module (Join-Path $PSScriptRoot 'W3LanJoin.psm1') -Force
+            if (-not $JoinPassword -or -not $JoinPassword.Length) { $JoinPassword = Read-Host 'The host set a join password. Enter it' -AsSecureString }
+            $answer = Request-W3LanJoin -Address $Address -Port $Port -Password $JoinPassword
+            if ($answer -eq 'WRONG_PASSWORD') { throw 'The host refused the join password. Ask the host for it and try again.' }
+            if ($answer -eq 'TOO_MANY_ATTEMPTS') { throw 'Too many wrong join passwords: wait a minute, then try again.' }
+            Write-Host 'Join password accepted.'
+        }
         if (-not $NoSessionSave) {
             try {
                 $session = Copy-W3LanSessionSave -Address $Address -Port ($Port + 1) -SaveDirectory $saves
