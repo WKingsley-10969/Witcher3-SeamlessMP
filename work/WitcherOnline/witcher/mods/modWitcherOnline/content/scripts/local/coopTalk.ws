@@ -144,6 +144,8 @@ class r_CoopTalk
     public function GetScenePath() : string { return scenePath; }
     public function IsApplying() : bool { return applying; }
     public function IsHolding() : bool { return holding; }
+    // This player's vote on the choice list on screen, "" if none.
+    public function MyVote() : string { return VoteOf(Me()); }
     // A shared conversation is running here: the older leader-follows dialogue sync stays out of it.
     public function IsSyncing() : bool { return role == 3 || (role == 1 && convId != 0); }
     public function IsListening() : bool { return role == 3; }
@@ -284,6 +286,7 @@ class r_CoopTalk
         linesSeen += 1;
         currentLine = text;
         Record("LINE " + text);
+        if(holding) { Record("HOLD_LEAK a line played while the scene was held"); }
     }
 
     public function OnChoices(choices : array<SSceneChoice>)

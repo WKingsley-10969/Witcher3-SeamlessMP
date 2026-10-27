@@ -1,8 +1,8 @@
 // prologue_coop: the start of the owner's first two-PC playthrough. Both bots load the owner's
 // Kaer Morhen checkpoint (CheckPoint_53db8_7ea47400_54d1b72: the sparring scene with Vesemir, Ciri
-// watching) as a co-op session: the second PC joins the host's party by itself. The leader takes the
-// first choice in scenes and, out of them, hits the nearest hostile (Vesemir in the sparring) by 6 %
-// every 3 s; the second PC follows the leader and picks nothing. Every 2 s each logs how many Ciris
+// watching) as a co-op session: the second PC joins the host's party by itself. Both vote the first
+// choice in scenes (shared choices wait for both votes); out of them the leader hits the nearest
+// hostile (Vesemir in the sparring) by 6 % every 3 s and the second PC follows the leader. Every 2 s each logs how many Ciris
 // and Vesemirs it shows (real ones visible, stand-ins and enemy copies), its role, scene and swords.
 // Pass: no sample with two of either character on screen, and the second PC still has a sword (the
 // playtest: a second Vesemir, Ciri gone, no sword).
@@ -89,16 +89,16 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
         bot.scenarioSeenAt = now;
         W3T_PrologueSample(bot, client, side);
     }
-    if(host)
+    if(client.hasActiveDialogChoices() && talk.ChoicesAge() > 2 && talk.MyVote() == "" && now - bot.scenarioActAt >= 3)
     {
-        if(client.hasActiveDialogChoices() && talk.ChoicesAge() > 2 && now - bot.scenarioActAt >= 3)
-        {
-            W3T_Log("PRO leader takes choice 0 of " + talk.LastChoiceCount());
-            W3T_DialogModule().OnDialogOptionSelected(0);
-            W3T_DialogModule().OnDialogOptionAccepted(0);
-            bot.scenarioActAt = now;
-        }
-        else if(!talk.InScene() && now - bot.scenarioActAt >= 3)
+        W3T_Log("PRO " + side + " votes choice 0 of " + talk.LastChoiceCount());
+        W3T_DialogModule().OnDialogOptionSelected(0);
+        W3T_DialogModule().OnDialogOptionAccepted(0);
+        bot.scenarioActAt = now;
+    }
+    else if(host)
+    {
+        if(!talk.InScene() && now - bot.scenarioActAt >= 3)
         {
             W3T_BossHit(W3T_BossNearest(W3T_BossHostiles()));
             bot.scenarioActAt = now;
@@ -113,6 +113,7 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
         thePlayer.TeleportWithRotation(spot, rot);
     }
     if(now < W3T_BossTime()) { return false; }
-    W3T_Log("PRO " + side + " end duplicates=" + bot.scenarioCount + " sword=" + bot.scenarioFlag);
+    W3T_Log("PRO " + side + " end duplicates=" + bot.scenarioCount + " sword=" + bot.scenarioFlag + " holds=" + talk.holds + " holdTimeouts=" + talk.holdTimeouts
+        + " votes=" + talk.votesSent + " decisions=" + talk.picksSent + " applied=" + talk.picksApplied + " ties=" + talk.ties);
     return bot.scenarioCount == 0 && bot.scenarioFlag;
 }
