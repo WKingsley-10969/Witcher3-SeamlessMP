@@ -89,7 +89,8 @@ function W3T_PrologueSample(bot : W3T_Bot, client : r_MultiplayerClient, side : 
     steel = GetWitcherPlayer().GetItemEquippedOnSlot(EES_SteelSword, id);
     silver = GetWitcherPlayer().GetItemEquippedOnSlot(EES_SilverSword, id);
     if(ciri >= 2 || vesemir >= 2) { bot.scenarioCount += 1; }
-    bot.scenarioFlag = steel || silver;
+    // the swords are checked in Kaer Morhen: after the wake-up White Orchard has its own gear story
+    if(WO_CurrentAreaCode() == 3) { bot.scenarioFlag = steel || silver; }
     W3T_Log("PRO " + side + " ciri=" + ciri + " vesemir=" + vesemir + " role=" + client.getCoopEnemies().GetRole() + " party=" + client.getJoinedParty()
         + " area=" + WO_CurrentAreaCode() + " scene=" + client.getCoopTalk().GetScenePath() + " steel=" + steel + " silver=" + silver
         + " vesemirState=" + W3T_PrologueVesemir(bot, client)
@@ -105,7 +106,9 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
     var spot : Vector;
     var rot : EulerAngles;
     var pick : int;
+    var tutorial, done : bool;
     host = W3T_GetEnv("W3T_ROLE") == "mover";
+    tutorial = W3T_GetEnv("W3T_PROLOGUE_TUTORIAL") == "1";
     side = "copy";
     if(host) { side = "leader"; }
     now = bot.ElapsedS();
@@ -128,7 +131,7 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
     {
         pick = -1;
         // W3T_PROLOGUE_TUTORIAL=1: the combat tutorial (Vesemir spars); else free training (straight to the nightmare)
-        if(W3T_GetEnv("W3T_PROLOGUE_TUTORIAL") != "1") { pick = talk.ChoiceContaining("SKIP TUTORIAL"); }
+        if(!tutorial) { pick = talk.ChoiceContaining("SKIP TUTORIAL"); }
         if(pick < 0) { pick = 0; }
         W3T_Log("PRO " + side + " votes choice " + pick + " of " + talk.LastChoiceCount());
         W3T_DialogModule().OnDialogOptionSelected(pick);
@@ -150,7 +153,9 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
             bot.scenarioActAt = now;
         }
     }
-    else if(leader && !talk.InScene() && leader.area == WO_CurrentAreaCode() && VecDistance(leader.pos, thePlayer.GetWorldPosition()) > 15
+    // following the leader: never while this game joins a scene (a move then broke its own quest's start
+    // of the nightmare)
+    else if(leader && !talk.InScene() && !talk.IsSyncing() && leader.area == WO_CurrentAreaCode() && VecDistance(leader.pos, thePlayer.GetWorldPosition()) > 15
         && (leader.pos.X != 0 || leader.pos.Y != 0))
     {
         spot = leader.pos;
@@ -158,9 +163,13 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
         rot.Yaw = thePlayer.GetHeading();
         thePlayer.TeleportWithRotation(spot, rot);
     }
-    if(now < W3T_BossTime()) { return false; }
+    // done early (the owner: runs too slow): free training once the wake-up scene is over here, the
+    // tutorial after 10 samples (20 s) of Vesemir sparring; at the latest at the scenario's time
+    if(tutorial) { done = bot.scenarioValue >= 10; }
+    else { done = !talk.InScene() && StrFindFirst(talk.GetScenePath(), "q001_5_wake_up") >= 0; }
+    if(!done && now < W3T_BossTime()) { return false; }
     W3T_Log("PRO " + side + " end duplicates=" + bot.scenarioCount + " sword=" + bot.scenarioFlag + " vesemirHostileSamples=" + bot.scenarioValue
         + " vesemirSyncedWhileHostile=" + bot.scenarioStep + " holds=" + talk.holds + " holdTimeouts=" + talk.holdTimeouts
         + " votes=" + talk.votesSent + " decisions=" + talk.picksSent + " applied=" + talk.picksApplied + " ties=" + talk.ties);
-    return bot.scenarioCount == 0 && bot.scenarioFlag && bot.scenarioStep == 0;
+    return bot.scenarioCount == 0 && bot.scenarioFlag && bot.scenarioStep == 0 && talk.holdTimeouts == 0 && done;
 }
