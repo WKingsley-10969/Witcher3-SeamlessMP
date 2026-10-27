@@ -73,7 +73,7 @@ try {
     Write-Host 'Launching Witcher 3 with the LAN mod and a separate co-op save/settings profile.'
     if (-not $joinsHostSave) { Write-Host 'Load matching saves in the same region. In game, interact with the host character and join its party.' }
     $game = [Diagnostics.Process]::Start($info)
-    $game.WaitForExit()
+    Wait-W3LanGame -Game $game -Server $server
     if ($sendLogs) {
         # this session's logs (and any the background upload did not deliver) to the host
         $line = Send-W3LanSessionLogs -Address $Address -Port ($Port + 1) -PlayerName $PlayerName -Documents $info.EnvironmentVariables['W3LAN_DOCUMENTS'] -GameDir $GameDir -Background $logUpload

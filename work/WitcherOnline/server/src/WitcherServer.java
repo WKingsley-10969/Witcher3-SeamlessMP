@@ -67,6 +67,8 @@ public class WitcherServer
 
     private static final AtomicInteger nextPlayerId = new AtomicInteger(1);
     private static SeamlessCampaign campaign;
+    // per-player connection health for the "status" command and the periodic summary
+    private static final ConnectionStats connectionStats = new ConnectionStats();
 
     public static void main(String[] args) throws Exception
     {
@@ -84,6 +86,7 @@ public class WitcherServer
                     booleanOption(args, "--campaign-voting", true), booleanOption(args, "--campaign-shared-xp", true));
         }
         whitelistEnabled.set(readBoolean(serverProperties, "whitelist", false));
+        connectionStats.configure(serverProperties);
 
         loadBannedIps();
         loadWhitelistIps();
@@ -506,6 +509,7 @@ public class WitcherServer
                     continue;
                 }
 
+                connectionStats.packetIn(sender, System.nanoTime());
                 handleMessage(socket, sender, msg);
             }
             catch (SocketException e)
@@ -763,6 +767,7 @@ public class WitcherServer
         }
 
         List<String> frozenFields = Collections.unmodifiableList(fields);
+        connectionStats.sequence(sender, opcode, frozenFields, now);
 
         if ("MOVE".equals(opcode))
         {
@@ -850,6 +855,9 @@ public class WitcherServer
                         }
                     }
                 }
+
+                String summary = connectionStats.tick(players.values(), now);
+                if (summary != null) dbg("%s\n", summary);
 
                 Thread.sleep(1000);
             }
@@ -967,6 +975,7 @@ public class WitcherServer
                 );
                 socket.send(packet);
                 sent++;
+                connectionStats.packetOut(client, System.nanoTime());
             }
             catch (Exception e)
             {
@@ -1053,6 +1062,16 @@ public class WitcherServer
                         secsSinceSeen);
             }
 
+            dbgNotime("\n");
+            return;
+        }
+
+        if (line.equals("status"))
+        {
+            for (String statusLine : connectionStats.statusLines(players.values(), System.nanoTime()))
+            {
+                dbg("%s\n", statusLine);
+            }
             dbgNotime("\n");
             return;
         }
@@ -1246,6 +1265,7 @@ public class WitcherServer
             dbg("whitelist on|off|<ip>     - toggle whitelist or add IP to whitelist\n");
             dbg("whitelist remove <ip>     - remove IP from whitelist\n");
             dbg("list                      - list connected players\n");
+            dbg("status                    - each player's connection: address, last packet, packets/s, loss\n");
             dbg("stats                     - show broadcast/server health counters\n");
             dbg("about                     - info about Witcher Online\n");
             dbg("stop                      - stop server\n");
@@ -1347,6 +1367,7 @@ public class WitcherServer
         byte[] data = text.getBytes(StandardCharsets.UTF_8);
         DatagramPacket packet = new DatagramPacket(data, data.length, client.address, client.port);
         socket.send(packet);
+        connectionStats.packetOut(client, System.nanoTime());
         logSize(packetSizes.record("out", PacketSizes.typeOf(text), data.length, 1, client.toString()));
     }
 
