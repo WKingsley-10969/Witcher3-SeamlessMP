@@ -1,4 +1,20 @@
-# Verification — v0.4.3-alpha, 27 October 2026
+# Verification — v0.4.4-alpha, 27 October 2026
+
+This alpha contains PR #61: a PC whose own quest does not start the other PC's scene plays it itself. All runs: two game processes on one PC, Custom Player Characters installed in the shared test game, the co-op quest runner of PR #38 (not merged) from a co-op save in the White Orchard inn.
+
+- **Before the fix** (`20261027-161356` host leading, `20261027-163247` second PC leading):
+  - Every objective change reached the other PC within 60 s (11 and 10).
+  - 8 of 10 scenes played on both PCs. The other PC's votes all matched (20 and 21), and the fights showed no differences.
+  - The scholar's scene (`q001_7c_academic_about_yenn`) and a Nilfgaardian guard's (`q002_01_a_nilfgaardian_guard`) never reached the other PC, in either direction. The scenes' characters were there and visible, and stepping out and back in or walking in did not start them.
+- **Probe** (`scene_play`): starting the scholar's scene from script with its default input `Input` played the real scene, with the same first line as on the leader. A wrong input or none started nothing.
+- **With the fix** (`20261027-172309`, host leading): the scholar's scene played on the second PC; it played it itself 2 s after joining. The guard's scene was declined as too far: the test bot teleported 500 m and the scene started 1 s after it arrived. That is a test artifact, and the bot now travels in two steps, but the retest has not run yet.
+- **Not tested:**
+  - the second PC leading with the fix;
+  - a scene without an `Input` entry point;
+  - side effects of a scene that plays on both PCs, such as items or counters.
+- **Known limit:** the other PC's own quest is not moved to that step, so later scenes of a drifted quest may also need to be played this way.
+
+## Verification — v0.4.3-alpha, 27 October 2026
 
 This alpha contains PR #56 (the nightmare on the second PC), #58 (choices stay up when voting) and #59 (the lobby and a save that needs a missing DLC); #57 changes only the test bots. All runs: two game processes on one PC, with Custom Player Characters installed in the shared test game.
 
