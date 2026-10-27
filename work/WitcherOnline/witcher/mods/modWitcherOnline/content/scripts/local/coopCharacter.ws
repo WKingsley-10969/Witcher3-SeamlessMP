@@ -32,6 +32,7 @@
 //   cpc;<ENR_PlayerType>;<head>                with Custom Player Characters (nikich340) installed:
 //   cpcslot;<ENR_AppearanceSlots>;<template>   the character type and look; switched to before the
 //   cpcitem;<index>;<template>                 rest is restored. The first time, its creator opens.
+//   cpcspeech;<0 auto, 1 female, 2 never>      its "Use female speech" setting (nr_speech_manual_control)
 import function WO_CharacterStore(text : string) : bool;
 import function WO_CharacterLoad() : string;
 import function WO_ToName(text : string) : name;
@@ -182,6 +183,8 @@ class r_CoopCharacter
             Record("FRESH no character for " + Session().HostName() + " yet: starting from the host's Geralt");
             theGame.GetGuiManager().ShowNotification("Your co-op character starts as a copy of " + Session().HostName() + "'s Geralt.");
             creatorDue = CpcInstalled();
+            // not the host's "Use female speech" (it is in the host's save): Auto, for the copy of its Geralt
+            if(CpcInstalled()) { ApplyCpcSpeech(""); }
             ready = true;
             Store();
             return;
@@ -208,7 +211,7 @@ class r_CoopCharacter
             theGame.GetGuiManager().ShowNotification("Your co-op character could not be read: playing the host's Geralt this time.");
             return;
         }
-        if(CpcInstalled()) { ApplyCpcLook(text); }
+        if(CpcInstalled()) { ApplyCpcLook(text); ApplyCpcSpeech(text); }
         ready = true;
         Store();
     }
@@ -244,7 +247,7 @@ class r_CoopCharacter
         head = "";
         if(type < heads.Size()) { head = NameToString(heads[type]); }
         if(!CoopSafeField(head)) { head = ""; }
-        text = "|cpc;" + type + ";" + head;
+        text = "|cpc;" + type + ";" + head + "|cpcspeech;" + FactsQuerySum("nr_speech_manual_control");
         if(type >= pm.m_appearanceTemplates.Size()) { return text; }
         for(slot = (int)ENR_RSlotHair; slot <= (int)ENR_RSlotMisc && slot < pm.m_appearanceTemplates[type].Size(); slot += 1)
         {
@@ -255,6 +258,26 @@ class r_CoopCharacter
             if(pm.m_appearanceItems[type][i] != "" && CoopSafeField(pm.m_appearanceItems[type][i])) { text += "|cpcitem;" + i + ";" + pm.m_appearanceItems[type][i]; }
         }
         return text;
+    }
+
+    // The record's "Use female speech" setting (Auto for a record without one), and the voice it gives the
+    // current character: the host's save carries the host's setting and voice, which are not synced (the
+    // owner's playtest: the host's "always female" muted the second PC's Geralt, who spoke female lines).
+    private function ApplyCpcSpeech(text : string)
+    {
+        var lines, f : array<string>;
+        var speech, i : int;
+        speech = 0;
+        lines = CoopSplit(text, "|");
+        for(i = 0; i < lines.Size(); i += 1)
+        {
+            f = CoopSplit(lines[i], ";");
+            if(f.Size() == 2 && f[0] == "cpcspeech") { speech = StringToInt(f[1], 0); }
+        }
+        FactsRemove("nr_speech_manual_control");
+        if(speech > 0) { FactsAdd("nr_speech_manual_control", speech); }
+        NR_GetPlayerManager().UpdateSpeechSwitchFacts();
+        Record("CPC_SPEECH setting " + speech + ": female lines " + FactsQuerySum("nr_speech_switch"));
     }
 
     // The record's look on the current character (its type switched to already).
