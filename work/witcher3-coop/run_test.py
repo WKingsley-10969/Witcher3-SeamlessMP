@@ -28,7 +28,7 @@ GAME_ARGS = os.environ.get("W3T_GAME_ARGS", "-windowed -width 640 -height 360 -d
 # scenarios where the leader waits for the member to load and join before acting
 LONG_SCENARIOS = ("shared_enemy", "enemy_attacks", "handoff", "reactions", "twin_match", "quest_sync", "dialog_sync",
                   "facts_sync", "puppet_follow", "puppet_walk", "puppet_glide", "enemy_moves", "real_encounter",
-                  "enemy_projectiles", "member_combat", "sign_visuals", "showcase", "attack_view", "corpse_loot", "monster_survey", "monster_flight", "monster_states", "monster_objects")
+                  "enemy_projectiles", "member_combat", "sign_visuals", "showcase", "attack_view", "corpse_loot", "monster_survey", "monster_flight", "monster_states", "monster_objects", "attack_objects", "boss_fight", "prologue_coop")
 
 
 def default_duration(scenario):
@@ -99,6 +99,27 @@ def relay_dir(run_dir, name):
     shutil.copy2(os.path.join(RELAY_BUILD, "w3relay.exe"), d)
     shutil.copy2(os.path.join(os.path.dirname(EXE), "steam_api64.dll"), d)
     return d
+
+
+NET_SIM = os.path.join(os.path.dirname(os.path.abspath(__file__)), "net_sim.py")
+NET_OPTIONS = ("delay", "jitter", "loss", "reorder", "duplicate")
+
+
+def start_net_sim(run_dir, a):
+    """net_sim.py between the routed bots and the server: internet-like UDP on the game port, a plain TCP
+    pass-through on port + 1 (the save download and lobby). Returns (process, the port the bots use)."""
+    port = a.port + 200
+    command = [sys.executable, "-I", NET_SIM, "--listen", f"127.0.0.1:{port}", "--server", f"127.0.0.1:{a.port}",
+               "--tcp-listen", f"127.0.0.1:{port + 1}", "--tcp-server", f"127.0.0.1:{a.port + 1}",
+               "--seed", a.net_seed, "--parent-pid", str(os.getpid())]
+    for name in NET_OPTIONS:
+        command += [f"--{name}", getattr(a, "net_" + name) or "0"]
+    proc = subprocess.Popen(command, stdout=open(os.path.join(run_dir, "net-sim.log"), "w"), stderr=subprocess.STDOUT,
+                            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+    time.sleep(1)
+    if proc.poll() is not None:
+        raise RuntimeError("net_sim.py did not start; see net-sim.log")
+    return proc, port
 
 
 def wait_log(path, pattern, limit):
@@ -286,9 +307,19 @@ def main():
     ap.add_argument("--record-from", default="", help="start filming when this text appears in the first bot's log")
     ap.add_argument("--steam-box", help="real Steam: the host relay uses this PC's Steam, joiner relays run in this "
                                         "Sandboxie box, whose Steam is logged in to a second account")
+    # internet-like conditions (net_sim.py): values in ms / percent, one for both directions or UP/DOWN
+    for name, unit in zip(NET_OPTIONS, ("one-way ms", "+- ms", "%", "%", "%")):
+        ap.add_argument(f"--net-{name}", default=os.environ.get(f"W3T_NET_{name.upper()}") or None,
+                        help=f"route bots through net_sim.py with this {name} ({unit}; W3T_NET_{name.upper()})")
+    ap.add_argument("--net-who", choices=("member", "all"), default=os.environ.get("W3T_NET_WHO") or "member",
+                    help="bots routed through net_sim.py: the members, as a second PC (default), or all, the leader too")
+    ap.add_argument("--net-seed", default=os.environ.get("W3T_NET_SEED") or "1")
     a = ap.parse_args()
     if a.steam_box:
         a.relay = True
+    net = any(getattr(a, "net_" + name) is not None for name in NET_OPTIONS)
+    if net and a.relay:
+        ap.error("--net-* and --relay/--steam-box don't go together")
     game_args = list(GAME_ARGS)
     if a.size:
         os.environ["W3T_RESOLUTION"] = a.size  # sandbox.py writes it into the settings
@@ -301,10 +332,16 @@ def main():
 
     run_dir = os.path.join(RUNS, time.strftime("%Y%m%d-%H%M%S") + "-" + (f"session{len(session)}" if session else a.scenario)
                            + ("-steam" if a.steam_box else "-relay" if a.relay else "")
+                           + ("-net" + "".join(f"-{n[0]}{getattr(a, 'net_' + n).replace('/', '_')}" for n in NET_OPTIONS
+                                               if getattr(a, "net_" + n)) if net else "")
                            + ("-" + re.sub(r"\.w2ent$", "", a.monster.split("\\")[-1]) if a.monster else ""))
     os.makedirs(run_dir)
     print(f"run dir: {run_dir}", flush=True)
 
+    net_sim, net_port = start_net_sim(run_dir, a) if net else (None, None)
+    if net_sim:
+        print(f"net_sim.py on port {net_port} for {'every bot' if a.net_who == 'all' else 'the members'}; "
+              f"log net-sim.log", flush=True)
     server_log = open(os.path.join(run_dir, "server.log"), "w")
     server_command = ["java", "-jar", SERVER_JAR, str(a.port)]
     if a.scenario.startswith("lobby_"):
@@ -365,6 +402,17 @@ def main():
                 other = sorted(f for f in os.listdir(stale_saves) if f.endswith(".sav") and f != host_save)[0]
                 shutil.copy2(os.path.join(stale_saves, other), os.path.join(docs, "The Witcher 3", "gamesaves", host_save))
                 print(f"[{time.time() - t0:6.1f}s] {bot_name(i)} has {other} as a stale {host_save}", flush=True)
+            if a.scenario == "lobby_rejoin" and i > 0 and host_save:
+                # as in the owner's playtest: the second PC's folder already holds saves of its own (the
+                # launcher seeds the profile with them), and the host's save has its .json
+                owner_saves = os.path.join(OWNER_W3_DOCS, "gamesaves")
+                host_base = os.path.splitext(host_save)[0]
+                seeded = 0
+                for f in sorted(os.listdir(owner_saves)):
+                    if f.endswith((".sav", ".png", ".json")) and os.path.splitext(f)[0] != host_base:
+                        shutil.copy2(os.path.join(owner_saves, f), os.path.join(docs, "The Witcher 3", "gamesaves", f))
+                        seeded += f.endswith(".sav")
+                print(f"[{time.time() - t0:6.1f}s] {bot_name(i)} starts with {seeded} saves of its own", flush=True)
             if a.scenario == "character_safety" and i > 0:
                 # a character record for BotA without any gear, as one made outside the host's world
                 records = os.path.join(docs, "The Witcher 3", "coop-characters")
@@ -374,7 +422,8 @@ def main():
             print(f"[{time.time() - t0:6.1f}s] {bot_name(i)} sandbox with save {save}", flush=True)
             env = dict(os.environ, SteamAppId="292030", SteamGameId="292030", W3T_DOCUMENTS=docs,
                        WO_USERNAME=bot_name(i), WO_SERVER_IP="127.0.0.1",
-                       WO_SERVER_PORT=str(a.port + 100 + i if a.relay and i > 0 else a.port),
+                       WO_SERVER_PORT=str(net_port if net_sim and (i > 0 or a.net_who == "all") else
+                                          a.port + 100 + i if a.relay and i > 0 else a.port),
                        W3T_SCENARIO=a.scenario, W3T_DURATION=str(a.duration), W3T_SAVE=a.save,
                        W3T_PEERS=str(a.bots - 1), W3T_ROLE="mover" if i == 0 else "observer",
                        W3T_GRACE=str(a.grace), W3T_MONSTER=a.monster,
@@ -384,7 +433,7 @@ def main():
                 env.update(W3T_SCENARIO="session", W3T_SCENARIOS=",".join(session), W3T_CONTROL=control, W3T_DURATION="100000")
             for key in list(env):
                 if key.upper().startswith(("WO_SC_", "W3LAN_SESSION_")): del env[key]
-            if a.scenario in ("session_join", "player_character", "party_leave", "loot_share", "cpc_character") or a.scenario.startswith("lobby_"):
+            if a.scenario in ("session_join", "player_character", "party_leave", "loot_share", "cpc_character", "prologue_coop") or a.scenario.startswith("lobby_"):
                 # the second PC joins the host's co-op session: its game loads the run's save as the host's
                 if i == 0:
                     env.update(W3LAN_SESSION_ROLE="host")
@@ -503,6 +552,16 @@ def main():
                 r.kill()
         if a.steam_box:
             stop_boxed_relays(run_dir)
+        if net_sim:
+            # Ctrl+Break: it logs its totals and exits
+            net_sim.send_signal(subprocess.signal.CTRL_BREAK_EVENT)
+            try:
+                net_sim.wait(5)
+            except subprocess.TimeoutExpired:
+                net_sim.kill()
+            text = open(os.path.join(run_dir, "net-sim.log"), encoding="utf-8", errors="replace").read()
+            if " totals:" in text:
+                print("--- net-sim: " + " | ".join(text[text.rfind(" totals:"):].strip().splitlines()))
         for name in sorted(os.listdir(run_dir)):
             if name.startswith("relay-"):
                 text = open(os.path.join(run_dir, name, "relay.log"), encoding="utf-8", errors="replace").read()
