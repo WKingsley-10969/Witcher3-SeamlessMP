@@ -274,6 +274,12 @@ class r_CoopAck
 
 class r_CoopEnemies
 {
+    private var fistfightEnding : bool;   // this game ends its fistfight for another PC's: not announced again
+    private var fistfightClearSince : float;
+    private var fistfightSeq : int;       // this game's last fistfight end, by its clock: the server repeats a channel's last message
+    private var fistfightPeers : array<string>;
+    private var fistfightPeerSeqs : array<int>;
+    public var fistfightsEnded : int;     // fistfights ended here because another PC's ended or none was left to fight
     private var loggedRole : int;
     private var loggedStatusAt : float;
     private var epoch : int;    // this game as leader: changes on restart so members drop stale ids
@@ -491,6 +497,7 @@ class r_CoopEnemies
 
         EnsureIds();
         now = theGame.GetEngineTimeAsSeconds();
+        FistfightTick(now);
         RetryFactsBaseline(now);
         LandFallingCopies(now);
         role = GetRole();
@@ -1573,6 +1580,65 @@ class r_CoopEnemies
         {
             OnFacts(sender, count);
         }
+        else if(WO_Str(0) == "ff" && WO_Str(1) == "end" && count >= 3 && CoopSameParty(sender))
+        {
+            OnFistfightEnd(sender, StringToInt(WO_Str(2), 0));
+        }
+    }
+
+    // A fistfight (the brawl outside the White Orchard inn, the fistfight quests) puts each player in the game's
+    // fistfight mode: fists only, no sword, signs, items or inventory, until the quest sees its opponents beaten.
+    // In a party those opponents are one PC's: the other's fight copies of them, so its quest never saw them
+    // beaten and it stayed in fistfight mode for good (the owner's playtest: the second PC fought White
+    // Orchard's dogs with its fists). A PC whose fistfight ends tells the party; the others end theirs.
+    public function OnLocalFistfightEnd()
+    {
+        if(fistfightEnding) { return; }
+        fistfightSeq = theGame.GetLocalTimeAsMilliseconds();   // new on every end, also after a restart
+        WO_Log("coop enemies FISTFIGHT_END here: the party is told (" + fistfightSeq + ")");
+        WO_Send("coop ff end " + fistfightSeq);
+    }
+
+    // Each end acted on once: the server sends a channel's last message again and again.
+    private function OnFistfightEnd(sender : string, seq : int)
+    {
+        var k : int;
+        k = fistfightPeers.FindFirst(sender);
+        if(k < 0)
+        {
+            fistfightPeers.PushBack(sender);
+            fistfightPeerSeqs.PushBack(0);
+            k = fistfightPeers.Size() - 1;
+        }
+        if(seq == fistfightPeerSeqs[k]) { return; }
+        fistfightPeerSeqs[k] = seq;
+        EndFistfightHere("the fistfight of " + sender + " ended");
+    }
+
+    private function EndFistfightHere(why : string)
+    {
+        if(!thePlayer.IsFistFightMinigameEnabled()) { return; }
+        fistfightsEnded += 1;
+        fistfightClearSince = 0;
+        WO_Log("coop enemies FISTFIGHT_RELEASED: " + why);
+        fistfightEnding = true;
+        thePlayer.OnEndFistfightMinigame();
+        fistfightEnding = false;
+    }
+
+    // A member (its opponents are copies of the leader's) in fistfight mode with nobody hostile left within
+    // 30 m for 10 s (the leader's end was missed, or the fight is over there): this fistfight is over. The
+    // leader's own fistfight ends only as its quest ends it.
+    private function FistfightTick(now : float)
+    {
+        if(!thePlayer.IsFistFightMinigameEnabled() || GetRole() != 2 || theGame.IsDialogOrCutscenePlaying()
+            || CoopHostilesNear(30) > 0)
+        {
+            fistfightClearSince = 0;
+            return;
+        }
+        if(fistfightClearSince == 0 || now < fistfightClearSince) { fistfightClearSince = now; return; }
+        if(now - fistfightClearSince > 10.0) { EndFistfightHere("nobody left to fight for 10 s"); }
     }
 
     private function OnSnapshot(sender : string, count : int)
@@ -4113,4 +4179,12 @@ function CoopHostilesNear(range : float) : int
         if(npc && npc.GetAttitude(thePlayer) == AIA_Hostile) { n += 1; }
     }
     return n;
+}
+
+// The player's fistfight ended (its quest saw the opponents beaten, or the co-op sync ended it): the party is told.
+@wrapMethod(CR4Player)
+function OnEndFistfightMinigame()
+{
+    wrappedMethod();
+    theGame.r_getMultiplayerClient().getCoopEnemies().OnLocalFistfightEnd();
 }
