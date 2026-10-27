@@ -91,6 +91,7 @@ through Steam's library folders. You can override paths with `W3_GAME_DIR`, `W3C
 | Command | What it does |
 |---|---|
 | `python relay\selftest.py` | Two relays and a mock Steam, no game. Checks traffic in both directions, a client that arrives late, and that a non-member can't reach the server. |
+| `python -I net_sim_test.py` | The network simulator without the game: delay, jitter, loss, order, duplication, reordering, seeding, several clients, the TCP pass-through. With `NET_SIM_SERVER_JAR` and `NET_SIM_JAVA` set, also a real server with a member through the simulator. |
 | `./compile.sh <tag>` (Git Bash) | Deploys the port and the test bot into the game folder and runs only the game's script compiler. |
 | `python run_test.py see_each_other` | Starts a local server and two games driven by the bot. They must spawn each other. |
 | `python run_test.py movement [--relay]` | One bot walks while the other checks that its copy follows. `--relay` sends the second bot through w3relay over mock Steam. |
@@ -129,6 +130,15 @@ so tests never write your saves or settings. The bot also:
 - lets two copies start at once and keeps both running unfocused;
 - skips the intro movies, answers start-up dialogs and loads the save.
 
+Internet-like conditions: `--net-delay MS --net-jitter MS --net-loss PCT` (also `--net-reorder PCT`,
+`--net-duplicate PCT`, `--net-seed N`, or the same as `W3T_NET_DELAY` and so on) start [net_sim.py](net_sim.py) on the
+game port + 200 and send the members (BotB and any later bot, each like a second PC) through it; the leader stays direct, as the host
+plays on the PC that runs the server. `--net-who all` routes the leader too. Delay is one way and applies to each
+direction, so `--net-delay 80` gives a round trip of about 160 ms; a value can be `UP/DOWN` (up = to the server).
+Jitter keeps datagrams in order; `--net-reorder` reorders. The save download and lobby (TCP, game port + 1) pass
+through without impairment. The simulator's log, with its counters every 30 s and at the end, is `net-sim.log` in
+the run folder, and the run folder's name ends in `-net-d80-j20-l2` and the like. Not with `--relay`/`--steam-box`.
+
 Both games load at once (`--serial` loads one after the other, as before). Two copies of the game still need a fair
 amount of GPU memory: about 10.6 GB of 12 GB here, loading at once or not.
 
@@ -141,6 +151,7 @@ amount of GPU memory: about 10.6 GB of 12 GB here, loading at once or not.
 | `package/` | Package builder, `Host co-op.cmd`, `Join co-op.cmd`, player README |
 | `w3test/` | The test bot: ASI (test-mode hooks, env natives) and script mod (scenarios) |
 | `run_test.py`, `w3run.py`, `sandbox.py`, `preset_expand.py`, `deploy.py`, `compile.sh` | Harness |
+| `net_sim.py`, `net_sim_test.py` | Network simulator (delay, jitter, loss) between the second PC's game and the server, and its tests |
 | `ws_*_check.py`, `wnb_static_check.py`, `port_edits/`, `exe_strings.py`, `pe_imports.py` | Static checks and scripted edits used during the port |
 | `docs/` | Design notes |
 

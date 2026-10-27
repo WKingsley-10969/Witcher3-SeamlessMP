@@ -97,6 +97,31 @@ try {
         Assert $result.Reachable 'No compatible server reply.'
         Assert ($result.Reply -ceq "ERROR`tINVALID_USERNAME") 'Wrong probe response.'
     }
+    Check 'typed console lines reach the host server; stop stays with the launcher' {
+        $line = [Text.StringBuilder]::new()
+        $typed = @()
+        foreach ($c in 'statx'.ToCharArray()) { $typed += Add-W3LanConsoleKey -Line $line -Key ([ConsoleKeyInfo]::new($c, [ConsoleKey]::A, $false, $false, $false)) }
+        $typed += Add-W3LanConsoleKey -Line $line -Key ([ConsoleKeyInfo]::new([char]8, [ConsoleKey]::Backspace, $false, $false, $false))
+        foreach ($c in 'us'.ToCharArray()) { $typed += Add-W3LanConsoleKey -Line $line -Key ([ConsoleKeyInfo]::new($c, [ConsoleKey]::A, $false, $false, $false)) }
+        $command = Add-W3LanConsoleKey -Line $line -Key ([ConsoleKeyInfo]::new([char]13, [ConsoleKey]::Enter, $false, $false, $false))
+        Assert (@($typed | Where-Object { $null -ne $_ }).Count -eq 0) 'A line was sent before Enter.'
+        Assert ($command -ceq 'status') "Typed line was '$command'."
+        $writer = [IO.StringWriter]::new()
+        $fake = [pscustomobject]@{ HasExited = $false; StandardInput = $writer }
+        Assert (Send-W3LanServerCommand -Server $fake -Command ' status ') 'Command not passed on.'
+        Assert (-not (Send-W3LanServerCommand -Server $fake -Command 'STOP')) 'stop was passed on.'
+        Assert (-not (Send-W3LanServerCommand -Server $fake -Command '  ')) 'An empty line was passed on.'
+        Assert ($writer.ToString() -ceq "status$([Environment]::NewLine)") "Server got '$($writer.ToString())'."
+        Assert (Send-W3LanServerCommand -Server $server -Command 'status') 'Real server did not take the command.'
+        Assert (Send-W3LanServerCommand -Server $server -Command 'help') 'Real server did not take help.'
+        Assert (-not $server.HasExited) 'Server stopped after status.'
+        Assert ((Test-W3LanEndpoint -Address 127.0.0.1 -Port $port).Reachable) 'Server stopped answering after status.'
+        $stand = [Diagnostics.Process]::Start('cmd.exe', '/c ping -n 2 127.0.0.1 >nul & exit 3')
+        try {
+            Wait-W3LanGame -Game $stand -Server $server
+            Assert ($stand.HasExited -and $stand.ExitCode -eq 3) 'Waiting for the game did not end with it.'
+        } finally { if (-not $stand.HasExited) { $stand.Kill() }; $stand.Dispose() }
+    }
     Check 'occupied port is rejected without stopping the first server' {
         Throws { Start-W3LanServer -JarPath $jar -JavaPath $java -Port $port }
         Assert (-not $server.HasExited) 'Existing server was stopped.'
