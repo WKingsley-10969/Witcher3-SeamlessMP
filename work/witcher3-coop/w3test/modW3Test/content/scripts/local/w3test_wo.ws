@@ -392,6 +392,26 @@ function W3T_ScenarioCheck(bot : W3T_Bot) : bool
         return W3T_SharedEnemyMember(bot, client, client.getCoopEnemies(), players[0]);
     }
 
+    if(scenario == "quest_run")
+    {
+        if(W3T_GetEnv("W3T_ROLE") == "mover")
+        {
+            return W3T_RunLeader(bot, client);
+        }
+        // the second PC idles (the leader plays alone), skipping through any scene its own save starts
+        if(theGame.IsDialogOrCutscenePlaying() && theGame.GetStorySceneSystem().IsSkippingLineAllowed() && bot.ElapsedS() - bot.scenarioActAt >= 0.5)
+        {
+            bot.scenarioActAt = bot.ElapsedS();
+            theGame.GetStorySceneSystem().SendSignal(SSST_Skip, 0);
+        }
+        if(client.hasActiveDialogChoices() && client.getCoopTalk().ChoicesAge() > 1)
+        {
+            W3T_DialogModule().OnDialogOptionSelected(0);
+            W3T_DialogModule().OnDialogOptionAccepted(0);
+        }
+        return bot.ElapsedS() > W3T_RunTime() + 60;
+    }
+
     if(scenario == "attack_objects")
     {
         if(W3T_GetEnv("W3T_ROLE") == "mover")
@@ -404,6 +424,7 @@ function W3T_ScenarioCheck(bot : W3T_Bot) : bool
         }
         return W3T_AttackObjectsMember(bot, client, players[0]);
     }
+
     if(scenario == "boss_fight")
     {
         if(W3T_GetEnv("W3T_ROLE") == "mover")

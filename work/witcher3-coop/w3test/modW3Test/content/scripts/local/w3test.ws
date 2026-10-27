@@ -144,6 +144,12 @@ function OnConfigUI()
         W3T_Log("MENU open " + NameToString(GetMenuName()));
         // pause_menu: the pause menu pauses the game, and with it the bot that checks it stays open; the
         // world runs on here (as the co-op features do every frame) so the check can be made
+        // quest_run: the bot cannot play gwent; a game a conversation started anyway is left at its deck builder
+        if((GetMenuName() == 'DeckBuilder' || GetMenuName() == 'GwintGame') && W3T_GetEnv("W3T_SCENARIO") == "quest_run")
+        {
+            W3T_Log("MENU gwent -> close (the bot cannot play it)");
+            CloseMenu();
+        }
         if(GetMenuName() == 'IngameMenu' && W3T_GetEnv("W3T_SCENARIO") == "pause_menu")
         {
             theGame.Unpause('IngameMenu');
@@ -250,6 +256,14 @@ function OnConfigUI()
     var i : int;
 
     wrappedMethod();
+
+    // W3T_TUTORIALS=off: the game's tutorials off before a save loads, so the prologue's quest takes its
+    // branch without them (its tutorial branch waits for button presses a bot never makes)
+    if(W3T_Active() && W3T_GetEnv("W3T_TUTORIALS") == "off" && theGame.GetInGameConfigWrapper().GetVarValue('Gameplay', 'HudTutorialEnabled') != "false")
+    {
+        theGame.GetInGameConfigWrapper().SetVarValue('Gameplay', 'HudTutorialEnabled', "false");
+        W3T_Log("MENU tutorials off");
+    }
 
     if(!W3T_Active() || !theGame.W3T_ClaimLoad())
     {
@@ -364,6 +378,15 @@ statemachine class W3T_Bot
     public var surveyStartZ : array<float>;    // ... and the height it appeared at
     public var surveyCopies : array<CEntity>;  // ... and those copies
     public var bossScene : string;             // boss_fight: the scene last logged
+    public var bossTalkAt : float;                    // boss_fight: when the leader last talked to W3T_BOSS_NEAR
+    public var runEntities : array<CEntity>;   // quest_run: what it talked to or examined
+    public var runTimes : array<float>;        // ... and when it last did
+    public var runPickKeys : array<string>;    // ... the menus it chose in (scene and choice count)
+    public var runPicks : array<int>;          // ... and how often: it takes the next choice each time
+    public var runObjective : int;             // ... which of the objectives with a pin it goes to
+    public var runIdle : int;                  // ... and how many ticks it found nothing to do there
+    public var runTrailTime : float;                  // ... and when it last stepped along a trail of clues
+    public var runChoices : string;                  // ... and the last choice list it saw, with the game's flags
     public var scenarioActAt : float;    // when it last moved
     public var scenarioSeenAt : float;   // when it last saw an enemy
     public var scenarioFarSince : float; // since when its target has been out of reach

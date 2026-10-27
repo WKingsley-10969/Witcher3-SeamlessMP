@@ -57,19 +57,24 @@ function W3T_BossHostiles() : array<CNewNPC>
     return list;
 }
 
-// The character of W3T_BOSS_NEAR (a voice tag) within 300 m, or NULL.
-function W3T_BossCharacter() : CNewNPC
+// The character of W3T_BOSS_NEAR (a voice tag) within 300 m nearest to "around" (there may be two: White Orchard's
+// Vesemir at the inn and the quest's one at the field of W3T_BOSS_AT), or NULL.
+function W3T_BossCharacter(around : Vector) : CNewNPC
 {
     var actors : array<CActor>;
-    var npc : CNewNPC;
+    var npc, found : CNewNPC;
     var i : int;
     actors = thePlayer.GetNPCsAndPlayersInRange(300, 500, '', FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
     for(i = 0; i < actors.Size(); i += 1)
     {
         npc = (CNewNPC)actors[i];
-        if(npc && !npc.HasTag('MPEntity') && !npc.HasTag('w3coop_npc_copy') && NpcVoice(npc) == W3T_GetEnv("W3T_BOSS_NEAR")) { return npc; }
+        if(npc && !npc.HasTag('MPEntity') && !npc.HasTag('w3coop_npc_copy') && NpcVoice(npc) == W3T_GetEnv("W3T_BOSS_NEAR")
+            && (!found || VecDistance(npc.GetWorldPosition(), around) < VecDistance(found.GetWorldPosition(), around)))
+        {
+            found = npc;
+        }
     }
-    return NULL;
+    return found;
 }
 
 function W3T_BossNearest(list : array<CNewNPC>) : CNewNPC
@@ -179,7 +184,8 @@ function W3T_BossLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
         if(coop.GetRole() != 1) { return false; }
         thePlayer.SetImmortalityMode(AIM_Invulnerable, AIC_Cheat, true);
         at = W3T_BossPos();
-        character = W3T_BossCharacter();
+        // with W3T_BOSS_AT the character is looked for there, once it is loaded (below)
+        if(at.X == 0 && at.Y == 0) { character = W3T_BossCharacter(thePlayer.GetWorldPosition()); }
         if(character)
         {
             at = character.GetWorldPosition() + VecFromHeading(character.GetHeading()) * 2.0;
@@ -204,23 +210,41 @@ function W3T_BossLeader(bot : W3T_Bot, client : r_MultiplayerClient) : bool
         return false;
     }
     W3T_BossQuestAndScene(bot, client, "leader");
-    // the character starts the quest's scene when talked to (three tries, 10 s apart)
+    // at W3T_BOSS_AT, 5 s after arriving (the field's Vesemir is only loaded near it): its W3T_BOSS_NEAR character
+    if(!bot.scenarioEntity && W3T_GetEnv("W3T_BOSS_NEAR") != "" && now - bot.scenarioTime > 5 && bot.scenarioCount == 0)
+    {
+        character = W3T_BossCharacter(thePlayer.GetWorldPosition());
+        if(character)
+        {
+            bot.scenarioEntity = character;
+            spot = character.GetWorldPosition() + VecFromHeading(character.GetHeading()) * 2.0;
+            theGame.GetWorld().NavigationFindSafeSpot(spot, 0.5, 4.0, spot);
+            rot.Yaw = VecHeading(character.GetWorldPosition() - spot);
+            thePlayer.TeleportWithRotation(spot, rot);
+            W3T_Log("BOSS leader goes to " + W3T_GetEnv("W3T_BOSS_NEAR") + " at " + W3T_VecStr(character.GetWorldPosition()));
+            bot.scenarioTime = now - 3;
+        }
+    }
+    hostiles = W3T_BossHostiles();
+    // the character starts the quest's scene when talked to: again 10 s after each scene while no enemy has come
+    // (White Orchard's trap takes two talks to Vesemir), at most three times
     character = (CNewNPC)bot.scenarioEntity;
-    if(character && bot.scenarioCount < 3 && !client.getCoopTalk().InScene() && now - bot.scenarioTime > 3 + 10 * bot.scenarioCount)
+    if(client.getCoopTalk().InScene()) { bot.bossTalkAt = now; }
+    if(character && bot.scenarioCount < 3 && hostiles.Size() == 0 && !client.getCoopTalk().InScene() && now - bot.scenarioTime > 3
+        && now - bot.bossTalkAt > 10)
     {
         W3T_Log("BOSS leader talks to " + W3T_GetEnv("W3T_BOSS_NEAR") + " (try " + (bot.scenarioCount + 1) + ")");
         W3T_LookAt(character.GetWorldPosition());
         character.OnInteraction("Talk", thePlayer);
         bot.scenarioCount += 1;
+        bot.bossTalkAt = now;
     }
-    if(client.getCoopTalk().InScene()) { bot.scenarioCount = 3; }
     if(client.hasActiveDialogChoices() && client.getCoopTalk().ChoicesAge() > 2)
     {
         W3T_Log("BOSS leader takes choice 0 of " + client.getCoopTalk().LastChoiceCount());
         W3T_DialogModule().OnDialogOptionSelected(0);
         W3T_DialogModule().OnDialogOptionAccepted(0);
     }
-    hostiles = W3T_BossHostiles();
     // the fight's first seconds are left to the quest (its scene, its enemies coming) and the second PC joining
     if(now - bot.scenarioTime > 25 && now - bot.scenarioActAt >= 3 && !client.getCoopTalk().InScene())
     {
