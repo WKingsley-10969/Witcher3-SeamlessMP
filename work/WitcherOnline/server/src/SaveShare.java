@@ -16,11 +16,12 @@ import java.util.stream.Stream;
  *
  * GET /session                 "host=NAME\nsave=BASENAME\nsize=BYTES\nmodified=EPOCHMS\n" for the
  *                              newest .sav (save= empty when there is none)
- * GET /session/save/FILE       a .sav or .png file of that directory, by plain file name
+ * GET /session/save/FILE       a .sav, .png or .json file of that directory, by plain file name (the game
+ *                              writes a .json of metadata beside each save it makes)
  */
 public final class SaveShare
 {
-    private static final Pattern FILE_NAME = Pattern.compile("[A-Za-z0-9_.-]{1,120}\\.(sav|png)");
+    private static final Pattern FILE_NAME = Pattern.compile("[A-Za-z0-9_.-]{1,120}\\.(sav|png|json)");
 
     private final Path directory;
     private final String hostName;
@@ -43,6 +44,12 @@ public final class SaveShare
         server.setExecutor(null);
         server.start();
         return share;
+    }
+
+    // the HTTP server, for the log inbox (LogInbox) on the same port
+    HttpServer httpServer()
+    {
+        return server;
     }
 
     public int port()

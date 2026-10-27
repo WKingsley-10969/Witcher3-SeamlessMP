@@ -212,13 +212,15 @@ function Get-W3LanPlayerSettingsPath {
 
 function Get-W3LanPlayerSettings {
     param([string]$Path = (Get-W3LanPlayerSettingsPath))
-    $values = @{ HostName = ''; JoinName = ''; HostAddress = '' }
+    # SendLogs: false stops the join launcher sending this PC's co-op logs to the host
+    $values = @{ HostName = ''; JoinName = ''; HostAddress = ''; SendLogs = $true }
     if ($Path -and (Test-Path -LiteralPath $Path -PathType Leaf)) {
         try {
             $stored = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
             foreach ($key in @('HostName', 'JoinName', 'HostAddress')) {
                 if ($stored.PSObject.Properties.Name -contains $key) { $values[$key] = [string]$stored.$key }
             }
+            if ($stored.PSObject.Properties.Name -contains 'SendLogs') { $values['SendLogs'] = [string]$stored.SendLogs -notin @('False', 'false', '0', 'no', 'off') }
         } catch {
             Write-Warning "Ignoring unreadable $Path"
         }
@@ -246,4 +248,193 @@ function Read-W3LanValue {
     }
 }
 
-Export-ModuleMember -Function Assert-W3LanName, Resolve-W3LanAddress, Get-W3LanAddresses, Find-W3LanJava, Test-W3LanEndpoint, Start-W3LanServer, Stop-W3LanServer, New-W3LanClientEnvironment, Copy-W3LanSessionSave, Get-W3LanPlayerSettingsPath, Get-W3LanPlayerSettings, Set-W3LanPlayerSettings, Read-W3LanValue
+# Co-op logs of the second PC: the join launcher sends this player's game logs to the host's
+# server (POST /log on TCP Port+1, LogInbox.java), so the host has them without going to the
+# second PC. A log is copied once into <profile>\log-upload\outbox (sent.json keeps the SHA-256 of
+# each log queued, so nothing is sent twice) and leaves the outbox when the host has it.
+$script:W3LanLogMaxBytes = 8MB
+$script:W3LanLogOutboxKeep = 9
+
+# This player's own logs: the profile's native.log and scriptslog.txt, and the mod's log in the game
+# folder (bin\WitcherOnline\WitcherOnline_<name>.log, written by WO_Log). Nothing else is sent.
+function Get-W3LanLogSources {
+    param([Parameter(Mandatory)][string]$Documents, [Parameter(Mandatory)][string]$GameDir, [Parameter(Mandatory)][string]$PlayerName)
+    Assert-W3LanName $PlayerName
+    @(
+        [pscustomobject]@{ Kind = 'native'; Path = (Join-Path $Documents 'native.log') }
+        [pscustomobject]@{ Kind = 'scripts'; Path = (Join-Path $Documents 'The Witcher 3\scriptslog.txt') }
+        [pscustomobject]@{ Kind = 'mod'; Path = (Join-Path $GameDir "bin\WitcherOnline\WitcherOnline_$PlayerName.log") }
+    )
+}
+
+function Get-W3LanLogOutbox {
+    param([Parameter(Mandatory)][string]$Documents)
+    Join-Path $Documents 'log-upload\outbox'
+}
+
+# Whether the join launcher sends the logs: not with -NoLogUpload, nor with "SendLogs": false in
+# player.json.
+function Test-W3LanLogUploadWanted {
+    param([switch]$NoLogUpload, [string]$SettingsPath = (Get-W3LanPlayerSettingsPath))
+    if ($NoLogUpload) { return $false }
+    [bool](Get-W3LanPlayerSettings -Path $SettingsPath)['SendLogs']
+}
+
+# Copies each of this player's logs that changed since it was last queued into the outbox (the last
+# 8 MB of a larger log). Returns how many were queued.
+function Add-W3LanLogsToOutbox {
+    param([Parameter(Mandatory)][string]$Documents, [Parameter(Mandatory)][string]$GameDir, [Parameter(Mandatory)][string]$PlayerName)
+    $box = Join-Path $Documents 'log-upload'
+    $outbox = Get-W3LanLogOutbox $Documents
+    $markerPath = Join-Path $box 'sent.json'
+    $marker = @{}
+    if (Test-Path -LiteralPath $markerPath -PathType Leaf) {
+        try { foreach ($entry in (Get-Content -LiteralPath $markerPath -Raw | ConvertFrom-Json).PSObject.Properties) { $marker[$entry.Name] = [string]$entry.Value } } catch { }
+    }
+    $queued = 0
+    foreach ($source in Get-W3LanLogSources -Documents $Documents -GameDir $GameDir -PlayerName $PlayerName) {
+        $item = Get-Item -LiteralPath $source.Path -Force -ErrorAction SilentlyContinue
+        if (-not $item -or $item.PSIsContainer -or $item.Length -eq 0) { continue }
+        # never follow a link out of the profile or the mod's log folder
+        if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or ((Get-Item -LiteralPath $item.DirectoryName -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { continue }
+        $stream = [IO.File]::Open($item.FullName, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+        try {
+            $start = [Math]::Max([long]0, $stream.Length - $script:W3LanLogMaxBytes)
+            [void]$stream.Seek($start, [IO.SeekOrigin]::Begin)
+            $bytes = [byte[]]::new($stream.Length - $start)
+            $read = 0
+            while ($read -lt $bytes.Length) {
+                $n = $stream.Read($bytes, $read, $bytes.Length - $read)
+                if ($n -le 0) { break }
+                $read += $n
+            }
+            if ($read -lt $bytes.Length) { $bytes = [byte[]]($bytes | Select-Object -First $read) }
+        } finally { $stream.Dispose() }
+        if ($bytes.Length -eq 0) { continue }
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try { $hash = [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace('-', '') } finally { $sha.Dispose() }
+        if ($marker.ContainsKey($source.Kind) -and $marker[$source.Kind] -ceq $hash) { continue }
+        [void][IO.Directory]::CreateDirectory($outbox)
+        $target = Join-Path $outbox ($item.LastWriteTime.ToString('yyyyMMdd-HHmmss') + '-' + $source.Kind + '.log')
+        [IO.File]::WriteAllBytes($target, $bytes)
+        $marker[$source.Kind] = $hash
+        $queued++
+    }
+    if ($queued) {
+        $marker | ConvertTo-Json | Set-Content -LiteralPath $markerPath -Encoding utf8
+        # a host that never takes them: keep only the newest few
+        Get-ChildItem -LiteralPath $outbox -Filter '*.log' -File | Sort-Object Name -Descending | Select-Object -Skip $script:W3LanLogOutboxKeep | Remove-Item -Force
+    }
+    $queued
+}
+
+# Sends the outbox to the host, oldest first; a log leaves the outbox once the host has it.
+# Returns Sent, Left (still in the outbox) and Error (why the rest was not sent).
+function Send-W3LanLogOutbox {
+    param(
+        [Parameter(Mandatory)][string]$Address,
+        [ValidateRange(1,65535)][int]$Port = 40001,
+        [Parameter(Mandatory)][string]$PlayerName,
+        [Parameter(Mandatory)][string]$Documents,
+        [ValidateRange(100,60000)][int]$ConnectTimeoutMs = 5000
+    )
+    Assert-W3LanName $PlayerName
+    $ip = Resolve-W3LanAddress $Address
+    $outbox = Get-W3LanLogOutbox $Documents
+    $files = @(Get-ChildItem -LiteralPath $outbox -Filter '*.log' -File -ErrorAction SilentlyContinue | Sort-Object Name)
+    $result = [pscustomobject]@{ Sent = 0; Left = $files.Count; Error = '' }
+    if (-not $files.Count) { return $result }
+    # a missing host fails here, within the connect timeout
+    $tcp = [Net.Sockets.TcpClient]::new([Net.Sockets.AddressFamily]::InterNetwork)
+    try {
+        if (-not $tcp.ConnectAsync($ip, $Port).Wait($ConnectTimeoutMs)) {
+            $result.Error = "the host $ip did not answer on TCP port $Port within $([Math]::Round($ConnectTimeoutMs / 1000.0, 1)) s"
+            return $result
+        }
+    } catch {
+        $result.Error = "the host $ip did not accept a connection on TCP port $Port"
+        return $result
+    } finally { $tcp.Dispose() }
+    foreach ($file in $files) {
+        $session = [IO.Path]::GetFileNameWithoutExtension($file.Name)
+        if ($session -cnotmatch '\A[A-Za-z0-9_-]{1,64}\z' -or $file.Length -eq 0 -or $file.Length -gt $script:W3LanLogMaxBytes) {
+            Remove-Item -LiteralPath $file.FullName -Force
+            $result.Left--
+            continue
+        }
+        $bytes = [IO.File]::ReadAllBytes($file.FullName)
+        $request = [Net.HttpWebRequest]::Create("http://${ip}:$Port/log?name=$PlayerName&session=$session")
+        $request.Method = 'POST'
+        $request.Proxy = $null
+        $request.KeepAlive = $false
+        $request.ServicePoint.Expect100Continue = $false
+        $request.Timeout = 15000
+        $request.ReadWriteTimeout = 30000
+        $request.ContentType = 'text/plain'
+        $request.ContentLength = $bytes.Length
+        try {
+            $body = $request.GetRequestStream()
+            try { $body.Write($bytes, 0, $bytes.Length) } finally { $body.Dispose() }
+            $request.GetResponse().Dispose()
+        } catch [Net.WebException] {
+            $response = $_.Exception.Response
+            if ($response) {
+                $status = [int]$response.StatusCode
+                $reader = [IO.StreamReader]::new($response.GetResponseStream())
+                try { $reply = $reader.ReadToEnd().Trim() } finally { $reader.Dispose(); $response.Dispose() }
+                $result.Error = "the host refused it ($status $reply)"
+            } else {
+                $result.Error = $_.Exception.Message
+            }
+            return $result
+        }
+        Remove-Item -LiteralPath $file.FullName -Force
+        $result.Sent++
+        $result.Left--
+    }
+    $result
+}
+
+# Sends the outbox in the background (a PowerShell runspace), so the game starts at once.
+function Start-W3LanLogUpload {
+    param([Parameter(Mandatory)][string]$Address, [int]$Port = 40001, [Parameter(Mandatory)][string]$PlayerName, [Parameter(Mandatory)][string]$Documents)
+    $shell = [PowerShell]::Create()
+    [void]$shell.AddScript({
+        param($Module, $Address, $Port, $PlayerName, $Documents)
+        Import-Module $Module
+        Send-W3LanLogOutbox -Address $Address -Port $Port -PlayerName $PlayerName -Documents $Documents
+    }).AddArgument((Join-Path $PSScriptRoot 'W3Lan.psm1')).AddArgument($Address).AddArgument($Port).AddArgument($PlayerName).AddArgument($Documents)
+    [pscustomobject]@{ Shell = $shell; Handle = $shell.BeginInvoke() }
+}
+
+# After the game: waits for the background upload, queues this session's logs, sends the outbox and
+# returns the one line to print ('' when there was nothing to send).
+function Send-W3LanSessionLogs {
+    param(
+        [Parameter(Mandatory)][string]$Address,
+        [int]$Port = 40001,
+        [Parameter(Mandatory)][string]$PlayerName,
+        [Parameter(Mandatory)][string]$Documents,
+        [Parameter(Mandatory)][string]$GameDir,
+        $Background,
+        [int]$ConnectTimeoutMs = 5000
+    )
+    $sent = 0
+    try {
+        if ($Background) {
+            try {
+                foreach ($early in $Background.Shell.EndInvoke($Background.Handle)) { if ($early) { $sent += $early.Sent } }
+            } catch { } finally { $Background.Shell.Dispose() }
+        }
+        [void](Add-W3LanLogsToOutbox -Documents $Documents -GameDir $GameDir -PlayerName $PlayerName)
+        $result = Send-W3LanLogOutbox -Address $Address -Port $Port -PlayerName $PlayerName -Documents $Documents -ConnectTimeoutMs $ConnectTimeoutMs
+        $sent += $result.Sent
+        if ($result.Left -gt 0) { return "Could not send your co-op log: $($result.Error). It is sent next time." }
+    } catch {
+        return "Could not send your co-op log: $($_.Exception.Message)"
+    }
+    if ($sent -gt 0) { return "Sent your co-op log to the host at $Address." }
+    ''
+}
+
+Export-ModuleMember -Function Assert-W3LanName, Resolve-W3LanAddress, Get-W3LanAddresses, Find-W3LanJava, Test-W3LanEndpoint, Start-W3LanServer, Stop-W3LanServer, New-W3LanClientEnvironment, Copy-W3LanSessionSave, Get-W3LanPlayerSettingsPath, Get-W3LanPlayerSettings, Set-W3LanPlayerSettings, Read-W3LanValue, Get-W3LanLogSources, Get-W3LanLogOutbox, Test-W3LanLogUploadWanted, Add-W3LanLogsToOutbox, Send-W3LanLogOutbox, Start-W3LanLogUpload, Send-W3LanSessionLogs

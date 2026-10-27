@@ -608,7 +608,8 @@ statemachine class r_MultiplayerClient
 
         now = theGame.GetEngineTimeAsSeconds();
 
-        if(inParty)
+        // in a shared conversation the vote status takes this line (coopTalk)
+        if(inParty || getCoopTalk().IsSyncing())
         {
             return;
         }

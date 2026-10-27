@@ -20,7 +20,7 @@ shutil.copy2(starter/'GAME-TEST-RESULTS.md',package/'TEST-RESULTS.md')
 # The player-facing changelog, newest release first.
 shutil.copy2(starter/'CHANGELOG.md',package/'CHANGELOG.md')
 for name in ('server','licenses','tests'):
-    shutil.copytree(starter/name,package/name,dirs_exist_ok=True,ignore=shutil.ignore_patterns('profile-fixture-*','w3lan-profile-fixture-*','install-fixtures'))
+    shutil.copytree(starter/name,package/name,dirs_exist_ok=True,ignore=shutil.ignore_patterns('profile-fixture-*','w3lan-profile-fixture-*','install-fixtures','player-logs'))
 # Play-LAN.ps1 hosts with server/WitcherServer.jar: the current build, with its source.
 shutil.copy2(work/'WitcherOnline/server/build/WitcherServer.jar',package/'server/WitcherServer.jar')
 shutil.copytree(work/'WitcherOnline/server/src',package/'server/src',dirs_exist_ok=True)
@@ -88,7 +88,8 @@ for file in sorted((package/'mod').rglob('*')):
 archive=Path(str(package)+'.zip')
 with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
     for file in sorted(package.rglob('*')):
-        if file.is_file():
+        # logs the second PC sent to a host run from this package folder stay out
+        if file.is_file() and 'player-logs' not in file.parts:
             assert not any(p in file.parts for p in ('.git','.w3lan-profiles','game-copy','game-testing'))
             assert file.name not in ('launcher.settings.json','install-copy.log')
             z.write(file, str(Path(package.name)/file.relative_to(package)))

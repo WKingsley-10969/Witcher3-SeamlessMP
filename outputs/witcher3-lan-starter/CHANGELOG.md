@@ -7,6 +7,19 @@ From v0.3.0-alpha on, each release is named by its version and ships as `Witcher
 ## Unreleased
 
 - **This changelog** is now part of the package.
+- **Story scenes start together.** A story scene or conversation waits on the first PC that reaches it, showing who it waits for, until the other player is in it too. It goes on alone only when the other player skips it, is far away or busy, or their quest is not at that point yet.
+- **Choices are voted on.** At a choice both players vote: the options stay up with each player's name beside the one they picked, and the scene goes on once both picked the same. If your votes differ, either of you can change yours; after 15 seconds the party leader's vote decides. A choice with a timer goes with the first vote. A line is skipped once both players press skip.
+- **No doubled characters in scenes.** While a scene plays, only the scene's own characters show: no second Vesemir over the first in the ghouls cutscene.
+
+## v0.4.0-alpha (27 October 2026)
+
+- **Whoever picks first decides.** In a shared conversation either player can answer. The other PC shows "name chose: answer" above its choices, then takes that answer too. Nothing is drawn over the subtitles any more.
+- **Scenes linked from the start.** A scene that was already playing when the party formed (a save that starts mid-scene) is shared, so both PCs go through it together.
+- **Esc works on the second PC.** The pause menu opens instead of closing again at once.
+- **The prologue in co-op:** the end of the Kaer Morhen dream on one PC no longer drags the other out of its own dream; quest gear isn't taken from the other PC's game; a prologue save starts a fresh co-op character; your swords are never replaced by a stored character without one.
+- **No vanishing Ciri, no second Vesemir.** Characters the story spawns late are matched instead of hidden, and a named character is never shown twice.
+- **Rejoining from the main menu:** the host's save arrives with all its files, and the game gets time to list it.
+- **Logs reach the host by themselves.** When the second PC's game closes, its co-op log is sent to the host PC, in `server\player-logs\<name>\`. Turn it off with `-NoLogUpload`.
 
 ## v0.3.0-alpha (26 October 2026)
 
