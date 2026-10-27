@@ -4,6 +4,11 @@ What changed for players in each release of the Witcher 3 LAN co-op mod, newest 
 
 From v0.3.0-alpha on, each release is named by its version and ships as `Witcher3-LAN-<version>.zip`. The builds before it all shipped as `Witcher3-LAN-0.2.0-dev.zip`; each one is named here by its GitHub release tag.
 
+## v0.4.2-alpha (27 October 2026)
+
+- **Vesemir stays on his horse.** Riding story characters use each PC's own character and horse, instead of an on-foot stand-in chasing the other PC's rider. Sync leaves the rider's collisions alone, avoiding sliding and an incorrect riding pace. Characters can be shared again after dismounting.
+- **Known alpha issue:** the latest automated prologue run still caught one brief duplicate Vesemir sample just after the ghoul fight. The riding checks recorded no bad stand-ins, jumps or sliding; this release does not claim the entire prologue is free of sync bugs.
+
 ## v0.4.1-alpha (27 October 2026)
 
 - **This changelog** is now part of the package.

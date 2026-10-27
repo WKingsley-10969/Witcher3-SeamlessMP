@@ -1,4 +1,12 @@
-# Verification — game integration, 2026-10-25
+# Verification — v0.4.2-alpha, 27 October 2026
+
+This alpha contains the rider fix in PR #53 and the prologue test changes in PR #54. The build under test (`1bf654f`) has the same tracked contents as main at `8b9db23`; verified with `git diff --quiet` before packaging. Release metadata updates do not change the game scripts.
+
+- The latest two-client run, `20261027-113043-prologue_coop`, cleared the ghoul fight and advanced both games to "Follow Vesemir". Both PCs recorded zero bad riding stand-ins, zero Vesemir jumps, zero riding slides and zero scene-hold timeouts. Six dialogue decisions reached the second PC.
+- **The full run failed:** the second PC showed both its own Vesemir and a stand-in in one sample immediately after the ghoul fight (11:34:38), followed by one Vesemir in the next sample. Its cumulative duplicate counter therefore remained 1 and the test timed out. An earlier run (`20261027-110128-prologue_coop`) passed on both clients, but does not override the later failure.
+- These were two game processes on one PC. Two physical PCs, long sessions and a complete campaign remain unverified. Earlier results below describe earlier payloads and are not fresh validation of this release.
+
+## Earlier verification — game integration, 25 October 2026
 
 ## In-place installer verification (25 October 2026)
 
