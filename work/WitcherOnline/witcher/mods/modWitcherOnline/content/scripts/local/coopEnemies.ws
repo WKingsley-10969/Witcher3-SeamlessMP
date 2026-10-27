@@ -282,6 +282,8 @@ class r_CoopEnemies
     private var nextHitSeq : int;
 
     private var hostEnemies : array<r_CoopHostEnemy>;
+    private var sparring : array<CNewNPC>;   // story characters hostile for a sparring: each game keeps its own
+    private var namedSeen : array<CNewNPC>;  // named hostiles already described in the log
     private var acks : array<r_CoopAck>;
     private var hurts : array<r_CoopHurt>;
     private var nextHurtSeq : int;
@@ -626,7 +628,7 @@ class r_CoopEnemies
         for(i = 0; i < candidates.Size(); i += 1)
         {
             npc = (CNewNPC)candidates[i];
-            if(!npc || npc.HasTag('MPEntity') || npc.IsHorse())
+            if(!npc || npc.HasTag('MPEntity') || npc.IsHorse() || SparringPartner(npc))
             {
                 continue;
             }
@@ -692,6 +694,45 @@ class r_CoopEnemies
                 hostEnemies.Erase(i);
             }
         }
+    }
+
+    // A friendly story character the quest made hostile for a while, for a sparring or a fistfight
+    // (Vesemir in the prologue): a voicetag and immortality (he cannot die there), and hostile to this
+    // Geralt in person, or in a group other than his own, or one of the recurring story characters
+    // (quests\main_npcs, quests\secondary_npcs). The prologue run showed Vesemir's group unchanged
+    // ("vesemir") and immortality 1. Not shared: each game keeps its own, on his own AI and in his own
+    // guard stance, sparring with its own Geralt (the owner's playtest: the second PC's Vesemir, paired
+    // with the leader's and his AI held for it, stood in his plain pose). Once one, he stays one while hostile.
+    private function SparringPartner(npc : CNewNPC) : bool
+    {
+        var voice, verdict, tpl : string;
+        var temporary, immortal, personal, story : bool;
+        var i : int;
+        for(i = sparring.Size() - 1; i >= 0; i -= 1)
+        {
+            if(!sparring[i] || !sparring[i].IsAlive() || sparring[i].GetAttitude(thePlayer) != AIA_Hostile) { sparring.Erase(i); }
+        }
+        if(sparring.Contains(npc)) { return true; }
+        voice = NpcVoice(npc);
+        if(voice == "") { return false; }
+        tpl = StrLower(npc.GetReadableName());
+        temporary = npc.GetAttitudeGroup() != npc.GetBaseAttitudeGroup();
+        personal = npc.HasAttitudeTowards(thePlayer);
+        story = StrBeginsWith(tpl, "quests") && (StrFindFirst(tpl, "main_npcs") >= 0 || StrFindFirst(tpl, "secondary_npcs") >= 0);
+        immortal = npc.GetImmortalityMode() != AIM_None;
+        if(!namedSeen.Contains(npc))
+        {
+            namedSeen.PushBack(npc);
+            if(namedSeen.Size() > 32) { namedSeen.Erase(0); }
+            verdict = "shared";
+            if(immortal && (temporary || personal || story)) { verdict = "sparring partner, each game its own"; }
+            WO_Log("coop enemies named hostile " + voice + " " + npc.GetReadableName() + " group=" + NameToString(npc.GetAttitudeGroup())
+                + " base=" + NameToString(npc.GetBaseAttitudeGroup()) + " personal=" + personal + " story=" + story
+                + " immortality=" + (int)npc.GetImmortalityMode() + " -> " + verdict);
+        }
+        if(!(immortal && (temporary || personal || story))) { return false; }
+        sparring.PushBack(npc);
+        return true;
     }
 
     // "en epoch seq area acks{user session lastSeq} templates{path}

@@ -147,6 +147,13 @@ class r_CoopTalk
     public function IsHolding() : bool { return holding; }
     // This player's vote on the choice list on screen, "" if none.
     public function MyVote() : string { return VoteOf(Me()); }
+    // The first option on screen whose text contains part, -1 if none (tests).
+    public function ChoiceContaining(part : string) : int
+    {
+        var i : int;
+        for(i = 0; i < choiceTexts.Size(); i += 1) { if(StrFindFirst(choiceTexts[i], part) >= 0) { return i; } }
+        return -1;
+    }
     // A shared conversation is running here: the older leader-follows dialogue sync stays out of it.
     public function IsSyncing() : bool { return role == 3 || (role == 1 && convId != 0); }
     public function IsListening() : bool { return role == 3; }
