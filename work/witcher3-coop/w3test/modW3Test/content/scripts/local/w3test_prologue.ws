@@ -117,6 +117,13 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
         bot.scenarioSeenAt = now;
         W3T_PrologueSample(bot, client, side);
     }
+    // lines are skipped (the owner: the runs were too slow): both bots press skip every second, through the
+    // dialogue box as the space bar does, so a line goes once both pressed (scenarioFarSince: the last press)
+    if(talk.InScene() && !client.hasActiveDialogChoices() && now - bot.scenarioFarSince >= 1.0 && theGame.GetStorySceneSystem().IsSkippingLineAllowed())
+    {
+        bot.scenarioFarSince = now;
+        W3T_DialogModule().OnDialogSkipped(0);
+    }
     if(client.hasActiveDialogChoices() && talk.ChoicesAge() > 2 && talk.MyVote() == "" && now - bot.scenarioActAt >= 3)
     {
         pick = -1;
