@@ -46,6 +46,8 @@ public class WitcherServer
     private static final AtomicLong totalBroadcastTicks = new AtomicLong(0);
 
     private static volatile long lastBroadcastTickNanos = 0L;
+    // datagram sizes by message type, against what Tailscale/ZeroTier/internet paths carry in one piece
+    private static final PacketSizes packetSizes = new PacketSizes();
 
     private static final long PLAYER_TIMEOUT_NANOS = 5_000_000_000L;
     private static final long USERNAME_HOLD_NANOS = 60_000_000_000L;
@@ -471,7 +473,8 @@ public class WitcherServer
 
     private static void receiveLoop(DatagramSocket socket)
     {
-        byte[] buffer = new byte[8192];
+        // was 8192: a larger datagram was cut off without a word and its stump relayed
+        byte[] buffer = new byte[PacketSizes.RECEIVE_BUFFER_BYTES];
 
         while (running.get())
         {
@@ -489,6 +492,7 @@ public class WitcherServer
                         packet.getLength(),
                         StandardCharsets.UTF_8
                 );
+                logSize(packetSizes.record("in", PacketSizes.typeOf(msg), packet.getLength(), 1, sender.toString()));
 
                 if (isIpBanned(senderIp))
                 {
@@ -942,10 +946,11 @@ public class WitcherServer
         String packetText = buildTypedPacket(opcode, session.playerId, session.username, fields);
         byte[] data = packetText.getBytes(StandardCharsets.UTF_8);
 
-        // enemy snapshots are routinely larger; logging them every tick would flood the console
-        if (data.length > 1200 && !"COOP".equals(opcode))
+        // The game client cannot receive it (it would also stall its receiver): log it (rate-limited) instead.
+        if (data.length > PacketSizes.CLIENT_RECEIVE_BYTES)
         {
-            dbg("Large packet: opcode=%s user=%s bytes=%d\n data=%s", opcode, session.username, data.length, packetText);
+            logSize(packetSizes.refuse(PacketSizes.type(opcode, fields), data.length, session.username));
+            return 0;
         }
 
         int sent = 0;
@@ -971,6 +976,7 @@ public class WitcherServer
             }
         }
 
+        logSize(packetSizes.record("out", PacketSizes.type(opcode, fields), data.length, sent, session.username));
         return sent;
     }
 
@@ -1321,6 +1327,7 @@ public class WitcherServer
             return;
         }
 
+        dbg("%s", packetSizes.summary());
         socket.close();
 
         HttpServer server = statusServer;
@@ -1340,6 +1347,12 @@ public class WitcherServer
         byte[] data = text.getBytes(StandardCharsets.UTF_8);
         DatagramPacket packet = new DatagramPacket(data, data.length, client.address, client.port);
         socket.send(packet);
+        logSize(packetSizes.record("out", PacketSizes.typeOf(text), data.length, 1, client.toString()));
+    }
+
+    private static void logSize(String warning)
+    {
+        if (warning != null) dbg("%s\n", warning);
     }
 
     private static void safeSend(DatagramSocket socket, ClientEndpoint client, String text)
