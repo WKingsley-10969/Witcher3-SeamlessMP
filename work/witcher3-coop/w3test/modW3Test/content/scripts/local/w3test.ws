@@ -364,6 +364,18 @@ statemachine class W3T_Bot
     public var ghoulsOnTheWay : int;      // samples with hostiles or enemy copies near while travelling
     public var objectivesAfter : string;
     public var hostilesText : string;     // the hostiles near as last logged
+    // prologue_coop, the second PC after the wake-up: Vesemir riding ("Follow Vesemir")
+    public var rideText : string;         // what shows of him, as last logged
+    public var rideSeen : int;            // samples with a Vesemir on a horse
+    public var rideBad : int;             // samples with a stand-in galloping or beside a riding own one
+    public var ridePos : Vector;          // the stand-in at the last sample
+    public var rideAt : float;
+    public var ownVesemirPos : Vector;    // this world's own Vesemir at the last tick (shown, not a stand-in)
+    public var ownVesemirAt : float;
+    public var ownVesemirLoggedAt : float; // when his movement was last logged (every 2 s)
+    public var ownVesemirSlideRun : int;  // ticks in a row he moved much faster than his horse goes
+    public var ownVesemirSlides : int;    // slides that lasted 2 ticks or more
+    public var ownVesemirJumps : int;     // ticks in which he moved more than 25 m: a teleport
 
     // every scenario: the second PC showing enemies the leader's world doesn't (W3T_FightCheck)
     public var fightMismatchRun : int;   // reports in a row with a mismatch
