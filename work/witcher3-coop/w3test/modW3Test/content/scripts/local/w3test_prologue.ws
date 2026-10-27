@@ -224,13 +224,6 @@ function W3T_PrologueRide(bot : W3T_Bot, side : string, now : float)
                     + " to " + FloatToStringPrec(VecDistance(own.GetWorldPosition(), thePlayer.GetWorldPosition()), 0) + " m from the player");
             }
         }
-        // every 2 s, on both PCs: where he is and where this player is, to compare the two worlds' riders
-        if(now - bot.ownVesemirLoggedAt >= 2)
-        {
-            bot.ownVesemirLoggedAt = now;
-            W3T_Log("PRO " + side + " vesemirpos " + W3T_VecStr(own.GetWorldPosition()) + " riding=" + own.IsUsingHorse()
-                + " player " + W3T_VecStr(thePlayer.GetWorldPosition()));
-        }
         // his pace over the ground against the pace his horse's own movement gives (its moving agent): a
         // slide or a double pace moves him much faster than his horse goes (the owner's playtest)
         pace = 0;
