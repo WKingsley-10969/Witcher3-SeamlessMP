@@ -4,6 +4,12 @@ What changed for players in each release of the Witcher 3 LAN co-op mod, newest 
 
 From v0.3.0-alpha on, each release is named by its version and ships as `Witcher3-LAN-<version>.zip`. The builds before it all shipped as `Witcher3-LAN-0.2.0-dev.zip`; each one is named here by its GitHub release tag.
 
+## v0.4.5-alpha (27 October 2026)
+
+- **Custom Player Characters' menu stays yours.** Opening the CPC menu, and CPC switching a female character to Geralt and back around story scenes, no longer asks the other player to join or pauses the game. This also ends the endless loading when a female host talked to Gaunter in the White Orchard inn.
+- **No mute Geralt on the second PC.** The second PC keeps its own CPC "Use female speech" setting instead of the host's, so a default Geralt speaks with his own voice even when the host's character is female. (A female host with "Use female speech" on is CPC's own behaviour: those lines need CPC's voice pack. Without it, set "Use female speech" to Never.)
+- **No more lock when the other player is stuck.** A scene waiting at its start for the other player gives up after 60 seconds and plays on, instead of waiting for minutes.
+
 ## v0.4.4-alpha (27 October 2026)
 
 - **Scenes the story starts by itself reach both PCs.** When one PC's quest starts a scene, and the other PC's quest doesn't start it too, the other PC now plays that scene itself after 2 seconds, instead of waiting on a black screen and giving up. Example: the scholar at the White Orchard inn who asks whether you play gwent. Votes, skips and waiting for each other work as in any shared scene, and a scene that already played on a PC isn't shared with it again.
