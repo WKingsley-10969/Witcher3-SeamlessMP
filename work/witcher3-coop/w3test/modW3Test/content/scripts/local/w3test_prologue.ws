@@ -153,6 +153,8 @@ function W3T_PrologueHostileList(client : r_MultiplayerClient, hostiles : array<
         if(tpl == "") { tpl = hostiles[i].GetReadableName(); }
         if(client.getCoopEnemies().IsPuppet(hostiles[i])) { tpl += " copy"; } else { tpl += " own"; }
         if(!hostiles[i].GetVisibility()) { tpl += " hidden"; }
+        // how far off, to 10 m: whether it came to the player or the player went to it
+        tpl += " " + RoundF(VecDistance(hostiles[i].GetWorldPosition(), thePlayer.GetWorldPosition()) / 10) * 10 + "m";
         text += " " + tpl;
     }
     return text;
@@ -184,10 +186,26 @@ function W3T_PrologueGhouls(bot : W3T_Bot, client : r_MultiplayerClient, leader 
     var hostiles : array<CNewNPC>;
     var pin, spot, safe : Vector;
     var rot : EulerAngles;
-    var near : int;
+    var fought : array<CNewNPC>;
+    var near, copiesNear, i : int;
+    var reach : float;
     var list : string;
+    // only ghouls within W3T_PROLOGUE_REACH (20 m) are fought, waited for and counted on the way: a player at the
+    // camp. White Orchard's own ghouls 40-50 m down the hill never came closer in a one-PC run with the player
+    // standing there; the bots had gone after them (all hostiles within 50 m) and taken them for a second spawn
+    reach = StringToFloat(W3T_GetEnv("W3T_PROLOGUE_REACH"), 20);
+    if(reach <= 0) { reach = 20; }
     hostiles = W3T_BossHostiles();
-    near = hostiles.Size();
+    for(i = 0; i < hostiles.Size(); i += 1)
+    {
+        if(VecDistance(hostiles[i].GetWorldPosition(), thePlayer.GetWorldPosition()) <= reach) { fought.PushBack(hostiles[i]); }
+    }
+    near = fought.Size();
+    for(i = 0; i < client.getCoopEnemies().PuppetCount(); i += 1)
+    {
+        if(client.getCoopEnemies().PuppetAt(i) && client.getCoopEnemies().PuppetAt(i).IsAlive()
+            && VecDistance(client.getCoopEnemies().PuppetAt(i).GetWorldPosition(), thePlayer.GetWorldPosition()) <= reach) { copiesNear += 1; }
+    }
     // what is near, each time it changes: where the ghouls come from (the quest's, an ambush's, the leader's copies)
     list = W3T_PrologueHostileList(client, hostiles);
     if(list != bot.hostilesText)
@@ -214,23 +232,18 @@ function W3T_PrologueGhouls(bot : W3T_Bot, client : r_MultiplayerClient, leader 
             {
                 if(now - bot.scenarioActAt >= 1)
                 {
-                    W3T_PrologueHit(W3T_BossNearest(hostiles), 0.35);
+                    W3T_PrologueHit(W3T_BossNearest(fought), 0.35);
                     bot.scenarioActAt = now;
                 }
             }
             else if(now - bot.scenarioActAt >= 2)
             {
-                W3T_PrologueHit(W3T_BossNearest(hostiles), 0.2);
+                W3T_PrologueHit(W3T_BossNearest(fought), 0.2);
                 bot.scenarioActAt = now;
             }
         }
-        else if(host && client.getCoopEnemies().HostEnemyCount() > 0)
-        {
-            bot.ghoulsClearAt = 0;
-        }
-        // over after 30 s with none near and no copies: the game's second group comes up to 12 s after the
-        // first (one co-op run; 1 s alone), one by one
-        else if(client.getCoopEnemies().PuppetCount() > 0)
+        // over after 30 s with none near and no copies near: the quest's ghouls come one by one
+        else if(copiesNear > 0)
         {
             bot.ghoulsClearAt = 0;
         }
@@ -247,10 +260,10 @@ function W3T_PrologueGhouls(bot : W3T_Bot, client : r_MultiplayerClient, leader 
         }
         return;
     }
-    if(near > 0 || client.getCoopEnemies().PuppetCount() > 0)
+    if(near > 0 || copiesNear > 0)
     {
         bot.ghoulsOnTheWay += 1;
-        W3T_Log("PRO " + side + " FAIL-MARK on the way: hostiles=" + near + " copies=" + client.getCoopEnemies().PuppetCount());
+        W3T_Log("PRO " + side + " FAIL-MARK on the way: hostiles=" + near + " copies=" + copiesNear + " within " + FloatToStringPrec(reach, 0) + " m");
     }
     if(bot.travelSteps >= 4 || now - bot.travelAt < 5) { return; }
     if(!W3T_PrologueObjectivePin(pin))
