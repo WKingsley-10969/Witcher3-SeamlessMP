@@ -101,6 +101,7 @@ class NR_PlayerManager
     }
 
     function IsPlayerTypeChangeLocked() : bool { return false; }
+    function UpdateSpeechSwitchFacts() {}
     function IsRealEquipmentModeEnabled() : bool { return false; }
     function IsReady() : bool { return true; }
     function IsReplacerActive() : bool { return false; }
