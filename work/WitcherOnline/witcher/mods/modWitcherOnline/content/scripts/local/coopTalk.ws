@@ -103,6 +103,7 @@ class r_CoopTalk
     private var choicesAt : float;      // engine time the current choice list appeared
     private var choiceTimed : bool;     // the current list runs on a timer
     private var answeredSet : int;      // the last choice list answered here (its number in the conversation)
+    private var answeredTexts : array<string>;  // that list's options: a vote for it arriving later is too late
     private var decided : bool;         // the choosing game decided the current list
     private var tieSince : float;       // everyone voted, but not alike, since then (0 otherwise)
     private var marksAt : float;        // when to redraw the list with the voters' names (0: not due)
@@ -147,8 +148,11 @@ class r_CoopTalk
     public function IsHolding() : bool { return holding; }
     // This player's vote on the choice list on screen, "" if none.
     public function MyVote() : string { return VoteOf(Me()); }
-    // A shared conversation is running here: the older leader-follows dialogue sync stays out of it.
-    public function IsSyncing() : bool { return role == 3 || (role == 1 && convId != 0); }
+    // A shared conversation is running here, or this game is on its way into one: the older
+    // leader-follows dialogue sync, the leader's skips and the shared quest progress stay out of it
+    // (the prologue run: the second PC, brought over for the leader's nightmare, took the leader's
+    // quest progress on the way and its own quest jumped past the nightmare to the wake-up).
+    public function IsSyncing() : bool { return role == 2 || role == 3 || (role == 1 && convId != 0); }
     public function IsListening() : bool { return role == 3; }
     public function ListenerCount() : int { return listeners.Size(); }
     public function LastChoiceCount() : int { return choiceTexts.Size(); }
@@ -183,6 +187,10 @@ class r_CoopTalk
         if(theGame.IsDialogOrCutscenePlaying() && role != 3) { return; }
         if(role != 0 || inScene) { Record("RESET role=" + role + " inScene=" + inScene); }
         if(role == 1 && convId != 0) { WO_Send("coop cv close " + convId); }
+        // the starter's hold waits for word from this game: a load while on the way or listening is a no
+        // (the prologue run: the leader held its nightmare for good)
+        if(role == 2) { Decline(hostName, hostConv, "loading"); }
+        if(role == 3) { WO_Send("coop cv left " + CoopEncode(hostName) + " " + hostConv); }
         LeaveConversation();
         role = 0;
         convId = 0;
@@ -365,6 +373,7 @@ class r_CoopTalk
         marksAt = 0;
         ClearStatus();
         if(index >= 0 && index < choiceTexts.Size()) { text = choiceTexts[index]; }
+        answeredTexts = choiceTexts;
         // this list is answered here: its decision and its votes are done
         for(i = picks.Size() - 1; i >= 0; i -= 1)
         {
@@ -458,7 +467,7 @@ class r_CoopTalk
         // already joining or in this one (an announcement repeated), or asked about it right now
         if(hostName == sender && conv == hostConv && (role == 2 || role == 3)) { return; }
         if(offerOpen && sender == offerSender && conv == offerConv) { return; }
-        if(role != 0 || inScene || offerOpen || thePlayer.IsInCombat() || thePlayer.IsUsingVehicle())
+        if(role != 0 || inScene || offerOpen || thePlayer.IsInCombat() || thePlayer.IsUsingVehicle() || theGame.IsDialogOrCutscenePlaying())
         {
             Decline(sender, conv, "busy");
             return;
@@ -605,6 +614,12 @@ class r_CoopTalk
         var conv : int;
         conv = StringToInt(WO_Str(2), 0);
         if(!(((role == 2 || role == 3) && conv == hostConv) || (role == 1 && conv == convId && listeners.Contains(sender)))) { return; }
+        if(!choiceTexts.Contains(CoopDecode(WO_Str(5))) && answeredTexts.Contains(CoopDecode(WO_Str(5))))
+        {
+            // a vote changed on a list this game already took: not one for the list to come
+            Record("VOTE_LATE " + sender + " " + CoopDecode(WO_Str(5)));
+            return;
+        }
         SetBallot(sender, StringToInt(WO_Str(4), -1), CoopDecode(WO_Str(5)));
         votesReceived += 1;
         lastVote = sender + ": " + CoopDecode(WO_Str(5));
@@ -736,6 +751,9 @@ class r_CoopTalk
         var pending : string;
         if(!holding) { return; }
         holdFrames += 1;
+        // every frame: a cutscene the scene starts after its first frame (the prologue's nightmare) is
+        // paused too, where one call at the start left it playing behind "Waiting for"
+        theGame.PauseCutscenes();
         pending = PendingNames();
         if(pending == "") { EndHold("all in"); return; }
         if(now - holdSince > COOP_SCENE_HOLD_MAX() || (float)holdFrames > COOP_SCENE_HOLD_MAX() * 120.0)
@@ -834,6 +852,20 @@ class r_CoopTalk
         return "";
     }
 
+    // Someone whose game is already past the list on screen here: their vote is for a later list (their
+    // scene started earlier, the prologue's wake-up). Not awaited: this game catches up, deciding alone,
+    // and their vote counts when it reaches their list (the owner saw both PCs waiting on each other).
+    private function Ahead(who : string) : bool
+    {
+        var i : int;
+        if(who == Me()) { return false; }
+        for(i = 0; i < ballots.Size(); i += 1)
+        {
+            if(ballots[i].who == who) { return !choiceTexts.Contains(ballots[i].text); }
+        }
+        return false;
+    }
+
     private function SetBallot(who : string, index : int, text : string)
     {
         var b : r_CoopTalkPick;
@@ -879,6 +911,7 @@ class r_CoopTalk
         first = VoteOf(voters[0]);
         for(i = 0; i < voters.Size(); i += 1)
         {
+            if(Ahead(voters[i])) { continue; }
             text = VoteOf(voters[i]);
             if(text == "") { everyone = false; }
             else if(text != first) { agreed = false; }
@@ -925,6 +958,7 @@ class r_CoopTalk
         first = "";
         for(i = 0; i < voters.Size(); i += 1)
         {
+            if(Ahead(voters[i])) { continue; }
             text = VoteOf(voters[i]);
             if(text == "")
             {
