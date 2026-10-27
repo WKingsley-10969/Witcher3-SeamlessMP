@@ -370,6 +370,9 @@ statemachine class W3T_Bot
     public var rideBad : int;             // samples with a stand-in galloping or beside a riding own one
     public var ridePos : Vector;          // the stand-in at the last sample
     public var rideAt : float;
+    public var ownVesemirPos : Vector;    // this world's own Vesemir at the last tick (shown, not a stand-in)
+    public var ownVesemirAt : float;
+    public var ownVesemirJumps : int;     // ticks in which he moved more than 25 m: a teleport
 
     // every scenario: the second PC showing enemies the leader's world doesn't (W3T_FightCheck)
     public var fightMismatchRun : int;   // reports in a row with a mismatch

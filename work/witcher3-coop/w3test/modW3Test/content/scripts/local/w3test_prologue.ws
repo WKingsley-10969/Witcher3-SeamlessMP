@@ -189,7 +189,8 @@ function W3T_PrologueRide(bot : W3T_Bot, side : string, now : float)
     var npc, standIn : CNewNPC;
     var text : string;
     var ownRides : bool;
-    var speed : float;
+    var speed, moved : float;
+    var own : CNewNPC;
     var i : int;
     FindGameplayEntitiesInSphere(entities, thePlayer.GetWorldPosition(), 80, 256, '', FLAG_OnlyAliveActors);
     for(i = 0; i < entities.Size(); i += 1)
@@ -202,11 +203,29 @@ function W3T_PrologueRide(bot : W3T_Bot, side : string, now : float)
             continue;
         }
         if(npc.IsUsingHorse()) { ownRides = true; }
+        if(npc.GetVisibility()) { own = npc; }
         if(!npc.GetVisibility()) { text += " own-hidden"; }
         else if(npc.IsUsingHorse()) { text += " own-riding"; }
         else { text += " own"; }
     }
     if(ownRides) { bot.rideSeen += 1; }
+    // this world's own Vesemir jumping: the game's own catch-up (a companion teleports after a player far ahead)
+    // or a sync fault; logged with where this player is, to tell the two apart
+    if(own)
+    {
+        if(bot.ownVesemirAt > 0 && now - bot.ownVesemirAt <= 1.5)
+        {
+            moved = VecDistance(own.GetWorldPosition(), bot.ownVesemirPos);
+            if(moved > 25)
+            {
+                bot.ownVesemirJumps += 1;
+                W3T_Log("PRO " + side + " vesemir jumped " + FloatToStringPrec(moved, 0) + " m riding=" + own.IsUsingHorse()
+                    + " to " + FloatToStringPrec(VecDistance(own.GetWorldPosition(), thePlayer.GetWorldPosition()), 0) + " m from the player");
+            }
+        }
+        bot.ownVesemirPos = own.GetWorldPosition();
+        bot.ownVesemirAt = now;
+    }
     if(standIn)
     {
         if(bot.rideAt > 0 && now - bot.rideAt > 0.5) { speed = VecDistance2D(standIn.GetWorldPosition(), bot.ridePos) / (now - bot.rideAt); }
@@ -299,7 +318,7 @@ function W3T_PrologueGhouls(bot : W3T_Bot, client : r_MultiplayerClient, leader 
         bot.ghoulsOnTheWay += 1;
         W3T_Log("PRO " + side + " FAIL-MARK on the way: hostiles=" + near + " copies=" + client.getCoopEnemies().PuppetCount());
     }
-    if(bot.travelSteps >= 4 || now - bot.travelAt < 5) { return; }
+    if(bot.travelSteps >= 4 || now - bot.travelAt < 8) { return; }
     if(!W3T_PrologueObjectivePin(pin))
     {
         // no pin here (the last run's second PC: "Follow Vesemir" had none): along with the leader
@@ -314,13 +333,14 @@ function W3T_PrologueGhouls(bot : W3T_Bot, client : r_MultiplayerClient, leader 
             return;
         }
     }
-    spot = thePlayer.GetWorldPosition() + VecNormalize(pin - thePlayer.GetWorldPosition()) * MinF(40.0, VecDistance(pin, thePlayer.GetWorldPosition()));
+    // runs there, 30 m a step every 8 s, as a player following Vesemir (teleports made the game's own Vesemir
+    // gallop after this player and teleport to catch up)
+    spot = thePlayer.GetWorldPosition() + VecNormalize(pin - thePlayer.GetWorldPosition()) * MinF(30.0, VecDistance(pin, thePlayer.GetWorldPosition()));
     if(!theGame.GetWorld().NavigationFindSafeSpot(spot, 0.5, 8.0, safe)) { safe = spot; }
-    rot.Yaw = VecHeading(pin - safe);
-    thePlayer.TeleportWithRotation(safe, rot);
+    thePlayer.ActionMoveToAsync(safe, MT_Run);
     bot.travelSteps += 1;
     bot.travelAt = now;
-    W3T_Log("PRO " + side + " travels step " + bot.travelSteps + " to " + W3T_VecStr(safe) + ", " + FloatToStringPrec(VecDistance(pin, safe), 0) + " m from the marker");
+    W3T_Log("PRO " + side + " travels step " + bot.travelSteps + " (runs) to " + W3T_VecStr(safe) + ", " + FloatToStringPrec(VecDistance(pin, safe), 0) + " m from the marker");
 }
 
 function W3T_PrologueSample(bot : W3T_Bot, client : r_MultiplayerClient, side : string)
@@ -363,8 +383,9 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
     {
         bot.scenarioSeenAt = now;
         W3T_PrologueSample(bot, client, side);
-        if(!host && bot.scenarioPos.X > 0) { W3T_PrologueRide(bot, side, now); }
     }
+    // every tick, both PCs: what shows of Vesemir, and his jumps
+    if(bot.scenarioPos.X > 0) { W3T_PrologueRide(bot, side, now); }
     // lines are skipped (the owner: the runs were too slow): both bots press skip every second, through the
     // dialogue box as the space bar does, so a line goes once both pressed (scenarioFarSince: the last press)
     if(talk.InScene() && !client.hasActiveDialogChoices() && now - bot.scenarioFarSince >= 1.0 && theGame.GetStorySceneSystem().IsSkippingLineAllowed())
@@ -429,7 +450,7 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
         + " vesemirSyncedWhileHostile=" + bot.scenarioStep + " holds=" + talk.holds + " holdTimeouts=" + talk.holdTimeouts
         + " votes=" + talk.votesSent + " decisions=" + talk.picksSent + " applied=" + talk.picksApplied + " ties=" + talk.ties
         + " ghoulsSeen=" + bot.ghoulsSeen + " cleared=" + bot.ghoulsCleared + " steps=" + bot.travelSteps + " ghoulsOnTheWay=" + bot.ghoulsOnTheWay
-        + " rideSeen=" + bot.rideSeen + " rideBad=" + bot.rideBad + " objectivesAfter | " + bot.objectivesAfter);
+        + " rideSeen=" + bot.rideSeen + " rideBad=" + bot.rideBad + " vesemirJumps=" + bot.ownVesemirJumps + " objectivesAfter | " + bot.objectivesAfter);
     // the swords only on the tutorial path: free training and the nightmare take them (a dream), the wake-up gives them back later
     return bot.scenarioCount == 0 && (bot.scenarioFlag || !tutorial) && bot.scenarioStep == 0 && talk.holdTimeouts == 0 && done
         && (tutorial || (bot.ghoulsSeen > 0 && bot.ghoulsOnTheWay == 0 && bot.rideBad == 0));
