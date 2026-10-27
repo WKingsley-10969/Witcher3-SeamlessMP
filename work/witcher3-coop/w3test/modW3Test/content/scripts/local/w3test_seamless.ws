@@ -1251,8 +1251,10 @@ function W3T_TalkShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_R
     if(!starter)
     {
         // the joiner votes; the starter's game decides, and its decision comes back here
+        // W3T_TALK_KEYS=1: this vote comes from a real key press sent to the window (a click goes
+        // through the dialog box's own handling, a script call does not)
         if(bot.scenarioStep == 2 && talk.IsListening() && client.hasActiveDialogChoices() && talk.MyVote() == "" && talk.picksApplied == 0
-            && talk.ChoicesAge() > 1)
+            && talk.ChoicesAge() > 1 && W3T_GetEnv("W3T_TALK_KEYS") != "1")
         {
             W3T_TalkShareVote(label, module, talk, host);
         }
