@@ -166,7 +166,12 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
     // done early (the owner: runs too slow): free training once the wake-up scene is over here, the
     // tutorial after 10 samples (20 s) of Vesemir sparring; at the latest at the scenario's time
     if(tutorial) { done = bot.scenarioValue >= 10; }
-    else { done = !talk.InScene() && StrFindFirst(talk.GetScenePath(), "q001_5_wake_up") >= 0; }
+    // free training: 90 s past the wake-up, which brings the ghoul attack at the camp (scenarioPos.X: when it ended here)
+    else
+    {
+        if(bot.scenarioPos.X == 0 && !talk.InScene() && StrFindFirst(talk.GetScenePath(), "q001_5_wake_up") >= 0) { bot.scenarioPos.X = now; }
+        done = bot.scenarioPos.X > 0 && now - bot.scenarioPos.X >= 90;
+    }
     if(!done && now < W3T_BossTime()) { return false; }
     W3T_Log("PRO " + side + " end duplicates=" + bot.scenarioCount + " sword=" + bot.scenarioFlag + " vesemirHostileSamples=" + bot.scenarioValue
         + " vesemirSyncedWhileHostile=" + bot.scenarioStep + " holds=" + talk.holds + " holdTimeouts=" + talk.holdTimeouts
