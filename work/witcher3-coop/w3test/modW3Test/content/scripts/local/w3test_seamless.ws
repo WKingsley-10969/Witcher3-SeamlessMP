@@ -1156,18 +1156,27 @@ function W3T_TalkProbe(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_R
 // disagreement: at the first choice list the host (listening, the party leader) votes the last
 // choice (Farewell) and the second PC (the starter, which decides) the first. After 15 s the
 // leader's vote must decide, in the second PC's game, and be applied in the host's; both end.
+// W3T_TALK_STARTER=host: the other way round, as in the owner's playtest: the host presses Talk and
+// the second PC (whose own NPC is behind a stand-in) is brought in.
+function W3T_TalkStarter() : bool
+{
+    if(W3T_GetEnv("W3T_TALK_STARTER") == "host") { return W3T_GetEnv("W3T_ROLE") == "mover"; }
+    return W3T_GetEnv("W3T_ROLE") != "mover";
+}
+
 function W3T_TalkShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_RemotePlayer) : bool
 {
     var talk : r_CoopTalk;
     var target : CNewNPC;
     var module : CR4HudModuleDialog;
     var root : CR4Menu;
-    var host : bool;
+    var host, starter : bool;
     var label : string;
     var now : float;
     host = W3T_GetEnv("W3T_ROLE") == "mover";
     label = "SHARETALK member";
     if(host) { label = "SHARETALK host"; }
+    starter = W3T_TalkStarter();
     if(!host && !client.getInParty())
     {
         W3T_Log("PARTY join " + leader.username);
@@ -1191,13 +1200,13 @@ function W3T_TalkShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_R
         target = W3T_TalkMerchant();
         if(!target) { W3T_Log(label + " FAIL no merchant by board 0"); bot.scenarioStep = -1; return false; }
         bot.scenarioEntity = target;
-        if(!host) { W3T_TeleportInFront(target); }
+        if(starter) { W3T_TeleportInFront(target); }
         W3T_Log(label + " merchant " + NpcVoice(target) + " dist=" + FloatToStringPrec(VecDistance(target.GetWorldPosition(), thePlayer.GetWorldPosition()), 1));
         bot.scenarioTime = now;
         bot.scenarioStep = 2;
         return false;
     }
-    if(!host && bot.scenarioStep == 2 && now - bot.scenarioTime >= 6)
+    if(starter && bot.scenarioStep == 2 && now - bot.scenarioTime >= 6)
     {
         target = (CNewNPC)bot.scenarioEntity;
         W3T_Log(label + " presses Talk");
@@ -1207,9 +1216,9 @@ function W3T_TalkShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_R
     }
     module = W3T_DialogModule();
     root = theGame.GetGuiManager().GetRootMenu();
-    if(host)
+    if(!starter)
     {
-        // the leader votes the farewell; the starter's game decides, and its decision comes back here
+        // the joiner votes the farewell; the starter's game decides, and its decision comes back here
         if(bot.scenarioStep == 2 && talk.IsListening() && client.hasActiveDialogChoices() && talk.MyVote() == "" && talk.picksApplied == 0
             && talk.ChoicesAge() > 1)
         {
@@ -1224,7 +1233,8 @@ function W3T_TalkShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_R
     }
     else
     {
-        // the starter votes otherwise (the first choice): the votes differ until the leader's wins
+        // the starter votes otherwise (the first choice): the votes differ until the leader's wins (with
+        // the host starting, its own vote is the leader's)
         if(bot.scenarioStep == 3 && client.hasActiveDialogChoices() && talk.MyVote() == "" && talk.picksSent == 0 && talk.ChoicesAge() > 1)
         {
             W3T_Log(label + " votes choice 0");
@@ -1247,7 +1257,7 @@ function W3T_TalkShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_R
         + " picksApplied=" + talk.picksApplied + " votesSent=" + talk.votesSent + " votesReceived=" + talk.votesReceived + " menusClosed=" + talk.menusClosed
         + " lines=" + talk.linesSeen + " holds=" + talk.holds + " holdTimeouts=" + talk.holdTimeouts + " ties=" + talk.ties
         + " alerts=" + talk.alertsShown + " holding=" + talk.IsHolding() + " scene=" + talk.GetScenePath());
-    if(host) { return bot.scenarioStep == 3 && talk.sceneMismatches == 0 && talk.votesSent >= 1 && talk.picksApplied >= 1; }
+    if(!starter) { return bot.scenarioStep == 3 && talk.sceneMismatches == 0 && talk.votesSent >= 1 && talk.picksApplied >= 1; }
     return bot.scenarioStep == 4 && talk.holds >= 1 && talk.holdTimeouts == 0 && talk.ties >= 1 && talk.picksSent >= 1 && talk.alertsShown >= 1;
 }
 

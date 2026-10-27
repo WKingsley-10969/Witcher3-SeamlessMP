@@ -151,7 +151,7 @@ function OnConfigUI()
         }
         // talk_share / scene_share: the shop pauses the game, and with it the bot that would close
         // it; the starter (which asked to trade) closes it here. The joiner's is the feature's to close.
-        if(GetMenuName() == 'CommonMenu' && ((W3T_GetEnv("W3T_SCENARIO") == "talk_share" && W3T_GetEnv("W3T_ROLE") != "mover")
+        if(GetMenuName() == 'CommonMenu' && ((W3T_GetEnv("W3T_SCENARIO") == "talk_share" && W3T_TalkStarter())
             || (W3T_GetEnv("W3T_SCENARIO") == "scene_share" && W3T_GetEnv("W3T_ROLE") == "mover")))
         {
             W3T_Log("MENU shop -> close (starter)");
