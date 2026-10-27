@@ -30,8 +30,27 @@ function W3T_Lobby(bot : W3T_Bot, client : r_MultiplayerClient, other : r_Remote
         if(host) { return lobby.starts == 1 && lobby.mode == "new"; }
         return lobby.newGames == 1;
     }
+    // W3T_LOBBY_REFUSE=1: the second PC's game refuses the host's save (the LoadSave wrapper below); the
+    // second PC stays in the main menu, where this does not run: run_test.py counts its refusals
+    if(W3T_GetEnv("W3T_LOBBY_REFUSE") == "1") { return host && lobby.starts == 1 && lobby.loads == 1; }
     if(host) { return lobby.starts == 1 && client.getCoopEnemies().GetRole() == 1 && apart >= 0 && apart < 4.0; }
     return lobby.fetches == 1 && lobby.loads == 1 && client.getInParty() && session.placements >= 1 && apart >= 0 && apart < 4.0;
+}
+
+// W3T_LOBBY_REFUSE=1: the second PC's game answers a load of the host's save as it does when this PC
+// lacks a DLC the save needs (the owner's playtest: Custom Player Characters on the host only), and
+// the main menu opens again, as after that refusal. Both test PCs share one game folder, so the
+// missing DLC itself cannot be set up.
+@wrapMethod(r_CoopSession)
+function LoadSave(wanted : string) : bool
+{
+    var missing : array<name>;
+    if(W3T_GetEnv("W3T_LOBBY_REFUSE") != "1" || W3T_GetEnv("W3T_ROLE") == "mover") { return wrappedMethod(wanted); }
+    W3T_Log("LOBBY member test: the game refuses " + wanted + " (missing dlc_newreplacers)");
+    missing.PushBack('dlc_newreplacers');
+    theGame.GetGuiManager().OnLoadingFailed(RESTORE_DLCRequired, missing);
+    theGame.r_getMultiplayerClient().getCoopLobby().OnMainMenu();
+    return true;
 }
 
 // lobby_rejoin: the second PC joins through the lobby (as lobby_save), then goes back to the main
