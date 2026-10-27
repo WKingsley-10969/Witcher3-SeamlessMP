@@ -23,7 +23,7 @@ $sendLogs = $false
 try {
     if (-not $PlayerName) { $PlayerName = if ($Mode -eq 'Host') {'HostWitcher'} else {'GuestWitcher'} }
     if ($Mode -eq 'Host') { $Address = '127.0.0.1' }
-    elseif (-not $Address) { $Address = Read-Host "Host PC's LAN IPv4 address" }
+    elseif (-not $Address) { $Address = Read-Host "Host PC's IPv4 address (home network, ZeroTier or Tailscale)" }
     $info = New-W3LanProfileStartInfo -GameDir $GameDir -PlayerName $PlayerName -Address $Address -Port $Port
     if ($Plan) {
         [pscustomobject]@{Mode=$Mode; Executable=$info.FileName; Address=$Address; Port=$Port; PlayerName=$PlayerName; Documents=$info.EnvironmentVariables['W3LAN_DOCUMENTS']; Launch=$false} | ConvertTo-Json
@@ -35,15 +35,15 @@ try {
         # Co-op session: joining players download this host's newest co-op save (TCP port Port+1)
         $server = Start-W3LanServer -JarPath (Join-Path $PSScriptRoot 'server\WitcherServer.jar') -JavaPath $JavaPath -Port $Port -SaveDirectory $saves -HostName $PlayerName
         $info.EnvironmentVariables['W3LAN_SESSION_ROLE'] = 'host'
-        Write-Host 'Host server ready. The second PC uses the home-network address below:'
+        Write-Host 'Host server ready. The second PC uses one of the addresses below: your home-network address on the same network, or your ZeroTier or Tailscale address over the internet:'
         Get-W3LanAddresses | Format-Table Adapter,Address | Out-Host
         Write-Host "Joining players load your newest co-op save. Save before they join to share your latest progress."
         # the host's own logs stay on this PC; the second PC's arrive in server\player-logs
         $modLog = Join-Path (Resolve-Path -LiteralPath $GameDir).Path "bin\WitcherOnline\WitcherOnline_$PlayerName.log"
         Write-Host "Your co-op logs: $($info.EnvironmentVariables['W3T_LOG']) and $modLog. The second PC's arrive in $(Join-Path $PSScriptRoot 'server\player-logs')."
     } else {
-        $probe = Test-W3LanEndpoint -Address $Address -Port $Port
-        if (-not $probe.Reachable) { throw "Host did not answer the UDP check: $($probe.Reply)." }
+        $probe = Test-W3LanEndpoint -Address $Address -Port $Port -TimeoutMs 2000 -Attempts 3
+        if (-not $probe.Reachable) { throw "Host ${Address}:${Port} did not answer the UDP check ($($probe.Reply)). $(Get-W3LanUnreachableHint $Address)" }
         if (-not $NoSessionSave) {
             try {
                 $session = Copy-W3LanSessionSave -Address $Address -Port ($Port + 1) -SaveDirectory $saves

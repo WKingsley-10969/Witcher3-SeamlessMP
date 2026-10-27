@@ -11,13 +11,16 @@ function Assert-W3LanName {
 
 function Resolve-W3LanAddress {
     param([Parameter(Mandatory)][string]$Address)
-    if ($Address -notmatch '\A(\d{1,3}\.){3}\d{1,3}\z') { throw 'Enter a private IPv4 address, such as 192.168.1.20.' }
+    if ($Address -notmatch '\A(\d{1,3}\.){3}\d{1,3}\z') { throw 'Enter a private IPv4 address, such as 192.168.1.20 (home network) or the host''s ZeroTier or Tailscale address.' }
     $parsed = $null
     if (-not [Net.IPAddress]::TryParse($Address, [ref]$parsed)) { throw 'Invalid IPv4 address.' }
     $b = $parsed.GetAddressBytes()
     if ($b.Count -ne 4 -or $parsed.ToString() -cne $Address) { throw 'Use the full IPv4 address without leading zeroes.' }
     $private = $b[0] -eq 10 -or ($b[0] -eq 172 -and $b[1] -ge 16 -and $b[1] -le 31) -or ($b[0] -eq 192 -and $b[1] -eq 168)
-    if (-not $private -and $Address -ne '127.0.0.1') { throw 'This launcher accepts private LAN IPv4 addresses or 127.0.0.1 only.' }
+    # 100.64.0.0/10 (shared address space): Tailscale gives each PC a 100.x address from it.
+    # ZeroTier networks use the private ranges above by default.
+    $virtualLan = $b[0] -eq 100 -and $b[1] -ge 64 -and $b[1] -le 127
+    if (-not $private -and -not $virtualLan -and $Address -ne '127.0.0.1') { throw 'This launcher accepts private LAN IPv4 addresses, Tailscale 100.64-100.127 addresses or 127.0.0.1 only.' }
     $parsed.ToString()
 }
 
@@ -61,24 +64,42 @@ function Test-W3LanEndpoint {
     param(
         [Parameter(Mandatory)][string]$Address,
         [ValidateRange(1,65535)][int]$Port = 40000,
-        [ValidateRange(50,10000)][int]$TimeoutMs = 1000
+        [ValidateRange(50,10000)][int]$TimeoutMs = 1000,
+        # Over ZeroTier or Tailscale the first packets can be lost while the two PCs find a route.
+        [ValidateRange(1,10)][int]$Attempts = 1
     )
     $ip = Resolve-W3LanAddress $Address
-    $udp = [Net.Sockets.UdpClient]::new([Net.Sockets.AddressFamily]::InterNetwork)
     $timer = [Diagnostics.Stopwatch]::StartNew()
-    try {
-        $udp.Client.ReceiveTimeout = $TimeoutMs
-        $udp.Connect($ip, $Port)
-        # A blank username produces an explicit reply without creating a player session.
-        $data = [Text.Encoding]::UTF8.GetBytes("MOVE`t ")
-        [void]$udp.Send($data, $data.Length)
-        $remote = [Net.IPEndPoint]::new([Net.IPAddress]::Any, 0)
-        $reply = [Text.Encoding]::UTF8.GetString($udp.Receive([ref]$remote))
-        $ok = $reply -ceq "ERROR`tINVALID_USERNAME"
-        [pscustomobject]@{ Reachable = $ok; Address = $ip; Port = $Port; Reply = $reply; ElapsedMs = $timer.ElapsedMilliseconds }
-    } catch [Net.Sockets.SocketException] {
-        [pscustomobject]@{ Reachable = $false; Address = $ip; Port = $Port; Reply = $_.Exception.SocketErrorCode.ToString(); ElapsedMs = $timer.ElapsedMilliseconds }
-    } finally { $udp.Dispose() }
+    for ($attempt = 1; ; $attempt++) {
+        $udp = [Net.Sockets.UdpClient]::new([Net.Sockets.AddressFamily]::InterNetwork)
+        try {
+            $udp.Client.ReceiveTimeout = $TimeoutMs
+            $udp.Connect($ip, $Port)
+            # A blank username produces an explicit reply without creating a player session.
+            $data = [Text.Encoding]::UTF8.GetBytes("MOVE`t ")
+            [void]$udp.Send($data, $data.Length)
+            $remote = [Net.IPEndPoint]::new([Net.IPAddress]::Any, 0)
+            $reply = [Text.Encoding]::UTF8.GetString($udp.Receive([ref]$remote))
+            $ok = $reply -ceq "ERROR`tINVALID_USERNAME"
+            $result = [pscustomobject]@{ Reachable = $ok; Address = $ip; Port = $Port; Reply = $reply; ElapsedMs = $timer.ElapsedMilliseconds }
+        } catch [Net.Sockets.SocketException] {
+            $result = [pscustomobject]@{ Reachable = $false; Address = $ip; Port = $Port; Reply = $_.Exception.SocketErrorCode.ToString(); ElapsedMs = $timer.ElapsedMilliseconds }
+        } finally { $udp.Dispose() }
+        if ($result.Reachable -or $attempt -ge $Attempts) { return $result }
+        Start-Sleep -Milliseconds 250
+    }
+}
+
+# What to check when the host does not answer: the same network, or the same ZeroTier/Tailscale network.
+function Get-W3LanUnreachableHint {
+    param([Parameter(Mandatory)][string]$Address)
+    $b = ([Net.IPAddress]::Parse($Address)).GetAddressBytes()
+    $route = if ($b[0] -eq 100 -and $b[1] -ge 64 -and $b[1] -le 127) {
+        'Check that both PCs are signed in to the same Tailscale tailnet and show as connected, and that this is the host''s Tailscale address.'
+    } else {
+        'Check the address: on the same home network use the host''s home-network address; over the internet check that both PCs are on the same ZeroTier network (and authorized there) or Tailscale tailnet, and use the host''s address on it.'
+    }
+    "$route Check that the host's console is open, Windows Firewall allows the host's Java, and Wi-Fi does not isolate the PCs."
 }
 
 function Stop-W3LanServer {
@@ -690,4 +711,4 @@ function Send-W3LanSessionLogs {
     ''
 }
 
-Export-ModuleMember -Function Assert-W3LanName, Resolve-W3LanAddress, Get-W3LanAddresses, Find-W3LanJava, Test-W3LanEndpoint, Start-W3LanServer, Stop-W3LanServer, New-W3LanClientEnvironment, Copy-W3LanSessionSave, Get-W3LanPlayerSettingsPath, Get-W3LanPlayerSettings, Set-W3LanPlayerSettings, Read-W3LanValue, Get-W3LanLogSources, Get-W3LanLogOutbox, Test-W3LanLogUploadWanted, Add-W3LanLogsToOutbox, Send-W3LanLogOutbox, Start-W3LanLogUpload, Send-W3LanSessionLogs
+Export-ModuleMember -Function Assert-W3LanName, Resolve-W3LanAddress, Get-W3LanAddresses, Find-W3LanJava, Test-W3LanEndpoint, Get-W3LanUnreachableHint, Start-W3LanServer, Stop-W3LanServer, New-W3LanClientEnvironment, Copy-W3LanSessionSave, Get-W3LanPlayerSettingsPath, Get-W3LanPlayerSettings, Set-W3LanPlayerSettings, Read-W3LanValue, Get-W3LanLogSources, Get-W3LanLogOutbox, Test-W3LanLogUploadWanted, Add-W3LanLogsToOutbox, Send-W3LanLogOutbox, Start-W3LanLogUpload, Send-W3LanSessionLogs
