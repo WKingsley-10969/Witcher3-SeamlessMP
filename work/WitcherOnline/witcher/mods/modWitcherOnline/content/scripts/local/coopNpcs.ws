@@ -1459,11 +1459,13 @@ class r_CoopNpcs
         npc.EnableCharacterCollisions(false);
     }
 
+    // A rider's collisions are the riding's own: switched on while he sits on the horse, his body pushes against
+    // it (the owner's playtest: the second PC's own riding Vesemir slid and went at twice the pace)
     private function ShowReal(npc : CNewNPC)
     {
         npc.SetVisibility(true);
         npc.SetGameplayVisibility(true);
-        npc.EnableCharacterCollisions(true);
+        if(!npc.IsUsingHorse()) { npc.EnableCharacterCollisions(true); }
     }
 
     // The real NPC takes the stand-in's place and pose, and the stand-in goes.

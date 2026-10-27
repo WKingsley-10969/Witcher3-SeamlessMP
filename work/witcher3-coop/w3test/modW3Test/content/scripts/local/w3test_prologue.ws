@@ -189,8 +189,9 @@ function W3T_PrologueRide(bot : W3T_Bot, side : string, now : float)
     var npc, standIn : CNewNPC;
     var text : string;
     var ownRides : bool;
-    var speed, moved : float;
+    var speed, moved, pace, horsePace : float;
     var own : CNewNPC;
+    var horse : CActor;
     var i : int;
     FindGameplayEntitiesInSphere(entities, thePlayer.GetWorldPosition(), 80, 256, '', FLAG_OnlyAliveActors);
     for(i = 0; i < entities.Size(); i += 1)
@@ -228,6 +229,35 @@ function W3T_PrologueRide(bot : W3T_Bot, side : string, now : float)
         {
             bot.ownVesemirLoggedAt = now;
             W3T_Log("PRO " + side + " vesemirpos " + W3T_VecStr(own.GetWorldPosition()) + " riding=" + own.IsUsingHorse()
+                + " player " + W3T_VecStr(thePlayer.GetWorldPosition()));
+        }
+        // his pace over the ground against the pace his horse's own movement gives (its moving agent): a
+        // slide or a double pace moves him much faster than his horse goes (the owner's playtest)
+        pace = 0;
+        horsePace = 0;
+        if(bot.ownVesemirAt > 0 && now - bot.ownVesemirAt > 0.2 && now - bot.ownVesemirAt <= 1.5)
+        {
+            pace = VecDistance2D(own.GetWorldPosition(), bot.ownVesemirPos) / (now - bot.ownVesemirAt);
+        }
+        if(own.IsUsingHorse() && own.GetUsedHorseComponent()) { horse = (CActor)own.GetUsedHorseComponent().GetEntity(); }
+        if(horse) { horsePace = VecLength2D(horse.GetMovingAgentComponent().GetVelocity()); }
+        if(own.IsUsingHorse() && pace > 3 && pace > horsePace * 1.6 + 1.5)
+        {
+            bot.ownVesemirSlideRun += 1;
+            if(bot.ownVesemirSlideRun == 2)
+            {
+                bot.ownVesemirSlides += 1;
+                W3T_Log("PRO " + side + " FAIL-MARK vesemir slides: " + FloatToStringPrec(pace, 1) + " m/s over the ground, his horse "
+                    + FloatToStringPrec(horsePace, 1) + " m/s");
+            }
+        }
+        else { bot.ownVesemirSlideRun = 0; }
+        // every 2 s, on both PCs: where he is, his pace and his horse's, and where this player is
+        if(now - bot.ownVesemirLoggedAt >= 2)
+        {
+            bot.ownVesemirLoggedAt = now;
+            W3T_Log("PRO " + side + " vesemirpos " + W3T_VecStr(own.GetWorldPosition()) + " riding=" + own.IsUsingHorse()
+                + " pace=" + FloatToStringPrec(pace, 1) + " horse=" + FloatToStringPrec(horsePace, 1)
                 + " player " + W3T_VecStr(thePlayer.GetWorldPosition()));
         }
         bot.ownVesemirPos = own.GetWorldPosition();
@@ -457,8 +487,8 @@ function W3T_PrologueCoop(bot : W3T_Bot, client : r_MultiplayerClient, leader : 
         + " vesemirSyncedWhileHostile=" + bot.scenarioStep + " holds=" + talk.holds + " holdTimeouts=" + talk.holdTimeouts
         + " votes=" + talk.votesSent + " decisions=" + talk.picksSent + " applied=" + talk.picksApplied + " ties=" + talk.ties
         + " ghoulsSeen=" + bot.ghoulsSeen + " cleared=" + bot.ghoulsCleared + " steps=" + bot.travelSteps + " ghoulsOnTheWay=" + bot.ghoulsOnTheWay
-        + " rideSeen=" + bot.rideSeen + " rideBad=" + bot.rideBad + " vesemirJumps=" + bot.ownVesemirJumps + " objectivesAfter | " + bot.objectivesAfter);
+        + " rideSeen=" + bot.rideSeen + " rideBad=" + bot.rideBad + " vesemirJumps=" + bot.ownVesemirJumps + " vesemirSlides=" + bot.ownVesemirSlides + " objectivesAfter | " + bot.objectivesAfter);
     // the swords only on the tutorial path: free training and the nightmare take them (a dream), the wake-up gives them back later
     return bot.scenarioCount == 0 && (bot.scenarioFlag || !tutorial) && bot.scenarioStep == 0 && talk.holdTimeouts == 0 && done
-        && (tutorial || (bot.ghoulsSeen > 0 && bot.ghoulsOnTheWay == 0 && bot.rideBad == 0));
+        && (tutorial || (bot.ghoulsSeen > 0 && bot.ghoulsOnTheWay == 0 && bot.rideBad == 0 && bot.ownVesemirSlides == 0));
 }

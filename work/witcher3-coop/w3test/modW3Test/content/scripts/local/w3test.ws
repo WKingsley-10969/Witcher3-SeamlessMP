@@ -373,6 +373,9 @@ statemachine class W3T_Bot
     public var ownVesemirPos : Vector;    // this world's own Vesemir at the last tick (shown, not a stand-in)
     public var ownVesemirAt : float;
     public var ownVesemirLoggedAt : float; // when his position was last logged (every 2 s)
+    public var ownVesemirLoggedAt : float; // when his movement was last logged (every 2 s)
+    public var ownVesemirSlideRun : int;  // ticks in a row he moved much faster than his horse goes
+    public var ownVesemirSlides : int;    // slides that lasted 2 ticks or more
     public var ownVesemirJumps : int;     // ticks in which he moved more than 25 m: a teleport
 
     // every scenario: the second PC showing enemies the leader's world doesn't (W3T_FightCheck)
