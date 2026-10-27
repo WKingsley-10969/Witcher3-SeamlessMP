@@ -77,8 +77,8 @@ class r_CoopTalk
 
     // the scene held at its start until the party is in it
     private var holding : bool;
-    private var holdSince : float;
-    private var holdFrames : int;      // frames held: a second clock, in case engine time stands with the game's
+    private var holdSince : float;     // real seconds (HoldClock): engine time all but stands while held
+    private var holdFrames : int;
     private var holdAnswers : array<string>;  // party members that joined this scene or declined it
     private var holdLines : int;      // lines the scene set while held
     // PauseCutscenes calls while held: the game counts them, and each needs its UnpauseCutscenes (the
@@ -792,7 +792,7 @@ class r_CoopTalk
         holdAnswers.Clear();
         if(PendingNames() == "") { return; }  // nobody else in the party
         holding = true;
-        holdSince = theGame.GetEngineTimeAsSeconds();
+        holdSince = HoldClock();
         holdFrames = 0;
         holdLines = 0;
         holds += 1;
@@ -814,7 +814,7 @@ class r_CoopTalk
         }
         theSound.SoundEvent("system_resume");
         ClearStatus();
-        Record("HOLD_END " + reason + " after " + FloatToStringPrec(theGame.GetEngineTimeAsSeconds() - holdSince, 1) + " s");
+        Record("HOLD_END " + reason + " after " + FloatToStringPrec(HoldClock() - holdSince, 1) + " s");
     }
 
     private function TickHold(now : float)
@@ -831,13 +831,23 @@ class r_CoopTalk
         if(holdFrames % 90 == 0 && openMessage != "") { WO_Send(openMessage); }
         pending = PendingNames();
         if(pending == "") { EndHold("all in"); return; }
-        if(now - holdSince > COOP_SCENE_HOLD_MAX() || (float)holdFrames > COOP_SCENE_HOLD_MAX() * 120.0)
+        // in real seconds: the hold slows engine time to 0.001, and the frame count it was also checked
+        // against assumed 120 frames a second (the owner's playtest: the second PC held Gaunter's scene for
+        // Red for 3 minutes, its log saying "after 0.2 s", while the host was stuck: both locked)
+        if(HoldClock() < holdSince) { holdSince = HoldClock(); }   // the clock wrapped
+        if(HoldClock() - holdSince > COOP_SCENE_HOLD_MAX())
         {
             holdTimeouts += 1;
             EndHold("timeout, no answer from " + pending);
             return;
         }
         ShowStatus("Waiting for " + pending + " to join the scene");
+    }
+
+    // Real seconds, which a time scale does not slow.
+    private function HoldClock() : float
+    {
+        return theGame.GetLocalTimeAsMilliseconds() / 1000.0;
     }
 
     private function SendOpen(message : string)
