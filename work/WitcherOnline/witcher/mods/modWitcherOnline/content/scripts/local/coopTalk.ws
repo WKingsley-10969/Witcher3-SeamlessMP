@@ -173,8 +173,8 @@ class r_CoopTalk
         choicesOpen = false;
         Record("SCENE " + scenePath);
         partyKnown = InParty();
-        // the scene's actors are this world's own NPCs: no stand-ins or hidden copies around it
-        if(InParty()) { theGame.r_getMultiplayerClient().getCoopNpcs().HoldAround(thePlayer.GetWorldPosition()); }
+        // the scene's actors are this world's own NPCs: no stand-ins or hidden copies while it plays
+        if(InParty()) { theGame.r_getMultiplayerClient().getCoopNpcs().HoldScene(); }
         if(role == 2)
         {
             role = 3;
@@ -709,12 +709,6 @@ function COOP_TALK_RANGE() : float
 function COOP_SCENE_RANGE() : float
 {
     return 60.0;
-}
-
-// How far around a scene playing here synced NPCs are left to be themselves.
-function COOP_SCENE_HOLD_RADIUS() : float
-{
-    return 25.0;
 }
 
 // How long a brought-over member waits for its own quest to start that scene.

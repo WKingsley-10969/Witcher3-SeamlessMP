@@ -180,8 +180,8 @@ class r_CoopNpcs
     private var lastSend : float;
     private var lastCollect : float;
     private var sceneNpc : CNewNPC;   // in a shared conversation here: shown as itself, left out of sync
-    private var sceneHold : bool;     // a scene plays here: every synced NPC near it is itself, left out of sync
-    private var sceneCenter : Vector;
+    private var sceneHold : bool;     // a scene plays here: every synced NPC is itself, left out of sync, no stand-in shown
+    private var sceneGoneSince : float;  // sceneHold, but no scene playing here since then (0 while one plays)
     private var lastSnapshotAt : float;
     private var wasHost : bool;
 
@@ -388,49 +388,41 @@ class r_CoopNpcs
         return best;
     }
 
-    // A scene started here: its actors are this world's own NPCs, so every synced NPC near it is
-    // shown as itself (stand-ins swapped back, hidden copies shown) and left out of sync until
-    // ReleaseScene.
-    public function HoldAround(center : Vector)
+    // A scene started here: its actors are this world's own NPCs, so while it plays no stand-in is
+    // shown anywhere, hidden copies are shown and every synced NPC is left out of sync until
+    // ReleaseScene (the owner's playtest: a stand-in Vesemir over the scene's own in the ghouls
+    // cutscene, which the hold kept beyond 25 m of the scene). Real NPCs stay where the scene put
+    // them: no swap to the stand-in's spot, which could move a scene actor mid-shot.
+    public function HoldScene()
     {
         var i : int;
+        if(!sceneHold) { Record("SCENE_HOLD puppets=" + puppets.Size() + " hidden=" + hidden.Size()); }
         sceneHold = true;
-        sceneCenter = center;
-        for(i = 0; i < puppets.Size(); i += 1)
+        sceneGoneSince = 0;
+        for(i = puppets.Size() - 1; i >= 0; i -= 1)
         {
-            if(!puppets[i].npc || !(InSceneHold(puppets[i].npc) || (puppets[i].display && NearScene(puppets[i].display.GetWorldPosition())))) { continue; }
-            if(puppets[i].display)
-            {
-                SwapToReal(puppets[i].npc, puppets[i].display);
-                puppets[i].display = NULL;
-            }
+            DropDisplay(puppets[i].npc, puppets[i].display);
+            puppets[i].display = NULL;
+            // a stand-in only: nothing of this world to show; the leader's list brings it back after the scene
+            if(!puppets[i].npc) { puppets.Erase(i); continue; }
             Unhide(puppets[i].npc);
         }
         for(i = 0; i < hosted.Size(); i += 1)
         {
-            if(hosted[i].npc && hosted[i].display && (InSceneHold(hosted[i].npc) || NearScene(hosted[i].display.GetWorldPosition())))
+            if(hosted[i].npc && hosted[i].display)
             {
-                SwapToReal(hosted[i].npc, hosted[i].display);
+                DropDisplay(hosted[i].npc, hosted[i].display);
                 hosted[i].display = NULL;
             }
         }
-        for(i = hidden.Size() - 1; i >= 0; i -= 1)
-        {
-            if(InSceneHold(hidden[i].npc)) { Unhide(hidden[i].npc); }
-        }
+        for(i = hidden.Size() - 1; i >= 0; i -= 1) { Unhide(hidden[i].npc); }
     }
 
     // Left out of sync for a scene playing here.
     private function InSceneHold(npc : CNewNPC) : bool
     {
         if(!npc) { return false; }
-        if(sceneNpc && npc == sceneNpc) { return true; }
-        return NearScene(npc.GetWorldPosition());
-    }
-
-    private function NearScene(pos : Vector) : bool
-    {
-        return sceneHold && VecDistance(pos, sceneCenter) < COOP_SCENE_HOLD_RADIUS();
+        return sceneHold || (sceneNpc && npc == sceneNpc);
     }
 
     // The scene or shared conversation is over: sync takes the NPCs back. A leader whose member
@@ -438,19 +430,37 @@ class r_CoopNpcs
     // next update.
     public function ReleaseScene()
     {
+        var held : CNewNPC;
+        var all : bool;
         var i : int;
         if(!sceneNpc && !sceneHold) { return; }
+        if(sceneHold) { Record("SCENE_RELEASE"); }
+        held = sceneNpc;
+        all = sceneHold;
+        sceneNpc = NULL;
+        sceneHold = false;  // stand-ins may be shown again
         for(i = 0; i < hosted.Size(); i += 1)
         {
-            if(InSceneHold(hosted[i].npc) && hosted[i].owner != "" && !hosted[i].display)
+            if(hosted[i].npc && (all || hosted[i].npc == held) && hosted[i].owner != "" && !hosted[i].display)
             {
                 hosted[i].display = ShowDisplay(hosted[i].npc, hosted[i].npc.GetReadableName(), NameToString(hosted[i].npc.GetAppearance()),
                     hosted[i].npc.GetWorldPosition(), hosted[i].npc.GetHeading());
                 if(hosted[i].track) { hosted[i].track.Clear(); }
             }
         }
-        sceneNpc = NULL;
-        sceneHold = false;
+    }
+
+    // Every frame: a scene that started here before the party formed (a save that loads into one) is
+    // held too, and a hold whose scene ended without word (a load cut it off) lets go after 3 s.
+    private function CheckSceneHold(role : int, now : float)
+    {
+        var playing : bool;
+        playing = theGame.IsDialogOrCutscenePlaying() || thePlayer.IsInNonGameplayCutscene();
+        if(!sceneHold && playing && role != 0) { HoldScene(); }
+        if(!sceneHold) { return; }
+        if(playing) { sceneGoneSince = 0; }
+        else if(sceneGoneSince == 0) { sceneGoneSince = now; }
+        else if(now - sceneGoneSince > 3.0) { ReleaseScene(); }
     }
 
     // What this world shows for the NPC with one voicetag: a stand-in or the real one; NULL if neither.
@@ -508,6 +518,7 @@ class r_CoopNpcs
         if(!client || !thePlayer) { return; }
         now = theGame.GetEngineTimeAsSeconds();
         role = client.getCoopEnemies().GetRole();
+        CheckSceneHold(role, now);
 
         if(role == 1)
         {
@@ -1399,7 +1410,8 @@ class r_CoopNpcs
         var rot : EulerAngles;
         var i : int;
 
-        if(tpl == "" || DisplayCount() >= 12) { return NULL; }
+        // none while a scene plays here: the scene shows this world's own actors
+        if(tpl == "" || sceneHold || DisplayCount() >= 12) { return NULL; }
         template = (CEntityTemplate)LoadResource(tpl, true);
         if(!template) { return NULL; }
         rot.Yaw = yaw;
@@ -1443,6 +1455,13 @@ class r_CoopNpcs
             display.Destroy();
         }
         ShowReal(real);
+    }
+
+    // The stand-in goes and the real NPC is shown where it stands (a scene placed it).
+    private function DropDisplay(real : CNewNPC, display : CNewNPC)
+    {
+        if(display) { display.Destroy(); }
+        if(real) { ShowReal(real); }
     }
 
     private function MeasureGlide(npc : CNewNPC, glide : r_CoopNpcGlide, ownerSpeed : float, reference : bool)

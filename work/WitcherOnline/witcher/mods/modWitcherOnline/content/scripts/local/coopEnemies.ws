@@ -328,6 +328,8 @@ class r_CoopEnemies
 
     // scenes and the leader's tracking (sent with the journal list)
     private var currentScene : string;
+    private var localScene : bool;      // a blocking scene plays in this game (bots' test scenes aside)
+    private var sceneReleased : bool;   // enemy copies let go for it
     private var sceneSkipSeq : int;
     private var sceneSkipValue : int;
     private var applyingSkip : bool;
@@ -542,8 +544,15 @@ class r_CoopEnemies
             }
 
             // the leader's snapshots also stop while its game sits in a menu; far from the leader, this world
-            // runs its own monsters again
-            if(now - lastSnapshotAt > 8.0 || !LeaderNear())
+            // runs its own monsters again. So it does while a scene plays here: the scene's monsters and
+            // characters are this world's own, and a copy of the leader's beside them shows twice
+            if(InLocalScene())
+            {
+                if(!sceneReleased) { WO_Log("coop enemies scene: copies let go copies=" + PuppetCount() + " suppressed=" + SuppressedCount()); }
+                sceneReleased = true;
+                ReleaseAll();
+            }
+            else if(now - lastSnapshotAt > 8.0 || !LeaderNear())
             {
                 ReleaseAll();
             }
@@ -1561,6 +1570,7 @@ class r_CoopEnemies
             leaderEpoch = snapshotEpoch;
         }
         lastSnapshotAt = theGame.GetEngineTimeAsSeconds();
+        if(InLocalScene()) { return; }  // no copies while a scene plays here (Tick)
 
         idx = 4;
         n = StringToInt(WO_Str(idx), 0);
@@ -3317,11 +3327,28 @@ class r_CoopEnemies
         {
             currentScene = scene.GetPath();
         }
+        localScene = true;
     }
 
     public function OnSceneEnded()
     {
         currentScene = "";
+        localScene = false;
+    }
+
+    // A scene of this game's own is on screen (also one a save loaded into, which never reported a start).
+    private function InLocalScene() : bool
+    {
+        if(localScene || theGame.IsDialogOrCutscenePlaying() || thePlayer.IsInNonGameplayCutscene())
+        {
+            return true;
+        }
+        if(sceneReleased)
+        {
+            WO_Log("coop enemies scene over: copies again");
+        }
+        sceneReleased = false;
+        return false;
     }
 
     // the bots have no quest scene to share; they name one
