@@ -1164,6 +1164,18 @@ function W3T_TalkStarter() : bool
     return W3T_GetEnv("W3T_ROLE") != "mover";
 }
 
+// The leader votes the last choice (Farewell), the member the first: the leader's vote wins after the
+// tie and ends the conversation, whichever of them started it.
+function W3T_TalkShareVote(label : string, module : CR4HudModuleDialog, talk : r_CoopTalk, host : bool)
+{
+    var index : int;
+    index = 0;
+    if(host) { index = talk.LastChoiceCount() - 1; }
+    W3T_Log(label + " votes choice " + index);
+    module.OnDialogOptionSelected(index);
+    module.OnDialogOptionAccepted(index);
+}
+
 function W3T_TalkShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_RemotePlayer) : bool
 {
     var talk : r_CoopTalk;
@@ -1218,13 +1230,11 @@ function W3T_TalkShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_R
     root = theGame.GetGuiManager().GetRootMenu();
     if(!starter)
     {
-        // the joiner votes the farewell; the starter's game decides, and its decision comes back here
+        // the joiner votes; the starter's game decides, and its decision comes back here
         if(bot.scenarioStep == 2 && talk.IsListening() && client.hasActiveDialogChoices() && talk.MyVote() == "" && talk.picksApplied == 0
             && talk.ChoicesAge() > 1)
         {
-            W3T_Log(label + " votes the last choice (farewell)");
-            module.OnDialogOptionSelected(talk.LastChoiceCount() - 1);
-            module.OnDialogOptionAccepted(talk.LastChoiceCount() - 1);
+            W3T_TalkShareVote(label, module, talk, host);
         }
         if(bot.scenarioStep == 2 && talk.joins >= 1 && talk.picksApplied >= 1 && !talk.InScene())
         {
@@ -1233,13 +1243,10 @@ function W3T_TalkShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_R
     }
     else
     {
-        // the starter votes otherwise (the first choice): the votes differ until the leader's wins (with
-        // the host starting, its own vote is the leader's)
+        // the starter votes the other way: the votes differ until the leader's wins
         if(bot.scenarioStep == 3 && client.hasActiveDialogChoices() && talk.MyVote() == "" && talk.picksSent == 0 && talk.ChoicesAge() > 1)
         {
-            W3T_Log(label + " votes choice 0");
-            module.OnDialogOptionSelected(0);
-            module.OnDialogOptionAccepted(0);
+            W3T_TalkShareVote(label, module, talk, host);
             bot.scenarioCount = 1;
         }
         if(bot.scenarioStep == 3 && root)
