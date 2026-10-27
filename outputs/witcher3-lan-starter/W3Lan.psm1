@@ -11,13 +11,16 @@ function Assert-W3LanName {
 
 function Resolve-W3LanAddress {
     param([Parameter(Mandatory)][string]$Address)
-    if ($Address -notmatch '\A(\d{1,3}\.){3}\d{1,3}\z') { throw 'Enter a private IPv4 address, such as 192.168.1.20.' }
+    if ($Address -notmatch '\A(\d{1,3}\.){3}\d{1,3}\z') { throw 'Enter a private IPv4 address, such as 192.168.1.20 (home network) or the host''s ZeroTier or Tailscale address.' }
     $parsed = $null
     if (-not [Net.IPAddress]::TryParse($Address, [ref]$parsed)) { throw 'Invalid IPv4 address.' }
     $b = $parsed.GetAddressBytes()
     if ($b.Count -ne 4 -or $parsed.ToString() -cne $Address) { throw 'Use the full IPv4 address without leading zeroes.' }
     $private = $b[0] -eq 10 -or ($b[0] -eq 172 -and $b[1] -ge 16 -and $b[1] -le 31) -or ($b[0] -eq 192 -and $b[1] -eq 168)
-    if (-not $private -and $Address -ne '127.0.0.1') { throw 'This launcher accepts private LAN IPv4 addresses or 127.0.0.1 only.' }
+    # 100.64.0.0/10 (shared address space): Tailscale gives each PC a 100.x address from it.
+    # ZeroTier networks use the private ranges above by default.
+    $virtualLan = $b[0] -eq 100 -and $b[1] -ge 64 -and $b[1] -le 127
+    if (-not $private -and -not $virtualLan -and $Address -ne '127.0.0.1') { throw 'This launcher accepts private LAN IPv4 addresses, Tailscale 100.64-100.127 addresses or 127.0.0.1 only.' }
     $parsed.ToString()
 }
 
@@ -61,24 +64,44 @@ function Test-W3LanEndpoint {
     param(
         [Parameter(Mandatory)][string]$Address,
         [ValidateRange(1,65535)][int]$Port = 40000,
-        [ValidateRange(50,10000)][int]$TimeoutMs = 1000
+        [ValidateRange(50,10000)][int]$TimeoutMs = 1000,
+        # Over ZeroTier or Tailscale the first packets can be lost while the two PCs find a route.
+        [ValidateRange(1,10)][int]$Attempts = 1
     )
     $ip = Resolve-W3LanAddress $Address
-    $udp = [Net.Sockets.UdpClient]::new([Net.Sockets.AddressFamily]::InterNetwork)
     $timer = [Diagnostics.Stopwatch]::StartNew()
-    try {
-        $udp.Client.ReceiveTimeout = $TimeoutMs
-        $udp.Connect($ip, $Port)
-        # A blank username produces an explicit reply without creating a player session.
-        $data = [Text.Encoding]::UTF8.GetBytes("MOVE`t ")
-        [void]$udp.Send($data, $data.Length)
-        $remote = [Net.IPEndPoint]::new([Net.IPAddress]::Any, 0)
-        $reply = [Text.Encoding]::UTF8.GetString($udp.Receive([ref]$remote))
-        $ok = $reply -ceq "ERROR`tINVALID_USERNAME"
-        [pscustomobject]@{ Reachable = $ok; Address = $ip; Port = $Port; Reply = $reply; ElapsedMs = $timer.ElapsedMilliseconds }
-    } catch [Net.Sockets.SocketException] {
-        [pscustomobject]@{ Reachable = $false; Address = $ip; Port = $Port; Reply = $_.Exception.SocketErrorCode.ToString(); ElapsedMs = $timer.ElapsedMilliseconds }
-    } finally { $udp.Dispose() }
+    for ($attempt = 1; ; $attempt++) {
+        $udp = [Net.Sockets.UdpClient]::new([Net.Sockets.AddressFamily]::InterNetwork)
+        try {
+            $udp.Client.ReceiveTimeout = $TimeoutMs
+            $udp.Connect($ip, $Port)
+            # A blank username produces an explicit reply without creating a player session.
+            $data = [Text.Encoding]::UTF8.GetBytes("MOVE`t ")
+            [void]$udp.Send($data, $data.Length)
+            $remote = [Net.IPEndPoint]::new([Net.IPAddress]::Any, 0)
+            $reply = [Text.Encoding]::UTF8.GetString($udp.Receive([ref]$remote))
+            # a host with a join password refuses this PC until it answers (W3LanJoin.psm1)
+            $locked = $reply -ceq "ERROR`tNOT_WHITELISTED`tPASSWORD_REQUIRED"
+            $ok = $locked -or $reply -ceq "ERROR`tINVALID_USERNAME"
+            $result = [pscustomobject]@{ Reachable = $ok; PasswordRequired = $locked; Address = $ip; Port = $Port; Reply = $reply; ElapsedMs = $timer.ElapsedMilliseconds }
+        } catch [Net.Sockets.SocketException] {
+            $result = [pscustomobject]@{ Reachable = $false; PasswordRequired = $false; Address = $ip; Port = $Port; Reply = $_.Exception.SocketErrorCode.ToString(); ElapsedMs = $timer.ElapsedMilliseconds }
+        } finally { $udp.Dispose() }
+        if ($result.Reachable -or $attempt -ge $Attempts) { return $result }
+        Start-Sleep -Milliseconds 250
+    }
+}
+
+# What to check when the host does not answer: the same network, or the same ZeroTier/Tailscale network.
+function Get-W3LanUnreachableHint {
+    param([Parameter(Mandatory)][string]$Address)
+    $b = ([Net.IPAddress]::Parse($Address)).GetAddressBytes()
+    $route = if ($b[0] -eq 100 -and $b[1] -ge 64 -and $b[1] -le 127) {
+        'Check that both PCs are signed in to the same Tailscale tailnet and show as connected, and that this is the host''s Tailscale address.'
+    } else {
+        'Check the address: on the same home network use the host''s home-network address; over the internet check that both PCs are on the same ZeroTier network (and authorized there) or Tailscale tailnet, and use the host''s address on it.'
+    }
+    "$route Check that the host's console is open, Windows Firewall allows the host's Java, and Wi-Fi does not isolate the PCs."
 }
 
 function Stop-W3LanServer {
@@ -92,6 +115,64 @@ function Stop-W3LanServer {
     }
 }
 
+# The host's server reads console commands from a pipe (the launcher sends it 'stop' at the end), so
+# lines typed in the host console while the game runs are passed on to it: 'status', 'help', ...
+function Wait-W3LanGame {
+    param([Parameter(Mandatory)][Diagnostics.Process]$Game, [Diagnostics.Process]$Server)
+    $interactive = $false
+    if ($Server) { try { $interactive = -not [Console]::IsInputRedirected } catch { } }
+    if ($interactive) {
+        Write-Host "Server console: type status and press Enter to see each player's connection (help lists more)."
+        $line = [Text.StringBuilder]::new()
+        try {
+            while (-not $Game.WaitForExit(200)) {
+                while ([Console]::KeyAvailable) {
+                    $command = Add-W3LanConsoleKey -Line $line -Key ([Console]::ReadKey($true))
+                    if ($null -ne $command) { [void](Send-W3LanServerCommand -Server $Server -Command $command) }
+                }
+            }
+        } catch [InvalidOperationException] { }   # no console to read keys from: just wait
+    }
+    $Game.WaitForExit()
+}
+
+# One key of a typed line: returns the line on Enter, else $null.
+function Add-W3LanConsoleKey {
+    param([Parameter(Mandatory)][Text.StringBuilder]$Line, [Parameter(Mandatory)][ConsoleKeyInfo]$Key)
+    if ($Key.Key -eq [ConsoleKey]::Enter) {
+        Write-Host ''
+        $text = $Line.ToString()
+        [void]$Line.Clear()
+        return $text
+    }
+    if ($Key.Key -eq [ConsoleKey]::Backspace) {
+        if ($Line.Length) { [void]$Line.Remove($Line.Length - 1, 1); Write-Host -NoNewline "`b `b" }
+        return $null
+    }
+    if ($Key.KeyChar -ge [char]' ' -and $Line.Length -lt 200) {
+        [void]$Line.Append($Key.KeyChar)
+        Write-Host -NoNewline $Key.KeyChar
+    }
+    $null
+}
+
+# Passes one typed command to the server; 'stop' stays with the launcher (it stops the server when
+# the game closes).
+function Send-W3LanServerCommand {
+    param([Parameter(Mandatory)]$Server, [AllowEmptyString()][string]$Command)
+    $Command = $Command.Trim()
+    if (-not $Command) { return $false }
+    if ($Command -ieq 'stop') { Write-Host 'Close the game to stop the server.'; return $false }
+    if ($Server.HasExited) { Write-Host 'The server has stopped.'; return $false }
+    try {
+        $Server.StandardInput.WriteLine($Command)
+        $Server.StandardInput.Flush()
+        $true
+    } catch { Write-Host "Could not reach the server: $($_.Exception.Message)"; $false }
+}
+
+Export-ModuleMember -Function Wait-W3LanGame, Add-W3LanConsoleKey, Send-W3LanServerCommand
+
 function Start-W3LanServer {
     param(
         [Parameter(Mandatory)][string]$JarPath,
@@ -99,7 +180,9 @@ function Start-W3LanServer {
         [ValidateRange(1,65535)][int]$Port = 40000,
         # Co-op session: joining players download the host's newest save from this folder (TCP Port+1)
         [string]$SaveDirectory,
-        [string]$HostName
+        [string]$HostName,
+        # empty: anyone may join
+        [Security.SecureString]$JoinPassword
     )
     if (-not (Test-Path -LiteralPath $JarPath -PathType Leaf)) { throw 'Server JAR missing. Run Build-Server.ps1 first.' }
     $jar = (Resolve-Path -LiteralPath $JarPath).Path
@@ -124,6 +207,9 @@ function Start-W3LanServer {
     $info.UseShellExecute = $false
     $info.CreateNoWindow = $true
     $info.RedirectStandardInput = $true
+    # only the server process gets the join password: never its command line, a file or a log
+    [void]$info.EnvironmentVariables.Remove('W3LAN_JOIN_PASSWORD')
+    if ($JoinPassword -and $JoinPassword.Length) { $info.EnvironmentVariables['W3LAN_JOIN_PASSWORD'] = [Net.NetworkCredential]::new('', $JoinPassword).Password }
     $process = [Diagnostics.Process]::new()
     $process.StartInfo = $info
     $started = $false
@@ -166,41 +252,236 @@ function New-W3LanClientEnvironment {
 
 # Co-op session: download the host's newest save (and its thumbnail) into this player's co-op
 # save folder. Returns @{ Host; Save } (Save empty when the host has no save yet).
+# Over the internet (ZeroTier, Tailscale) a connection can drop or stall, so each file goes to a
+# .download file first, shows its progress, resumes where it broke off (HTTP Range) on the next of
+# -Attempts tries, and only replaces the file in the save folder once its size and SHA-256 match
+# what the host announced. When every try fails it throws a plain message and leaves no .download
+# file behind. A refusal by the host (403, 404) is not retried and keeps its WebException, so
+# callers can read its status code.
 function Copy-W3LanSessionSave {
     param(
         [Parameter(Mandatory)][string]$Address,
         [ValidateRange(1,65535)][int]$Port = 40001,
-        [Parameter(Mandatory)][string]$SaveDirectory
+        [Parameter(Mandatory)][string]$SaveDirectory,
+        [ValidateRange(1,10)][int]$Attempts = 3,
+        # wait before try n: (n - 1) times this
+        [ValidateRange(0,60)][double]$RetryDelaySeconds = 2
     )
     $ip = Resolve-W3LanAddress $Address
     $base = "http://${ip}:$Port/session"
+    $offered = $null   # the listing the .download files belong to: save|size|sha256
+    $partials = @{}    # extension -> its .download file
+    $expect = @{}      # extension -> @{ Length; Sha256; Fixed } the file must match
+    $state = @{}       # extension -> 'ready' (verified .download) or 'skip' (nothing to move)
+    $hostName = ''
+    $save = ''
+    $why = ''
+    $last = $null
+    try {
+        for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+            if ($attempt -gt 1) {
+                Write-Warning "Save download from the host failed: $why. Trying again ($attempt of $Attempts)..."
+                Start-Sleep -Milliseconds ([int](1000 * $RetryDelaySeconds * ($attempt - 1)))
+            }
+            try {
+                $fields = Read-W3LanSessionListing $base
+                $hostName = [string]$fields['host']
+                $save = [string]$fields['save']
+                if ($hostName) { Assert-W3LanName $hostName }
+                if (-not $save) { return @{ Host = $hostName; Save = '' } }
+                if ($save -notmatch '^[A-Za-z0-9_.-]{1,120}$') { throw 'The host offered an invalid save name.' }
+                if ([string]$fields['size'] -notmatch '^\d{1,15}$') { throw 'The host offered no save size.' }
+                $size = [long]$fields['size']
+                $sha = ([string]$fields['sha256']).ToUpperInvariant()   # empty from an older host
+                if ($sha -and $sha -notmatch '^[0-9A-F]{64}$') { throw 'The host offered an invalid save checksum.' }
+                if ("$save|$size|$sha" -ne $offered) {
+                    # the first try, or the host saved again since: start these files over
+                    Remove-W3LanPartials $partials
+                    [void][IO.Directory]::CreateDirectory($SaveDirectory)
+                    $partials = @{ '.sav' = (Join-Path $SaveDirectory "$save.sav.download"); '.png' = (Join-Path $SaveDirectory "$save.png.download") }
+                    Remove-W3LanPartials $partials   # left by a launcher that was closed mid-download
+                    $expect = @{ '.sav' = @{ Length = $size; Sha256 = $sha; Fixed = [bool]$sha }; '.png' = @{ Length = -1L; Sha256 = ''; Fixed = $false } }
+                    $state = @{}
+                    $offered = "$save|$size|$sha"
+                    $target = Join-Path $SaveDirectory "$save.sav"
+                    if ($sha -and (Test-Path -LiteralPath $target -PathType Leaf) -and (Get-Item -LiteralPath $target).Length -eq $size -and (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -eq $sha) {
+                        $state['.sav'] = 'skip'   # this PC has that very save already
+                    }
+                }
+                if (-not $state['.sav']) {
+                    Receive-W3LanSessionFile -Uri "$base/save/$save.sav" -Partial $partials['.sav'] -Expect $expect['.sav'] -Label "$save.sav"
+                    Assert-W3LanDownload -Path $partials['.sav'] -Expect $expect['.sav'] -Label "$save.sav"
+                    $state['.sav'] = 'ready'
+                }
+                if (-not $state['.png']) {
+                    try {
+                        Receive-W3LanSessionFile -Uri "$base/save/$save.png" -Partial $partials['.png'] -Expect $expect['.png'] -Label "$save.png"
+                        Assert-W3LanDownload -Path $partials['.png'] -Expect $expect['.png'] -Label "$save.png"
+                        $state['.png'] = 'ready'
+                    } catch {
+                        $cause = Get-W3LanCause $_.Exception
+                        if ($cause -isnot [Net.WebException] -or $cause.Response -isnot [Net.HttpWebResponse] -or [int]$cause.Response.StatusCode -ne 404) { throw }
+                        $state['.png'] = 'skip'   # the thumbnail is optional
+                    }
+                }
+                break
+            } catch {
+                $last = Get-W3LanCause $_.Exception
+                if (-not (Test-W3LanTransient $last)) { throw $last }
+                $why = $last.Message.Trim().TrimEnd('.')
+            }
+        }
+        if ($state['.sav'] -ne 'ready' -and $state['.sav'] -ne 'skip') {
+            throw [IO.IOException]::new("The host's save did not arrive after $Attempts tries: $why. Check the network connection to the host and start the launcher again. Nothing was written to your co-op saves.", $last)
+        }
+        # the thumbnail first: the game lists a save by its .sav
+        foreach ($extension in @('.png', '.sav')) {
+            if ($state[$extension] -eq 'ready') { Move-W3LanDownload $partials[$extension] (Join-Path $SaveDirectory ($save + $extension)) }
+        }
+        @{ Host = $hostName; Save = $save }
+    } finally {
+        Remove-W3LanPartials $partials
+    }
+}
+
+# Session share helpers (not exported).
+function New-W3LanSessionRequest([string]$Uri) {
+    $request = [Net.HttpWebRequest][Net.WebRequest]::Create($Uri)
+    $request.Proxy = $null              # the host is on the LAN or a virtual network, never behind a proxy
+    $request.KeepAlive = $false
+    $request.Timeout = 15000            # connect and headers
+    $request.ReadWriteTimeout = 30000   # a stalled transfer counts as dropped
+    $request.AutomaticDecompression = [Net.DecompressionMethods]::None
+    $request
+}
+
+function Read-W3LanSessionListing([string]$Uri) {
+    $response = (New-W3LanSessionRequest $Uri).GetResponse()
+    try {
+        $reader = [IO.StreamReader]::new($response.GetResponseStream(), [Text.Encoding]::UTF8)
+        try { $text = $reader.ReadToEnd() } finally { $reader.Dispose() }
+    } finally { $response.Dispose() }
     $fields = @{}
-    foreach ($line in ((Invoke-WebRequest -Uri $base -UseBasicParsing -TimeoutSec 5).Content -split "`n")) {
+    foreach ($line in ($text -split "`n")) {
         $at = $line.IndexOf('=')
         if ($at -gt 0) { $fields[$line.Substring(0, $at)] = $line.Substring($at + 1).Trim() }
     }
-    $hostName = [string]$fields['host']
-    $save = [string]$fields['save']
-    if ($hostName) { Assert-W3LanName $hostName }
-    if (-not $save) { return @{ Host = $hostName; Save = '' } }
-    if ($save -notmatch '^[A-Za-z0-9_.-]{1,120}$') { throw "The host offered an invalid save name." }
-    [void][IO.Directory]::CreateDirectory($SaveDirectory)
-    foreach ($extension in @('.sav', '.png')) {
-        $target = Join-Path $SaveDirectory ($save + $extension)
-        $partial = $target + '.download'
-        try {
-            Invoke-WebRequest -Uri "$base/save/$save$extension" -UseBasicParsing -TimeoutSec 60 -OutFile $partial
-        } catch {
-            if ($extension -eq '.png') { continue }   # the thumbnail is optional
-            throw
+    $fields
+}
+
+# One try at one file into its .download file, resuming what an earlier try left there. Fills in
+# $Expect's length and SHA-256 from the host when they are not known yet.
+function Receive-W3LanSessionFile {
+    param([string]$Uri, [string]$Partial, [hashtable]$Expect, [string]$Label)
+    $have = 0L
+    if (Test-Path -LiteralPath $Partial -PathType Leaf) { $have = (Get-Item -LiteralPath $Partial).Length }
+    if ($Expect.Length -ge 0 -and $have -gt $Expect.Length) { Remove-Item -LiteralPath $Partial -Force; $have = 0L }
+    if ($have -gt 0 -and $have -eq $Expect.Length) { return }   # complete: Assert-W3LanDownload checks it
+    $request = New-W3LanSessionRequest $Uri
+    if ($have -gt 0) { $request.AddRange([long]$have) }
+    try { $response = $request.GetResponse() } catch {
+        $cause = Get-W3LanCause $_.Exception
+        if ($have -gt 0 -and $cause -is [Net.WebException] -and $cause.Response -is [Net.HttpWebResponse] -and [int]$cause.Response.StatusCode -eq 416) {
+            Remove-Item -LiteralPath $Partial -Force
+            throw [IO.IOException]::new("the host's $Label no longer matches the part already downloaded")
         }
-        if ($extension -eq '.sav' -and (Get-Item -LiteralPath $partial).Length -ne [long]$fields['size']) {
-            Remove-Item -LiteralPath $partial
-            throw 'The host save download was incomplete.'
-        }
-        Move-Item -LiteralPath $partial -Destination $target -Force
+        throw $cause
     }
-    @{ Host = $hostName; Save = $save }
+    try {
+        $total = -1L
+        if ($have -gt 0 -and [int]$response.StatusCode -eq 206) {
+            if ([string]$response.Headers['Content-Range'] -notmatch '^bytes (\d+)-(\d+)/(\d+)$' -or [long]$Matches[1] -ne $have) {
+                Remove-Item -LiteralPath $Partial -Force
+                throw [IO.IOException]::new("the host sent the wrong part of $Label")
+            }
+            $total = [long]$Matches[3]
+        } else {
+            $have = 0L   # a host without Range support sends the whole file again
+            $total = $response.ContentLength
+        }
+        $hostSha = ([string]$response.Headers['X-Content-SHA256']).ToUpperInvariant()
+        if ($hostSha -and $Expect.Sha256 -and $hostSha -ne $Expect.Sha256 -and ($Expect.Fixed -or $have -gt 0)) {
+            Remove-Item -LiteralPath $Partial -Force -ErrorAction SilentlyContinue
+            throw [IO.IOException]::new("the host's $Label changed during the download")
+        }
+        if ($hostSha -and -not $Expect.Fixed) { $Expect.Sha256 = $hostSha }
+        if ($total -ge 0 -and $Expect.Length -ge 0 -and $total -ne $Expect.Length) {
+            Remove-Item -LiteralPath $Partial -Force -ErrorAction SilentlyContinue
+            throw [IO.IOException]::new("the host's $Label changed during the download")
+        }
+        if ($Expect.Length -lt 0) { $Expect.Length = $total }
+        $mode = if ($have -gt 0) { [IO.FileMode]::Append } else { [IO.FileMode]::Create }
+        $got = $have
+        $show = $total -ge 1MB
+        $activity = "Downloading the host's save"
+        $stream = $response.GetResponseStream()
+        $file = [IO.FileStream]::new($Partial, $mode, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        try {
+            $buffer = [byte[]]::new(65536)
+            $clock = [Diagnostics.Stopwatch]::StartNew()
+            $next = 0L
+            while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                $file.Write($buffer, 0, $read)
+                $got += $read
+                if ($show -and $clock.ElapsedMilliseconds -ge $next) {
+                    $next = $clock.ElapsedMilliseconds + 250
+                    $rate = ($got - $have) / 1MB / [Math]::Max(0.001, $clock.Elapsed.TotalSeconds)
+                    $status = '{0}: {1:N1} of {2:N1} MB ({3:N1} MB/s)' -f $Label, ($got / 1MB), ($total / 1MB), $rate
+                    Write-Progress -Activity $activity -Status $status -PercentComplete ([int][Math]::Min(100, 100 * $got / $total))
+                }
+            }
+        } finally {
+            $file.Dispose()
+            $stream.Dispose()
+            if ($show) { Write-Progress -Activity $activity -Completed }
+        }
+        if ($total -ge 0 -and $got -lt $total) {
+            throw [IO.IOException]::new(('the connection dropped at {0:N1} of {1:N1} MB of {2}' -f ($got / 1MB), ($total / 1MB), $Label))
+        }
+    } finally { $response.Dispose() }
+}
+
+# A complete .download that is not the host's file is deleted: the next try starts it over.
+function Assert-W3LanDownload {
+    param([string]$Path, [hashtable]$Expect, [string]$Label)
+    $length = (Get-Item -LiteralPath $Path).Length
+    if ($Expect.Length -ge 0 -and $length -lt $Expect.Length) {
+        throw [IO.IOException]::new(('the connection dropped at {0:N1} of {1:N1} MB of {2}' -f ($length / 1MB), ($Expect.Length / 1MB), $Label))
+    }
+    if (($Expect.Length -ge 0 -and $length -ne $Expect.Length) -or ($Expect.Sha256 -and (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash -ne $Expect.Sha256)) {
+        Remove-Item -LiteralPath $Path -Force
+        throw [IO.IOException]::new("$Label arrived damaged: its SHA-256 checksum does not match the host's")
+    }
+}
+
+# Replace the file in the save folder in one step: the game never sees half a save.
+function Move-W3LanDownload([string]$Partial, [string]$Target) {
+    if (Test-Path -LiteralPath $Target -PathType Leaf) { [IO.File]::Replace($Partial, $Target, [NullString]::Value) }
+    else { [IO.File]::Move($Partial, $Target) }
+}
+
+function Remove-W3LanPartials([hashtable]$Partials) {
+    foreach ($path in @($Partials.Values)) {
+        if ($path -and (Test-Path -LiteralPath $path -PathType Leaf)) { Remove-Item -LiteralPath $path -Force }
+    }
+}
+
+# The .NET exception behind a PowerShell method-call wrapper.
+function Get-W3LanCause([Exception]$Exception) {
+    while ($Exception.InnerException -and $Exception -is [Management.Automation.ExtendedTypeSystemException]) { $Exception = $Exception.InnerException }
+    $Exception
+}
+
+# Worth another try: a dropped, refused or stalled connection, a damaged file, a host error (5xx).
+function Test-W3LanTransient([Exception]$Exception) {
+    if ($Exception -is [Net.WebException]) {
+        if ($Exception.Response -is [Net.HttpWebResponse]) {
+            $code = [int]$Exception.Response.StatusCode
+            return $code -ge 500 -or $code -eq 408
+        }
+        return $true
+    }
+    $Exception -is [IO.IOException] -or $Exception -is [TimeoutException]
 }
 
 # What a player typed last time (names per mode, the host's address), kept per Windows user so a
@@ -437,4 +718,4 @@ function Send-W3LanSessionLogs {
     ''
 }
 
-Export-ModuleMember -Function Assert-W3LanName, Resolve-W3LanAddress, Get-W3LanAddresses, Find-W3LanJava, Test-W3LanEndpoint, Start-W3LanServer, Stop-W3LanServer, New-W3LanClientEnvironment, Copy-W3LanSessionSave, Get-W3LanPlayerSettingsPath, Get-W3LanPlayerSettings, Set-W3LanPlayerSettings, Read-W3LanValue, Get-W3LanLogSources, Get-W3LanLogOutbox, Test-W3LanLogUploadWanted, Add-W3LanLogsToOutbox, Send-W3LanLogOutbox, Start-W3LanLogUpload, Send-W3LanSessionLogs
+Export-ModuleMember -Function Assert-W3LanName, Resolve-W3LanAddress, Get-W3LanAddresses, Find-W3LanJava, Test-W3LanEndpoint, Get-W3LanUnreachableHint, Start-W3LanServer, Stop-W3LanServer, New-W3LanClientEnvironment, Copy-W3LanSessionSave, Get-W3LanPlayerSettingsPath, Get-W3LanPlayerSettings, Set-W3LanPlayerSettings, Read-W3LanValue, Get-W3LanLogSources, Get-W3LanLogOutbox, Test-W3LanLogUploadWanted, Add-W3LanLogsToOutbox, Send-W3LanLogOutbox, Start-W3LanLogUpload, Send-W3LanSessionLogs

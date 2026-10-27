@@ -75,6 +75,7 @@ public final class SeamlessUdpIntegrationTest {
         dialogueInstances(java, classes, root, port);
         factRemovals(java, classes, root, port);
         coopChannels(java, classes, root, port);
+        joinPassword(java, classes, root, port);
         System.out.println("SeamlessUdpIntegrationTest passed: " + assertions + " assertions (loss/duplicate/reorder/auth/crash/replay)");
     }
     // A party leader's game keeps one co-op state per channel, 14 of them by now: every one must reach
@@ -98,6 +99,69 @@ public final class SeamlessUdpIntegrationTest {
             }
             eq(wanted, seen);
         } finally { if (server.isAlive()) stop(server); }
+    }
+    // Join password on the real server: a second PC (this PC's own LAN address, so not loopback) is
+    // refused on UDP and on the save share until it answers the challenge with the right password;
+    // without a password it joins as before. The password never appears in the server's output.
+    private static void joinPassword(String java, String classes, Path root, int port) throws Exception {
+        InetAddress lan = lanAddress();
+        if (lan == null) { System.out.println("SKIP no LAN address on this PC: join password checks need a non-loopback source"); return; }
+        Path state = Files.createTempDirectory(root, "udp-join-password-"); Path saves = Files.createDirectories(state.resolve("gamesaves"));
+        int savePort; try (ServerSocket free = new ServerSocket(0)) { savePort = free.getLocalPort(); }
+        String password = "silver sword 7";
+        Process server = startPlain(java, classes, state, port, savePort, password, "join-password.log");
+        try (Peer local = new Peer(port, "Host", H); Peer second = new Peer(lan, port); Peer wrong = new Peer(lan, port)) {
+            ready(local, server);
+            String session = "http://" + lan.getHostAddress() + ":" + savePort + "/session";
+            eq("ERROR\tNOT_WHITELISTED\tPASSWORD_REQUIRED", second.raw("MOVE\t "));
+            eq("ERROR\tNOT_WHITELISTED\tPASSWORD_REQUIRED", second.raw("COOP\tSecondPC\ten\t1"));
+            eq(403, httpStatus(session));
+            eq(200, httpStatus("http://127.0.0.1:" + savePort + "/session"));   // the host's own PC
+            String nonce = challenge(wrong);
+            eq("ERROR\tWRONG_PASSWORD", wrong.raw("AUTH\t" + nonce + "\t" + JoinGate.proof("steel sword", nonce)));
+            eq("ERROR\tNOT_WHITELISTED\tPASSWORD_REQUIRED", wrong.raw("MOVE\t "));
+            nonce = challenge(wrong);
+            eq("ERROR\tWRONG_PASSWORD", wrong.raw("AUTH\t" + nonce + "\t"));   // missing password
+            eq("ERROR\tWRONG_PASSWORD", wrong.raw("AUTH\t" + nonce + "\t" + JoinGate.proof(password, nonce)));   // used nonce
+            eq(403, httpStatus(session));
+            nonce = challenge(second);
+            eq("AUTH\tOK", second.raw("AUTH\t" + nonce + "\t" + JoinGate.proof(password, nonce)));
+            eq("ERROR\tINVALID_USERNAME", second.raw("MOVE\t "));   // game packets now reach the server
+            eq(200, httpStatus(session));
+        } finally { if (server.isAlive()) stop(server); }
+        eq(false, Files.readString(state.resolve("join-password.log")).contains(password));
+        server = startPlain(java, classes, state, port, savePort, null, "no-password.log");
+        try (Peer local = new Peer(port, "Host", H); Peer second = new Peer(lan, port)) {
+            ready(local, server);
+            eq("ERROR\tINVALID_USERNAME", second.raw("MOVE\t "));
+            eq("AUTH\tOPEN", second.raw("AUTH"));
+            eq(200, httpStatus("http://" + lan.getHostAddress() + ":" + savePort + "/session"));
+        } finally { if (server.isAlive()) stop(server); }
+    }
+    private static String challenge(Peer peer) throws Exception {
+        String[] reply = peer.raw("AUTH").split("\t", -1);
+        eq(3, reply.length); eq("AUTH", reply[0]); eq("CHALLENGE", reply[1]);
+        return reply[2];
+    }
+    private static Process startPlain(String java, String classes, Path state, int port, int savePort, String password, String log) throws IOException {
+        ProcessBuilder builder = new ProcessBuilder(java, "-cp", classes, "WitcherServer", Integer.toString(port),
+            "--save-dir", state.resolve("gamesaves").toAbsolutePath().toString(), "--save-port", Integer.toString(savePort), "--host-name", "Host");
+        builder.environment().remove(JoinGate.PASSWORD_ENV);
+        if (password != null) builder.environment().put(JoinGate.PASSWORD_ENV, password);
+        builder.redirectErrorStream(true).redirectOutput(state.resolve(log).toFile()); return builder.start();
+    }
+    private static int httpStatus(String address) throws IOException {
+        HttpURLConnection connection = (HttpURLConnection) new URL(address).openConnection();
+        connection.setConnectTimeout(2000); connection.setReadTimeout(2000);
+        try { assertions++; return connection.getResponseCode(); } finally { connection.disconnect(); }
+    }
+    private static InetAddress lanAddress() throws IOException {
+        for (NetworkInterface face : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+            if (!face.isUp() || face.isLoopback()) continue;
+            for (InetAddress address : Collections.list(face.getInetAddresses()))
+                if (address instanceof Inet4Address && !address.isLoopbackAddress() && !address.isLinkLocalAddress()) return address;
+        }
+        return null;
     }
     private static void factRemovals(String java, String classes, Path root, int port) throws Exception {
         Path state = Files.createTempDirectory(root, "udp-removal-"); Process server = start(java, classes, state, port, "removal-first.log");
@@ -222,7 +286,9 @@ public final class SeamlessUdpIntegrationTest {
     }
     private static final class Peer implements AutoCloseable {
         final DatagramSocket socket; final String name, id;
-        Peer(int port, String name, String id) throws Exception { socket = new DatagramSocket(0, InetAddress.getLoopbackAddress()); socket.connect(InetAddress.getLoopbackAddress(), port); socket.setSoTimeout(300); this.name = name; this.id = id; }
+        Peer(int port, String name, String id) throws Exception { this(InetAddress.getLoopbackAddress(), port, name, id); }
+        Peer(InetAddress address, int port) throws Exception { this(address, port, "-", "-"); }
+        Peer(InetAddress address, int port, String name, String id) throws Exception { socket = new DatagramSocket(0, address); socket.connect(address, port); socket.setSoTimeout(300); this.name = name; this.id = id; }
         List<String> send(long seq, String op, String... args) throws Exception {
             String message = "COOP\t" + name + "\tsc\t1\t" + id + "\t" + seq + "\t" + op;
             for (String arg : args) message += "\t" + arg;

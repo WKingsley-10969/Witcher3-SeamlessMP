@@ -25,6 +25,8 @@ Fields use the existing tab-separated COOP encoding, including existing backslas
 COOP  <username>  sc  1  <clientSession>  <requestSeq>  <operation>  <arguments...>
 ```
 
+Datagram size (all traffic, not only `sc`): the server receives into 65,536 bytes, so no datagram is cut off (it was 8192, and a longer one was cut off silently and its stump relayed). It does not relay a datagram over 8192 bytes, the game client's receive buffer, and logs that (rate-limited). It logs a warning (at most once per direction and type every 30 s) for any datagram over 1200 bytes, naming its type (`COOP/<channel>` for co-op channels), and at shutdown the number of datagrams per type by size band and the largest of each. One IP packet carries at most 1252 bytes of UDP payload over Tailscale (MTU 1280), 1472 over a 1500-byte internet path and 2772 over ZeroTier (MTU 2800); a larger datagram is IP-fragmented and lost whenever any fragment is.
+
 The legacy optional numeric player id can precede username. A clientSession is a persistent random token matching `[A-Za-z0-9_-]{16,64}`. Keep it in the launcher profile across launches. The host name is ASCII letters/digits/underscore, 2–16 characters, case insensitive for identity, excluding `none` and `SCServer`.
 
 One request is outstanding per session. Sequence starts at 1; retry identical fields with the same sequence until acknowledged. A successful/semantic-error sequenced response consumes that sequence. Malformed packets, authentication failures, `STALE_EPOCH`, `HELLO_REQUIRED`, `BAD_SEQUENCE`, and endpoint ownership failures do not. A duplicate most-recent committed request replays its durable result with a new response tick; a different request using the same number returns `REQUEST_CONFLICT`. Older requests return `ALREADY_APPLIED` and the last accepted sequence. Future requests return `BAD_SEQUENCE` and the expected sequence.
@@ -168,3 +170,15 @@ Verification on the separate Codex branch: 255 existing pure assertions + 54 rem
 The owner of a scope drains the native FactsSet journal (`WNB_FactOps*`) one FactsSet at a time. Each FactsSet is recorded as a `remove`/`add` pair for one target; the adapter acknowledges the `remove` locally, turns the `add` into `EFFECT fx_<processNonce>_<generation>_<revision> <scope> fact <target> <value[@validFor]>`, and acknowledges the `add` only after `OK` (or `OK ... DUPLICATE` on a resend). Only operations captured under the scope id the client currently owns are sent; others wait. Any other reply halts the adapter (`CAPTURE_COMMIT_<status>`) with the operation still queued.
 
 Applying a `TRANSACTION` brackets each fact write in both remote-echo guards (`WO_SCBeginRemoteFact` and, when capture is active, `WNB_FactOpsBeginRemote`), so a replicated write is never recaptured. The capturing process skips its own `fx_<processNonce>_` transactions because the engine already holds them; a later process (new nonce) replays them like any remote write. A positive duration re-arms expiry from the applying game's current time. Capture remains restricted to `sc_test_` scopes and targets.
+
+## Join password (26 October 2026)
+
+Optional and separate from the campaign host secret. The server reads it only from the environment variable `W3LAN_JOIN_PASSWORD` (the launcher sets it on the server process only); empty or unset keeps the open behaviour. It is never logged. With a password, a non-loopback address is refused until it answers a challenge once per server run:
+
+```
+AUTH                      ->  AUTH  CHALLENGE  <32 hex nonce>     (AUTH  OPEN without a password)
+AUTH  <nonce>  <proof>    ->  AUTH  OK  |  ERROR  WRONG_PASSWORD  |  ERROR  TOO_MANY_ATTEMPTS
+proof = lowercase hex HMAC-SHA256(key = UTF-8 password, message = "w3lan-join:" + nonce)
+```
+
+A nonce belongs to the requesting address, answers once and expires after 30 s; 5 wrong answers within 60 s refuse new nonces to that address. Before a successful answer, every other UDP packet from that address gets `ERROR  NOT_WHITELISTED  PASSWORD_REQUIRED` (unchanged native clients show the "not whitelisted" message; launchers read the third field), and the save share and lobby (`/session`, `/lobby`) answer HTTP 403. Bans and the IP whitelist are checked first. Access is per address, not per player; it is not encryption, so run it inside a trusted LAN or an encrypted virtual network.

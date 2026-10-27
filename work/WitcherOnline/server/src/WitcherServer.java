@@ -46,6 +46,8 @@ public class WitcherServer
     private static final AtomicLong totalBroadcastTicks = new AtomicLong(0);
 
     private static volatile long lastBroadcastTickNanos = 0L;
+    // datagram sizes by message type, against what Tailscale/ZeroTier/internet paths carry in one piece
+    private static final PacketSizes packetSizes = new PacketSizes();
 
     private static final long PLAYER_TIMEOUT_NANOS = 5_000_000_000L;
     private static final long USERNAME_HOLD_NANOS = 60_000_000_000L;
@@ -61,10 +63,15 @@ public class WitcherServer
     private static final int DEFAULT_STATUS_PORT = 40001;
 
     private static volatile HttpServer statusServer = null;
+    private static volatile SaveShare saveShare = null;
     private static volatile String cachedStatusFontBase64 = "";
 
     private static final AtomicInteger nextPlayerId = new AtomicInteger(1);
     private static SeamlessCampaign campaign;
+    // Optional join password (W3LAN_JOIN_PASSWORD on this process only; never logged or on the command line)
+    private static JoinGate joinGate = new JoinGate(null);
+    // per-player connection health for the "status" command and the periodic summary
+    private static final ConnectionStats connectionStats = new ConnectionStats();
 
     public static void main(String[] args) throws Exception
     {
@@ -82,9 +89,12 @@ public class WitcherServer
                     booleanOption(args, "--campaign-voting", true), booleanOption(args, "--campaign-shared-xp", true));
         }
         whitelistEnabled.set(readBoolean(serverProperties, "whitelist", false));
+        connectionStats.configure(serverProperties);
 
         loadBannedIps();
         loadWhitelistIps();
+        joinGate = new JoinGate(System.getenv(JoinGate.PASSWORD_ENV));
+        if (joinGate.enabled()) System.out.println("Join password set: other PCs must enter it to join");
 
         // Co-op session: joining players download the host's newest save (SaveShare)
         String saveDir = option(args, "--save-dir");
@@ -93,10 +103,10 @@ public class WitcherServer
             String savePortText = option(args, "--save-port");
             Integer savePort = savePortText == null ? Integer.valueOf(port + 1) : parsePort(savePortText);
             if (savePort == null) throw new IllegalArgumentException("--save-port must be a port number");
-            SaveShare share = SaveShare.start(Paths.get(saveDir), savePort, option(args, "--host-name"));
-            System.out.println("Sharing co-op saves from " + saveDir + " on TCP port " + share.port());
+            saveShare = SaveShare.start(Paths.get(saveDir), savePort, option(args, "--host-name"), joinGate::allows);
+            System.out.println("Sharing co-op saves from " + saveDir + " on TCP port " + saveShare.port());
             // co-op logs from the second PC, next to the server's other data
-            LogInbox.attach(share.httpServer(), appDir().resolve("player-logs"), WitcherServer::clientAddresses);
+            LogInbox.attach(saveShare.httpServer(), appDir().resolve("player-logs"), WitcherServer::clientAddresses);
         }
 
         DatagramSocket socket = new DatagramSocket(port);
@@ -471,7 +481,8 @@ public class WitcherServer
 
     private static void receiveLoop(DatagramSocket socket)
     {
-        byte[] buffer = new byte[8192];
+        // was 8192: a larger datagram was cut off without a word and its stump relayed
+        byte[] buffer = new byte[PacketSizes.RECEIVE_BUFFER_BYTES];
 
         while (running.get())
         {
@@ -489,6 +500,7 @@ public class WitcherServer
                         packet.getLength(),
                         StandardCharsets.UTF_8
                 );
+                logSize(packetSizes.record("in", PacketSizes.typeOf(msg), packet.getLength(), 1, sender.toString()));
 
                 if (isIpBanned(senderIp))
                 {
@@ -502,6 +514,20 @@ public class WitcherServer
                     continue;
                 }
 
+                if (msg.equals("AUTH") || msg.startsWith("AUTH\t"))
+                {
+                    handleAuth(socket, sender, msg);
+                    continue;
+                }
+
+                // The game shows its "not whitelisted" message; the third field tells launchers why.
+                if (!joinGate.allows(sender.address))
+                {
+                    safeSend(socket, sender, "ERROR\tNOT_WHITELISTED\tPASSWORD_REQUIRED");
+                    continue;
+                }
+
+                connectionStats.packetIn(sender, System.nanoTime());
                 handleMessage(socket, sender, msg);
             }
             catch (SocketException e)
@@ -516,6 +542,34 @@ public class WitcherServer
             {
                 e.printStackTrace();
             }
+        }
+    }
+
+    // Join password challenge (JoinGate): AUTH, then AUTH <nonce> <proof>.
+    private static void handleAuth(DatagramSocket socket, ClientEndpoint sender, String msg)
+    {
+        if (!joinGate.enabled())
+        {
+            safeSend(socket, sender, "AUTH\tOPEN");
+            return;
+        }
+        String ip = sender.address.getHostAddress();
+        String[] parts = msg.split("\t", -1);
+        long now = System.currentTimeMillis();
+        if (parts.length == 1)
+        {
+            String nonce = joinGate.challenge(ip, now);
+            safeSend(socket, sender, nonce == null ? "ERROR\tTOO_MANY_ATTEMPTS" : "AUTH\tCHALLENGE\t" + nonce);
+        }
+        else if (parts.length == 3 && joinGate.answer(ip, parts[1], parts[2], now))
+        {
+            dbg("Join password accepted from %s\n", ip);
+            safeSend(socket, sender, "AUTH\tOK");
+        }
+        else
+        {
+            dbg("Wrong join password from %s\n", ip);
+            safeSend(socket, sender, "ERROR\tWRONG_PASSWORD");
         }
     }
 
@@ -759,6 +813,7 @@ public class WitcherServer
         }
 
         List<String> frozenFields = Collections.unmodifiableList(fields);
+        connectionStats.sequence(sender, opcode, frozenFields, now);
 
         if ("MOVE".equals(opcode))
         {
@@ -846,6 +901,9 @@ public class WitcherServer
                         }
                     }
                 }
+
+                String summary = connectionStats.tick(players.values(), now);
+                if (summary != null) dbg("%s\n", summary);
 
                 Thread.sleep(1000);
             }
@@ -942,10 +1000,11 @@ public class WitcherServer
         String packetText = buildTypedPacket(opcode, session.playerId, session.username, fields);
         byte[] data = packetText.getBytes(StandardCharsets.UTF_8);
 
-        // enemy snapshots are routinely larger; logging them every tick would flood the console
-        if (data.length > 1200 && !"COOP".equals(opcode))
+        // The game client cannot receive it (it would also stall its receiver): log it (rate-limited) instead.
+        if (data.length > PacketSizes.CLIENT_RECEIVE_BYTES)
         {
-            dbg("Large packet: opcode=%s user=%s bytes=%d\n data=%s", opcode, session.username, data.length, packetText);
+            logSize(packetSizes.refuse(PacketSizes.type(opcode, fields), data.length, session.username));
+            return 0;
         }
 
         int sent = 0;
@@ -962,6 +1021,7 @@ public class WitcherServer
                 );
                 socket.send(packet);
                 sent++;
+                connectionStats.packetOut(client, System.nanoTime());
             }
             catch (Exception e)
             {
@@ -971,6 +1031,7 @@ public class WitcherServer
             }
         }
 
+        logSize(packetSizes.record("out", PacketSizes.type(opcode, fields), data.length, sent, session.username));
         return sent;
     }
 
@@ -1047,6 +1108,16 @@ public class WitcherServer
                         secsSinceSeen);
             }
 
+            dbgNotime("\n");
+            return;
+        }
+
+        if (line.equals("status"))
+        {
+            for (String statusLine : connectionStats.statusLines(players.values(), System.nanoTime()))
+            {
+                dbg("%s\n", statusLine);
+            }
             dbgNotime("\n");
             return;
         }
@@ -1240,6 +1311,7 @@ public class WitcherServer
             dbg("whitelist on|off|<ip>     - toggle whitelist or add IP to whitelist\n");
             dbg("whitelist remove <ip>     - remove IP from whitelist\n");
             dbg("list                      - list connected players\n");
+            dbg("status                    - each player's connection: address, last packet, packets/s, loss\n");
             dbg("stats                     - show broadcast/server health counters\n");
             dbg("about                     - info about Witcher Online\n");
             dbg("stop                      - stop server\n");
@@ -1321,6 +1393,7 @@ public class WitcherServer
             return;
         }
 
+        dbg("%s", packetSizes.summary());
         socket.close();
 
         HttpServer server = statusServer;
@@ -1329,6 +1402,8 @@ public class WitcherServer
             server.stop(0);
             statusServer = null;
         }
+        // its HTTP thread would otherwise keep the process alive after "stop"
+        if (saveShare != null) saveShare.stop();
         if (campaign != null)
         {
             try { campaign.close(); } catch (IOException e) { e.printStackTrace(); }
@@ -1340,6 +1415,13 @@ public class WitcherServer
         byte[] data = text.getBytes(StandardCharsets.UTF_8);
         DatagramPacket packet = new DatagramPacket(data, data.length, client.address, client.port);
         socket.send(packet);
+        connectionStats.packetOut(client, System.nanoTime());
+        logSize(packetSizes.record("out", PacketSizes.typeOf(text), data.length, 1, client.toString()));
+    }
+
+    private static void logSize(String warning)
+    {
+        if (warning != null) dbg("%s\n", warning);
     }
 
     private static void safeSend(DatagramSocket socket, ClientEndpoint client, String text)
