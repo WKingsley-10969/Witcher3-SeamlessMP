@@ -4,6 +4,11 @@ What changed for players in each release of the Witcher 3 LAN co-op mod, newest 
 
 From v0.3.0-alpha on, each release is named by its version and ships as `Witcher3-LAN-<version>.zip`. The builds before it all shipped as `Witcher3-LAN-0.2.0-dev.zip`; each one is named here by its GitHub release tag.
 
+## v0.4.4-alpha (27 October 2026)
+
+- **Scenes the story starts by itself reach both PCs.** When one PC's quest starts a scene, and the other PC's quest doesn't start it too, the other PC now plays that scene itself after 2 seconds, instead of waiting on a black screen and giving up. Example: the scholar at the White Orchard inn who asks whether you play gwent. Votes, skips and waiting for each other work as in any shared scene, and a scene that already played on a PC isn't shared with it again.
+- **Shorter wait on the way into a scene.** The screen fades back in a second after you are moved beside the other player, and the wait for the scene is at most 8 seconds (was 10).
+
 ## v0.4.3-alpha (27 October 2026)
 
 - **The nightmare plays on both PCs.** After the Kaer Morhen sparring, the second PC plays the nightmare cutscene too, instead of skipping ahead to White Orchard. When a scene ends, the story characters are left as they are for a few seconds, so a scene the quest starts right after plays on both PCs.
