@@ -718,7 +718,7 @@ class r_CoopEnemies
         tpl = StrLower(npc.GetReadableName());
         temporary = npc.GetAttitudeGroup() != npc.GetBaseAttitudeGroup();
         personal = npc.HasAttitudeTowards(thePlayer);
-        story = StrFindFirst(tpl, "quests\main_npcs\") == 0 || StrFindFirst(tpl, "quests\secondary_npcs\") == 0;
+        story = StrBeginsWith(tpl, "quests") && (StrFindFirst(tpl, "main_npcs") >= 0 || StrFindFirst(tpl, "secondary_npcs") >= 0);
         immortal = npc.GetImmortalityMode() != AIM_None;
         if(!namedSeen.Contains(npc))
         {
