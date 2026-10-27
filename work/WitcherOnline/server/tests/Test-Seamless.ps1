@@ -34,8 +34,12 @@ $classPath = $classes + [IO.Path]::PathSeparator + $testClasses
 if ($LASTEXITCODE -ne 0) { throw 'Campaign unit tests failed' }
 & $java -cp $classPath FactRemovalTest $TestRoot | Tee-Object -FilePath (Join-Path $TestRoot 'fact-removal-latest.log')
 if ($LASTEXITCODE -ne 0) { throw 'Fact removal tests failed' }
+& $java -cp $classPath PacketSizesTest $java $classes $TestRoot | Tee-Object -FilePath (Join-Path $TestRoot 'packet-sizes-latest.log')
+if ($LASTEXITCODE -ne 0) { throw 'Packet size tests failed' }
 & $java -cp $classPath SaveShareTest $TestRoot | Tee-Object -FilePath (Join-Path $TestRoot 'save-share-latest.log')
 if ($LASTEXITCODE -ne 0) { throw 'Save share tests failed' }
+& $java -cp $classPath LogInboxTest $TestRoot | Tee-Object -FilePath (Join-Path $TestRoot 'log-inbox-latest.log')
+if ($LASTEXITCODE -ne 0) { throw 'Log inbox tests failed' }
 & $java -cp $classPath CoopLobbyTest $TestRoot | Tee-Object -FilePath (Join-Path $TestRoot 'coop-lobby-latest.log')
 if ($LASTEXITCODE -ne 0) { throw 'Co-op lobby tests failed' }
 & $java -cp $classPath ConnectionStatsTest $java $classes $TestRoot | Tee-Object -FilePath (Join-Path $TestRoot 'connection-status-latest.log')

@@ -2,6 +2,8 @@
 
 Two Windows PCs on one home network: one hosts, the other joins by private IPv4 address. Built on **W3Coop v0.2.0**, a fork of **Witcher Online**. This is an experimental LAN adaptation, not a verified seamless campaign.
 
+**Version:** the `VERSION` file in this package (for example `0.3.0-alpha`) is this build's version. The package folder, its zip and its GitHub release carry the same number.
+
 The full development ZIP contains the native mod, its DLC/templates, Java server, LAN launchers, source and licenses. It contains no Witcher 3 installation or Java runtime. Each player needs a matching game. Target: Steam build **25773555**, executable resource version **5.0.0.1048522**; other builds are rejected until checked.
 
 ## On this development PC
@@ -23,6 +25,8 @@ The payload is hash-checked before installation. First backups remain unchanged 
 ## Update or remove the mod
 
 For updates, extract the newer complete package, run **Manage Mod.cmd**, choose the same game folder and select **1**. The restore record lives in that game folder, so updates keep the first backups even when you use a different extracted package directory. For **older/manual installations**, the first managed install treats the files currently present as its baseline; it cannot reconstruct vanilla files that were already overwritten before these backups existed.
+
+**What's new:** `CHANGELOG.md` in this package lists what changed for players in each release, newest first.
 
 To remove, run **Remove Mod.cmd**, or choose **2 — Remove** in **Manage Mod.cmd**. Original file contents are restored, and files newly added by this installer are removed. Co-op saves, original backups and any preserved outside edits are retained. Uninstall does not undo quest progress in a save. Reinstalling in the same folder reuses the co-op save identity and creates fresh original-backup entries.
 
@@ -53,6 +57,8 @@ A separate full copy remains optional for development:
    - follows the host's difficulty, also when the host changes it mid-session.
 
    Both players then play the same game: the same story point, choices and place. Your own solo saves are untouched; the host's save goes into your co-op profile only.
+
+   The launcher shows the download's progress. If the connection drops (more likely over the internet), it says so and resumes where it stopped, up to 3 tries; it only uses a save that arrived intact, checked against the host's checksum.
 4. **If the host has no save yet,** your game waits in the co-op lobby (below) until the host starts a new game. **If the download fails,** the launcher says so and you play as before:
    - load a save yourself;
    - meet the host;
@@ -89,7 +95,15 @@ A separate full copy remains optional for development:
 
 **Shared quest progress (new).** In a party, quest progress made on either PC reaches the other: the quest facts and quest-log updates each PC makes are sent to the other, which applies the ones that move it forward, so the other PC's own quests start and advance too (for example, taking a notice from a board). Story choices are shared the same way; a romance outcome is shared, the romance scene itself only plays on the PC that played it. Tutorial progress stays per player. Progress only moves forward: nothing is undone on the other PC.
 
-**Talk together (new).** In a party, when one player talks to an NPC, the other player (within about 40 m, not fighting or riding) joins the same conversation: their Geralt is moved beside the speaker and their own game plays the same scene, so they see the camera, hear the voices and read the subtitles. The player who started the conversation chooses the answers. The other player's clicks are not answers: they show up for the speaker as suggestions ("name > choice"). The chosen answer then plays on both PCs. A shop, barber or other menu the conversation opens stays with the speaker; it is closed on the other PC.
+**Talk together (new).** In a party, when one player talks to an NPC, the other player (within about 40 m, not fighting or riding) joins the same conversation: their Geralt is moved beside the speaker and their own game plays the same scene, so they see the camera, hear the voices and read the subtitles. A story scene waits until both players are in it: the PC that reaches it first holds it at the start and shows who it waits for (new). At a choice both players vote: the options stay up with each player's name beside the one they picked, and the scene goes on once both voted the same. If your votes differ, either of you can change yours; after 15 seconds the party leader's vote decides. A choice with a timer goes with the first vote. A line is skipped once both players press skip (new). A shop, barber or other menu the conversation opens stays with the speaker; it is closed on the other PC.
+
+**Co-op logs go to the host (new).** So the host can look into a problem without going to the second PC, **Play Join LAN.cmd** sends the second PC's co-op logs to the host PC after the game closes.
+- **What is sent:** only this player's own logs. These are the co-op profile's `native.log`, the profile's `The Witcher 3\scriptslog.txt` (if there is one and it changed) and the mod's own log `bin\WitcherOnline\WitcherOnline_<your name>.log` in the game folder. A log over 8 MB is cut to its last 8 MB. Nothing else is sent: no saves, settings or other files.
+- **What they contain:** player names, LAN addresses and what the game and mod did. They contain no passwords.
+- **To whom:** only the host you joined, over your home network (TCP port 40001). The host accepts logs only from a PC that is in its game or was in the last 30 minutes.
+- **When:** after the game closes. If it never got there (a crash, a closed window), the logs are kept in your profile's `log-upload\outbox` and sent at your next launch, in the background so the game starts at once (or after that game, if the host does not take them yet). A log is sent once. The launcher prints *Sent your co-op log to …* or *Could not send your co-op log: …*. If the host does not answer, it gives up after 5 s.
+- **Where they land:** on the host PC, in `server\player-logs\<name>\` next to the host's `WitcherServer.jar` (for the package, `<package folder>\server\player-logs`). The host's console names the folder when the first log arrives. The host keeps the newest 20 per player. The host's own logs are not sent anywhere; **Play Host LAN.cmd** prints where they are.
+- **To opt out:** start with `.\Play-LAN.ps1 -Mode Join ... -NoLogUpload`, or set `"SendLogs": false` in `%LOCALAPPDATA%\W3LAN\player.json`.
 
 Steam must be running for the game normally. Mod traffic goes directly over LAN: no Steam relay, VPN or router port forwarding. If Windows Firewall blocks the host's Java process, allow it on your private home network; scripts do not change firewall rules. Guest Wi-Fi can isolate PCs.
 
@@ -139,6 +153,8 @@ Shared-progress limits: only quest facts and quest-log states travel, so a quest
 **Monster phases and knockdowns (new).** When a monster turns untouchable or untargetable (a noonwraith, an alghoul, a fogling in its fog), it does so on both screens, and you cannot lock on to it on either. A monster knocked down, staggered, frozen, blinded or held by Yrden is so on both screens too.
 
 **A leshen's roots and crows (new).** The roots a leshen sends through the ground and the crows it throws show on both screens, and its crows hurt whichever player they hit. A griffin's landing dust already shows with its flight.
+
+**Attacks that come out of the ground (new).** What a monster's attack makes appear, such as a spriggan's roots bursting out under you, shows on both screens. Only the real one hurts: the other player's copy is just for show.
 
 Inherited limits include the roughly 60 m shared-enemy range, independently started scenes, incomplete enemy animation/spell/summon cases and loot on corpses outside the shared-enemy range. This adaptation does not remove them. The server has no enforced two-player cap or authenticated LAN session; use it on your trusted home network.
 

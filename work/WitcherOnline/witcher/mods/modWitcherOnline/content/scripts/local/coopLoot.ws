@@ -73,7 +73,16 @@ class r_CoopLoot
     {
         events.PushBack(FloatToStringPrec(theGame.GetEngineTimeAsSeconds(), 2) + " " + text);
         if(events.Size() > 100) { events.Erase(0); }
+        WO_Log("coop loot " + text);
     }
+
+    // Only what a player takes by hand (the loot window, a container's take-all, gathering) is
+    // shared. A quest moving items out of a container (the prologue hands Geralt his swords from one)
+    // also fires OnItemTaken: shared, it emptied the other PC's container and its own quest handed
+    // out nothing (the owner's playtest: no sword on the second PC).
+    private var playerTaking : int;
+    public function BeginPlayerTake() { playerTaking += 1; }
+    public function EndPlayerTake() { if(playerTaking > 0) { playerTaking -= 1; } }
 
     private function Me() : string { return theGame.r_getMultiplayerClient().getUsername(); }
 
@@ -169,6 +178,11 @@ class r_CoopLoot
         var pos : Vector;
         var i : int;
         if(applyingRemote || !container || quantity <= 0 || questItem || !InParty()) { return; }
+        if(playerTaking <= 0 || (W3HouseDecorationBase)container)
+        {
+            Record("LOOT_NOT_SENT " + quantity + " " + NameToString(itemName) + " (not taken by the player)");
+            return;
+        }
         itemText = NameToString(itemName);
         if(!CoopSafeField(itemText)) { return; }
         key = CorpseKey(container);
@@ -676,4 +690,49 @@ function CoopBit(value : bool) : string
 {
     if(value) { return "1"; }
     return "0";
+}
+
+// The player's own takes, the ones shared (see BeginPlayerTake).
+@wrapMethod(W3Container)
+function OnInteraction(actionName : string, activator : CEntity)
+{
+    var r, mine : bool;
+    // wrappedMethod is called once (the compiler takes one call per wrapper)
+    mine = activator == thePlayer;
+    if(mine) { theGame.r_getMultiplayerClient().getCoopLoot().BeginPlayerTake(); }
+    r = wrappedMethod(actionName, activator);
+    if(mine) { theGame.r_getMultiplayerClient().getCoopLoot().EndPlayerTake(); }
+    return r;
+}
+
+@wrapMethod(CR4LootPopup)
+function OnPopupTakeItem(Id : int)
+{
+    theGame.r_getMultiplayerClient().getCoopLoot().BeginPlayerTake();
+    wrappedMethod(Id);
+    theGame.r_getMultiplayerClient().getCoopLoot().EndPlayerTake();
+}
+
+@wrapMethod(CR4LootPopup)
+function TakeAllAction()
+{
+    theGame.r_getMultiplayerClient().getCoopLoot().BeginPlayerTake();
+    wrappedMethod();
+    theGame.r_getMultiplayerClient().getCoopLoot().EndPlayerTake();
+}
+
+@wrapMethod(CR4HudModuleLootPopup)
+function OnPopupTakeItem(Id : int)
+{
+    theGame.r_getMultiplayerClient().getCoopLoot().BeginPlayerTake();
+    wrappedMethod(Id);
+    theGame.r_getMultiplayerClient().getCoopLoot().EndPlayerTake();
+}
+
+@wrapMethod(CR4HudModuleLootPopup)
+function OnPopupTakeAllItems()
+{
+    theGame.r_getMultiplayerClient().getCoopLoot().BeginPlayerTake();
+    wrappedMethod();
+    theGame.r_getMultiplayerClient().getCoopLoot().EndPlayerTake();
 }

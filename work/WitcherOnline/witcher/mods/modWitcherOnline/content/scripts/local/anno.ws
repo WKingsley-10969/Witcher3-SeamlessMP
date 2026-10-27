@@ -205,6 +205,13 @@ function OnAfterLoadingScreenGameStart()
     theGame.r_getMultiplayerClient().getCoopSession().OnGameStarted();
     theGame.r_getMultiplayerClient().getCoopLobby().OnGameStarted();
     theGame.r_getMultiplayerClient().getCoopCharacter().OnGameStarted();
+    theGame.r_getMultiplayerClient().getCoopTalk().Reset();
+    // a pause lock copied from another player by an older version, saved with the game
+    if(!theGame.IsDialogOrCutscenePlaying() && FactsQuerySum("nge_pause_menu_disabled") > 0)
+    {
+        FactsRemove("nge_pause_menu_disabled");
+        WO_Log("coop removed a stale pause lock (nge_pause_menu_disabled)");
+    }
     theGame.r_getMultiplayerClient().setSpawnTime(theGame.GetEngineTimeAsSeconds());
     theGame.r_getMultiplayerClient().setEmote(-1);
 
@@ -1012,7 +1019,7 @@ function OnDialogChoicesSet(choices : array<SSceneChoice>, alternativeUI : bool)
 @wrapMethod(CR4HudModuleDialog)
 function OnDialogOptionAccepted(index : int)
 {
-    // in a joined conversation the click is a suggestion to the player who started it
+    // in a shared conversation a click is a vote: coopTalk keeps the list up and accepts the decision later
     if(!theGame.r_getMultiplayerClient().getCoopTalk().InterceptChoice(index)
         && !theGame.r_getMultiplayerClient().getSeamlessCampaign().InterceptChoice(index))
     {
@@ -1053,10 +1060,91 @@ function OnBlockingSceneEnded( output : CStorySceneOutput )
 @wrapMethod(CR4HudModuleDialog)
 function OnDialogSkipped(value : int)
 {
+    // in a shared conversation a line goes once both players pressed skip on it
+    if(theGame.r_getMultiplayerClient().getCoopTalk().InterceptSkip(value))
+    {
+        return true;
+    }
     theGame.r_getMultiplayerClient().clearActiveDialogChoices();
     theGame.r_getMultiplayerClient().getCoopEnemies().OnLocalSkip(value);
 
     wrappedMethod(value);
+}
+
+@wrapMethod(CR4HudModuleDialog)
+function OnDialogChoiceTimeoutSet(timeOutPercent : float)
+{
+    theGame.r_getMultiplayerClient().getCoopTalk().OnChoiceTimer();
+
+    wrappedMethod(timeOutPercent);
+}
+
+// The choice list redrawn as the scene set it, with marks[i] after option i (the voters' names):
+// a vote keeps the list up, where the box would hide it after a click.
+@addMethod(CR4HudModuleDialog)
+public function WO_ShowVoteMarks(marks : array<string>)
+{
+    var flashValueStorage : CScriptedFlashValueStorage;
+    var choiceFlashArray : CScriptedFlashArray;
+    var choiceFlashObject : CScriptedFlashObject;
+    var choice : SSceneChoice;
+    var prefix, mark : string;
+    var i : int;
+
+    flashValueStorage = GetModuleFlashValueStorage();
+    if(!flashValueStorage || lastSetChoices.Size() == 0)
+    {
+        return;
+    }
+
+    choiceFlashArray = flashValueStorage.CreateTempFlashArray();
+    for(i = 0; i < lastSetChoices.Size(); i += 1)
+    {
+        // lastSetChoices already carry the box's size and colour (SendDialogChoicesToUI)
+        choice = lastSetChoices[i];
+        prefix = "<font size = '" + IntToString(23 + choiceScale) + "' >" + IntToString(i + 1) + ". " + "</font>";
+        if(choice.disabled)
+        {
+            prefix = "<FONT COLOR='#CC0000'>" + prefix + "</FONT>";
+        }
+        else if(choice.previouslyChoosen)
+        {
+            prefix = "<FONT COLOR='#a7a7a7'>" + prefix + "</FONT>";
+        }
+        else if(choice.emphasised)
+        {
+            prefix = "<FONT COLOR='#d9b215'>" + prefix + "</FONT>";
+        }
+        else
+        {
+            prefix = "<FONT COLOR='#F2D6B7'>" + prefix + "</FONT>";
+        }
+        mark = "";
+        if(i < marks.Size())
+        {
+            mark = "<font size = '" + IntToString(23 + choiceScale) + "' >" + marks[i] + "</font>";
+        }
+
+        choiceFlashObject = flashValueStorage.CreateTempFlashObject();
+        choiceFlashObject.SetMemberFlashString("prefix", prefix);
+        choiceFlashObject.SetMemberFlashString("name", choice.description + mark);
+        choiceFlashObject.SetMemberFlashInt("icon", choice.dialogAction);
+        choiceFlashObject.SetMemberFlashBool("read", choice.previouslyChoosen == false);
+        choiceFlashObject.SetMemberFlashBool("emphasis", choice.emphasised);
+        if(choice.disabled && choice.dialogAction == DialogAction_CONTENT_MISSING)
+        {
+            choiceFlashObject.SetMemberFlashBool("locked", !theGame.IsContentAvailable(choice.playGoChunk));
+        }
+        else
+        {
+            choiceFlashObject.SetMemberFlashBool("locked", choice.disabled);
+        }
+        choiceFlashArray.SetElementFlashObject(i, choiceFlashObject);
+    }
+    flashValueStorage.SetFlashArray("hud.dialog.choices", choiceFlashArray);
+
+    m_guiManager.RequestMouseCursor(true);
+    theGame.ForceUIAnalog(true);
 }
 
 @addMethod(CR4HudModuleDialog)
