@@ -57,6 +57,8 @@ A separate full copy remains optional for development:
    - follows the host's difficulty, also when the host changes it mid-session.
 
    Both players then play the same game: the same story point, choices and place. Your own solo saves are untouched; the host's save goes into your co-op profile only.
+
+   The launcher shows the download's progress. If the connection drops (more likely over the internet), it says so and resumes where it stopped, up to 3 tries; it only uses a save that arrived intact, checked against the host's checksum.
 4. **If the host has no save yet,** your game waits in the co-op lobby (below) until the host starts a new game. **If the download fails,** the launcher says so and you play as before:
    - load a save yourself;
    - meet the host;
