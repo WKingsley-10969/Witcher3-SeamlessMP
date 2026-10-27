@@ -238,6 +238,16 @@ class r_CoopTalk
         inScene = true;
         scenePath = "";
         if(scene) { scenePath = scene.GetPath(); }
+        // Custom Player Characters' own scenes (its menu, and its switch of a female character to Geralt and
+        // back around a story scene) are this player's: never offered, held or shared (the owner's playtest:
+        // the CPC menu asked the second PC to join, and the host, talking to Gaunter, stayed in an endless
+        // loading: CPC's switch to Geralt was taken for that conversation and held at its start, the game
+        // slowed to 0.001, which the switch cannot finish in)
+        if(CoopPersonalScene(scenePath))
+        {
+            Record("PERSONAL " + scenePath);
+            return;
+        }
         seen = SeenRecently(scenePath);
         SetSeen(scenePath);
         choiceSet = 0;
@@ -299,6 +309,14 @@ class r_CoopTalk
 
     public function OnSceneEnded()
     {
+        if(CoopPersonalScene(scenePath) && inScene)
+        {
+            inScene = false;
+            Record("END " + scenePath);
+            // the conversation CPC switched the character for starts now: still this player's Talk
+            if(talkedTo) { talkedAt = theGame.GetEngineTimeAsSeconds(); }
+            return;
+        }
         EndHold("scene ended");
         inScene = false;
         choicesOpen = false;
@@ -516,6 +534,12 @@ class r_CoopTalk
         offerSender = sender;
         offerConv = conv;
         offerScene = CoopDecode(WO_Str(3));
+        // another PC's Custom Player Characters scene (an older version announced them): that player's own
+        if(CoopPersonalScene(offerScene))
+        {
+            Decline(sender, conv, "skip");
+            return;
+        }
         offerVoice = CoopDecode(WO_Str(4));
         offerTpl = CoopDecode(WO_Str(5));
         offerApp = CoopDecode(WO_Str(6));
@@ -1471,4 +1495,11 @@ function CoopWatchText(sender : string, npc : CNewNPC, auto : bool) : string
 function CoopNpcVec3(v : Vector) : string
 {
     return FloatToStringPrec(v.X, 2) + " " + FloatToStringPrec(v.Y, 2) + " " + FloatToStringPrec(v.Z, 2);
+}
+
+// A scene that belongs to one player and is never shared: Custom Player Characters' (its menu, its character
+// switches).
+function CoopPersonalScene(path : string) : bool
+{
+    return StrFindFirst(StrLower(path), "dlc\dlcnewreplacers") == 0;
 }
