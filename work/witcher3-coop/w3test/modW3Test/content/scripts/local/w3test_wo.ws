@@ -2625,6 +2625,6 @@ function W3T_ReportExtra(bot : W3T_Bot)
     W3T_Log("COOP role=" + coop.GetRole() + " party=" + client.getInParty() + "/" + client.getJoinedParty()
         + " leaderEnemies=" + coop.HostEnemyCount() + " puppets=" + coop.PuppetCount() + " suppressed=" + coop.SuppressedCount()
         + " hitsSent=" + coop.hitsSent + " hitsApplied=" + coop.hitsApplied + " spawned=" + coop.puppetsSpawned
-        + " twins=" + coop.twinsBound + " spawnFailures=" + coop.spawnFailures + " hurtsCaptured=" + coop.hurtsCaptured
+        + " twins=" + coop.twinsBound + " adopted=" + coop.twinsAdopted + " spawnFailures=" + coop.spawnFailures + " hurtsCaptured=" + coop.hurtsCaptured
         + " hurtsApplied=" + coop.hurtsApplied + " lastError=" + coop.lastError);
 }

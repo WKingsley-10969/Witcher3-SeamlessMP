@@ -364,6 +364,10 @@ statemachine class W3T_Bot
     public var ghoulsOnTheWay : int;      // samples with hostiles or enemy copies near while travelling
     public var objectivesAfter : string;
     public var hostilesText : string;     // the hostiles near as last logged
+
+    // every scenario: the second PC showing enemies the leader's world doesn't (W3T_FightCheck)
+    public var fightMismatchRun : int;   // reports in a row with a mismatch
+    public var fightMismatches : int;    // mismatches that lasted 3 reports or more
     public var labelSceneChecks : int;   // scene_share: ticks seen inside a scene that hides labels
     public var labelSceneShown : int;    // ... with a player label still on screen
     public var scenarioName : name;
@@ -451,6 +455,29 @@ statemachine class W3T_Bot
     }
 }
 
+// Every scenario, each report: on the second PC, the enemies it shows must be the leader's (coopEnemies
+// FightMismatch), whatever quest or fight is on. A mismatch for 3 reports in a row (a new enemy is hidden or
+// paired within a snapshot) counts, and the scenario can no longer pass.
+function W3T_FightCheck(bot : W3T_Bot)
+{
+    var client : r_MultiplayerClient;
+    var text : string;
+    client = theGame.r_getMultiplayerClient();
+    if(!client) { return; }
+    text = client.getCoopEnemies().FightMismatch();
+    if(text == "")
+    {
+        bot.fightMismatchRun = 0;
+        return;
+    }
+    bot.fightMismatchRun += 1;
+    if(bot.fightMismatchRun == 3)
+    {
+        bot.fightMismatches += 1;
+        W3T_Log("FAIL-MARK fight differs from the leader's:" + text);
+    }
+}
+
 state W3T_Running in W3T_Bot
 {
     event OnEnterState(prevStateName : name)
@@ -479,6 +506,7 @@ state W3T_Running in W3T_Bot
         while(true)
         {
             parent.Report();
+            W3T_FightCheck(parent);
 
             // a tutorial hint pauses the game until closed; the sandbox turns them off, this closes any that still shows
             if(theGame.GetTutorialSystem() && theGame.GetTutorialSystem().HasActiveTutorial())
@@ -519,7 +547,8 @@ state W3T_Running in W3T_Bot
                     W3T_BeginScenario(parent);
                     parent.begun = true;
                 }
-                if(W3T_ScenarioCheck(parent))
+                // no scenario passes once the second PC showed the fight differently from the leader's
+                if(W3T_ScenarioCheck(parent) && parent.fightMismatches == 0)
                 {
                     streak += 1;
                 }
