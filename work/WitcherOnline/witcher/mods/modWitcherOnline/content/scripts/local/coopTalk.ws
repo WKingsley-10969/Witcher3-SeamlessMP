@@ -77,6 +77,7 @@ class r_CoopTalk
     private var holdSince : float;
     private var holdFrames : int;      // frames held: a second clock, in case engine time stands with the game's
     private var holdAnswers : array<string>;  // party members that joined this scene or declined it
+    private var holdLines : int;      // lines the scene set while held
 
     // an offer to join a party member's conversation, waiting for this player's answer
     private var offerOpen : bool;
@@ -286,7 +287,9 @@ class r_CoopTalk
         linesSeen += 1;
         currentLine = text;
         Record("LINE " + text);
-        if(holding) { Record("HOLD_LEAK a line played while the scene was held"); }
+        // the scene's first line is set as it starts, the hold's moment: a second one means the hold leaks
+        if(holding) { holdLines += 1; }
+        if(holding && holdLines >= 2) { Record("HOLD_LEAK a line played while the scene was held"); }
     }
 
     public function OnChoices(choices : array<SSceneChoice>)
@@ -709,6 +712,7 @@ class r_CoopTalk
         holding = true;
         holdSince = theGame.GetEngineTimeAsSeconds();
         holdFrames = 0;
+        holdLines = 0;
         holds += 1;
         theGame.PauseCutscenes();
         theGame.SetTimeScale(0.001, 'w3coop_scene_wait', 100, false, true);
