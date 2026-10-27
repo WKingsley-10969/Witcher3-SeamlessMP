@@ -1204,6 +1204,8 @@ function W3T_TalkShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_R
     var host, starter : bool;
     var label : string;
     var now : float;
+    var spot : Vector;
+    var rot : EulerAngles;
     host = W3T_GetEnv("W3T_ROLE") == "mover";
     label = "SHARETALK member";
     if(host) { label = "SHARETALK host"; }
@@ -1232,7 +1234,20 @@ function W3T_TalkShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_R
         else { target = W3T_TalkMerchant(); }
         if(!target) { W3T_Log(label + " FAIL no NPC to talk to"); bot.scenarioStep = -1; return false; }
         bot.scenarioEntity = target;
-        if(starter) { W3T_TeleportInFront(target); }
+        // W3T_TALK_JOINER_FIRST=1: the other PC stands at the NPC first (1.8 m, so its game takes the NPC over,
+        // as the second PC walking up does) and the starter talks from 3.5 m (the owner's playtest: the host,
+        // talking to Gaunter after the second PC had walked up to him, was stuck before the scene started)
+        if(W3T_GetEnv("W3T_TALK_JOINER_FIRST") == "1")
+        {
+            if(!starter) { W3T_TeleportInFront(target); }
+            else
+            {
+                spot = target.GetWorldPosition() + VecFromHeading(target.GetHeading() + 40) * 3.5;
+                rot.Yaw = VecHeading(target.GetWorldPosition() - spot);
+                thePlayer.TeleportWithRotation(spot, rot);
+            }
+        }
+        else if(starter) { W3T_TeleportInFront(target); }
         W3T_Log(label + " merchant " + NpcVoice(target) + " dist=" + FloatToStringPrec(VecDistance(target.GetWorldPosition(), thePlayer.GetWorldPosition()), 1));
         bot.scenarioTime = now;
         bot.scenarioStep = 2;
