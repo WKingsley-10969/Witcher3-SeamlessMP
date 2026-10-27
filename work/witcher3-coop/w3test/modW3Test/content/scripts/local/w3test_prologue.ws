@@ -153,6 +153,8 @@ function W3T_PrologueHostileList(client : r_MultiplayerClient, hostiles : array<
         if(tpl == "") { tpl = hostiles[i].GetReadableName(); }
         if(client.getCoopEnemies().IsPuppet(hostiles[i])) { tpl += " copy"; } else { tpl += " own"; }
         if(!hostiles[i].GetVisibility()) { tpl += " hidden"; }
+        // how far off, to 10 m: whether it came to the player or the player went to it
+        tpl += " " + RoundF(VecDistance(hostiles[i].GetWorldPosition(), thePlayer.GetWorldPosition()) / 10) * 10 + "m";
         text += " " + tpl;
     }
     return text;
@@ -210,7 +212,13 @@ function W3T_PrologueGhouls(bot : W3T_Bot, client : r_MultiplayerClient, leader 
             // the second PC kills them (35 % a hit, every second); the leader helps (20 % every 2 s), so most
             // kills still come from the second PC; alone (W3T_PROLOGUE_SOLO=1, the plain game's baseline) the
             // leader at the second PC's pace
-            if(!host || W3T_GetEnv("W3T_PROLOGUE_SOLO") == "1")
+            // W3T_PROLOGUE_REACH=<m>: only ghouls that come that close are fought, none gone after (a player
+            // standing at the camp; whether the second group comes to the camp at all)
+            if(StringToFloat(W3T_GetEnv("W3T_PROLOGUE_REACH"), 0) > 0
+                && VecDistance(W3T_BossNearest(hostiles).GetWorldPosition(), thePlayer.GetWorldPosition()) > StringToFloat(W3T_GetEnv("W3T_PROLOGUE_REACH"), 0))
+            {
+            }
+            else if(!host || W3T_GetEnv("W3T_PROLOGUE_SOLO") == "1")
             {
                 if(now - bot.scenarioActAt >= 1)
                 {
