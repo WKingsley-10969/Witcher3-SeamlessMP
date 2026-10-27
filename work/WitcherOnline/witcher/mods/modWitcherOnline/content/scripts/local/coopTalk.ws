@@ -78,6 +78,14 @@ class r_CoopTalk
     private var holdFrames : int;      // frames held: a second clock, in case engine time stands with the game's
     private var holdAnswers : array<string>;  // party members that joined this scene or declined it
     private var holdLines : int;      // lines the scene set while held
+    // PauseCutscenes calls while held: the game counts them, and each needs its UnpauseCutscenes (the
+    // prologue run: one unpause after many pauses left the leader's nightmare frozen on a black screen)
+    private var holdPauses : int;
+    private var openMessage : string;
+    // the last announcement this game said no to: its repeats get the same answer, not a new prompt
+    private var declinedStarter : string;
+    private var declinedConv : int;
+    private var declinedReason : string;  // this game's last announcement, repeated while held (a lost "joined")
 
     // an offer to join a party member's conversation, waiting for this player's answer
     private var offerOpen : bool;
@@ -103,6 +111,7 @@ class r_CoopTalk
     private var choicesAt : float;      // engine time the current choice list appeared
     private var choiceTimed : bool;     // the current list runs on a timer
     private var answeredSet : int;      // the last choice list answered here (its number in the conversation)
+    private var answeredTexts : array<string>;  // that list's options: a vote for it arriving later is too late
     private var decided : bool;         // the choosing game decided the current list
     private var tieSince : float;       // everyone voted, but not alike, since then (0 otherwise)
     private var marksAt : float;        // when to redraw the list with the voters' names (0: not due)
@@ -154,8 +163,11 @@ class r_CoopTalk
         for(i = 0; i < choiceTexts.Size(); i += 1) { if(StrFindFirst(choiceTexts[i], part) >= 0) { return i; } }
         return -1;
     }
-    // A shared conversation is running here: the older leader-follows dialogue sync stays out of it.
-    public function IsSyncing() : bool { return role == 3 || (role == 1 && convId != 0); }
+    // A shared conversation is running here, or this game is on its way into one: the older
+    // leader-follows dialogue sync, the leader's skips and the shared quest progress stay out of it
+    // (the prologue run: the second PC, brought over for the leader's nightmare, took the leader's
+    // quest progress on the way and its own quest jumped past the nightmare to the wake-up).
+    public function IsSyncing() : bool { return role == 2 || role == 3 || (role == 1 && convId != 0); }
     public function IsListening() : bool { return role == 3; }
     public function ListenerCount() : int { return listeners.Size(); }
     public function LastChoiceCount() : int { return choiceTexts.Size(); }
@@ -190,6 +202,10 @@ class r_CoopTalk
         if(theGame.IsDialogOrCutscenePlaying() && role != 3) { return; }
         if(role != 0 || inScene) { Record("RESET role=" + role + " inScene=" + inScene); }
         if(role == 1 && convId != 0) { WO_Send("coop cv close " + convId); }
+        // the starter's hold waits for word from this game: a load while on the way or listening is a no
+        // (the prologue run: the leader held its nightmare for good)
+        if(role == 2) { Decline(hostName, hostConv, "loading"); }
+        if(role == 3) { WO_Send("coop cv left " + CoopEncode(hostName) + " " + hostConv); }
         LeaveConversation();
         role = 0;
         convId = 0;
@@ -246,7 +262,7 @@ class r_CoopTalk
             role = 1;
             auto = false;
             listeners.Clear();
-            WO_Send("coop cv open " + convId + " " + CoopEncode(scenePath) + " " + CoopEncode(NpcVoice(talkedTo)) + " "
+            SendOpen("coop cv open " + convId + " " + CoopEncode(scenePath) + " " + CoopEncode(NpcVoice(talkedTo)) + " "
                 + CoopEncode(talkedTo.GetReadableName()) + " " + CoopEncode(NameToString(talkedTo.GetAppearance())) + " "
                 + CoopNpcVec3(talkedTo.GetWorldPosition()) + " " + CoopNpcVec3(thePlayer.GetWorldPosition()));
             StartHold();
@@ -260,7 +276,7 @@ class r_CoopTalk
             autoOpens += 1;
             listeners.Clear();
             Record("AUTO_OPEN " + scenePath);
-            WO_Send("coop cv open " + convId + " " + CoopEncode(scenePath) + " - - - "
+            SendOpen("coop cv open " + convId + " " + CoopEncode(scenePath) + " - - - "
                 + CoopNpcVec3(thePlayer.GetWorldPosition()) + " " + CoopNpcVec3(thePlayer.GetWorldPosition()));
             StartHold();
         }
@@ -372,6 +388,7 @@ class r_CoopTalk
         marksAt = 0;
         ClearStatus();
         if(index >= 0 && index < choiceTexts.Size()) { text = choiceTexts[index]; }
+        answeredTexts = choiceTexts;
         // this list is answered here: its decision and its votes are done
         for(i = picks.Size() - 1; i >= 0; i -= 1)
         {
@@ -457,15 +474,26 @@ class r_CoopTalk
                 // this game chooses: announce again, in case the other ignored this game's first
                 // announcement (its scene was not linked to a party yet)
                 Record("REOPEN for " + sender);
-                WO_Send("coop cv open " + convId + " " + CoopEncode(scenePath) + " - - - "
+                SendOpen("coop cv open " + convId + " " + CoopEncode(scenePath) + " - - - "
                     + CoopNpcVec3(thePlayer.GetWorldPosition()) + " " + CoopNpcVec3(thePlayer.GetWorldPosition()));
             }
             return;
         }
-        // already joining or in this one (an announcement repeated), or asked about it right now
-        if(hostName == sender && conv == hostConv && (role == 2 || role == 3)) { return; }
+        // already joining or in this one (an announcement repeated), or asked about it right now; in it:
+        // say so again, the starter may hold its scene for a "joined" that was lost
+        if(hostName == sender && conv == hostConv && (role == 2 || role == 3))
+        {
+            if(role == 3) { WO_Send("coop cv joined " + hostConv + " " + CoopEncode(scenePath)); }
+            return;
+        }
         if(offerOpen && sender == offerSender && conv == offerConv) { return; }
-        if(role != 0 || inScene || offerOpen || thePlayer.IsInCombat() || thePlayer.IsUsingVehicle())
+        // a Skip stays a Skip for that scene (no prompt every 1.5 s); busy or far is weighed again
+        if(sender == declinedStarter && conv == declinedConv && declinedReason == "skip")
+        {
+            WO_Send("coop cv decline " + CoopEncode(sender) + " " + conv + " " + declinedReason);
+            return;
+        }
+        if(role != 0 || inScene || offerOpen || thePlayer.IsInCombat() || thePlayer.IsUsingVehicle() || theGame.IsDialogOrCutscenePlaying())
         {
             Decline(sender, conv, "busy");
             return;
@@ -580,7 +608,10 @@ class r_CoopTalk
         picks.Clear();
         joinFrom = thePlayer.GetWorldPosition();
         joinFromRot = thePlayer.GetWorldRotation();
-        if(VecDistance(joinFrom, starterPos) > 3.0)
+        // moved beside the starter: the scene plays where the starter stands, and this game's quest starts
+        // it only with this player there (the prologue runs: the second PC, left 17 m off in the Kaer Morhen
+        // courtyard, never got the nightmare and loaded the wake-up instead; moved, it got it)
+        if(VecDistance(joinFrom, starterPos) > COOP_JOIN_MOVE_MIN())
         {
             spot = starterPos + VecFromHeading(VecHeading(joinFrom - starterPos)) * 1.5;
             if(!theGame.GetWorld().NavigationFindSafeSpot(spot, 0.5, 3.0, safe)) { safe = spot; }
@@ -611,7 +642,20 @@ class r_CoopTalk
     {
         var conv : int;
         conv = StringToInt(WO_Str(2), 0);
+        // a vote for this game's conversation from a party member it is not counting yet: they are in it
+        if(role == 1 && conv == convId && !listeners.Contains(sender) && inScene)
+        {
+            listeners.PushBack(sender);
+            if(!holdAnswers.Contains(sender)) { holdAnswers.PushBack(sender); }
+            Record("LISTENER " + sender + " (by their vote)");
+        }
         if(!(((role == 2 || role == 3) && conv == hostConv) || (role == 1 && conv == convId && listeners.Contains(sender)))) { return; }
+        if(!choiceTexts.Contains(CoopDecode(WO_Str(5))) && answeredTexts.Contains(CoopDecode(WO_Str(5))))
+        {
+            // a vote changed on a list this game already took: not one for the list to come
+            Record("VOTE_LATE " + sender + " " + CoopDecode(WO_Str(5)));
+            return;
+        }
         SetBallot(sender, StringToInt(WO_Str(4), -1), CoopDecode(WO_Str(5)));
         votesReceived += 1;
         lastVote = sender + ": " + CoopDecode(WO_Str(5));
@@ -721,7 +765,7 @@ class r_CoopTalk
         holdFrames = 0;
         holdLines = 0;
         holds += 1;
-        theGame.PauseCutscenes();
+        PauseCutscenesOnce();
         theGame.SetTimeScale(0.001, 'w3coop_scene_wait', 100, false, true);
         theSound.SoundEvent("system_pause");
         Record("HOLD " + scenePath + " for " + PendingNames());
@@ -732,7 +776,11 @@ class r_CoopTalk
         if(!holding) { return; }
         holding = false;
         theGame.RemoveTimeScale('w3coop_scene_wait');
-        theGame.UnpauseCutscenes();
+        while(holdPauses > 0)
+        {
+            theGame.UnpauseCutscenes();
+            holdPauses -= 1;
+        }
         theSound.SoundEvent("system_resume");
         ClearStatus();
         Record("HOLD_END " + reason + " after " + FloatToStringPrec(theGame.GetEngineTimeAsSeconds() - holdSince, 1) + " s");
@@ -743,6 +791,13 @@ class r_CoopTalk
         var pending : string;
         if(!holding) { return; }
         holdFrames += 1;
+        // again every half second (real frames: game time stands): a cutscene the scene starts after its
+        // first frame (the prologue's nightmare) is paused too, where one call at the start left it
+        // playing behind "Waiting for"
+        if(holdFrames % 30 == 0) { PauseCutscenesOnce(); }
+        // every ~1.5 s: the announcement again; a game already in this scene answers "joined" again
+        // (the prologue run: the second PC's "joined" never arrived and the leader waited for good)
+        if(holdFrames % 90 == 0 && openMessage != "") { WO_Send(openMessage); }
         pending = PendingNames();
         if(pending == "") { EndHold("all in"); return; }
         if(now - holdSince > COOP_SCENE_HOLD_MAX() || (float)holdFrames > COOP_SCENE_HOLD_MAX() * 120.0)
@@ -752,6 +807,18 @@ class r_CoopTalk
             return;
         }
         ShowStatus("Waiting for " + pending + " to join the scene");
+    }
+
+    private function SendOpen(message : string)
+    {
+        openMessage = message;
+        WO_Send(message);
+    }
+
+    private function PauseCutscenesOnce()
+    {
+        theGame.PauseCutscenes();
+        holdPauses += 1;
     }
 
     // Lets a held scene go now (console: coopgo).
@@ -781,6 +848,9 @@ class r_CoopTalk
     {
         WO_Send("coop cv decline " + CoopEncode(starter) + " " + conv + " " + reason);
         Record("DECLINE " + starter + " " + reason);
+        declinedStarter = starter;
+        declinedConv = conv;
+        declinedReason = reason;
     }
 
     private function FadeForJoin()
@@ -841,6 +911,20 @@ class r_CoopTalk
         return "";
     }
 
+    // Someone whose game is already past the list on screen here: their vote is for a later list (their
+    // scene started earlier, the prologue's wake-up). Not awaited: this game catches up, deciding alone,
+    // and their vote counts when it reaches their list (the owner saw both PCs waiting on each other).
+    private function Ahead(who : string) : bool
+    {
+        var i : int;
+        if(who == Me()) { return false; }
+        for(i = 0; i < ballots.Size(); i += 1)
+        {
+            if(ballots[i].who == who) { return !choiceTexts.Contains(ballots[i].text); }
+        }
+        return false;
+    }
+
     private function SetBallot(who : string, index : int, text : string)
     {
         var b : r_CoopTalkPick;
@@ -886,6 +970,7 @@ class r_CoopTalk
         first = VoteOf(voters[0]);
         for(i = 0; i < voters.Size(); i += 1)
         {
+            if(Ahead(voters[i])) { continue; }
             text = VoteOf(voters[i]);
             if(text == "") { everyone = false; }
             else if(text != first) { agreed = false; }
@@ -932,6 +1017,7 @@ class r_CoopTalk
         first = "";
         for(i = 0; i < voters.Size(); i += 1)
         {
+            if(Ahead(voters[i])) { continue; }
             text = VoteOf(voters[i]);
             if(text == "")
             {
@@ -1004,7 +1090,7 @@ class r_CoopTalk
             autoOpens += 1;
             listeners.Clear();
             Record("LATE_OPEN " + scenePath);
-            WO_Send("coop cv open " + convId + " " + CoopEncode(scenePath) + " - - - "
+            SendOpen("coop cv open " + convId + " " + CoopEncode(scenePath) + " - - - "
                 + CoopNpcVec3(thePlayer.GetWorldPosition()) + " " + CoopNpcVec3(thePlayer.GetWorldPosition()));
             StartHold();
         }
@@ -1205,6 +1291,12 @@ function COOP_TALK_RANGE() : float
 function COOP_SCENE_RANGE() : float
 {
     return 60.0;
+}
+
+// How far from the starter a member of a quest-started scene must be to be moved beside it.
+function COOP_JOIN_MOVE_MIN() : float
+{
+    return 3.0;
 }
 
 // How long a brought-over member waits for its own quest to start that scene.
