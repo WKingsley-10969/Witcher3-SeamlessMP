@@ -36,6 +36,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Campaign unit tests failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Fact removal tests failed' }
 & $java -cp $classPath SaveShareTest $TestRoot | Tee-Object -FilePath (Join-Path $TestRoot 'save-share-latest.log')
 if ($LASTEXITCODE -ne 0) { throw 'Save share tests failed' }
+& $java -cp $classPath LogInboxTest $TestRoot | Tee-Object -FilePath (Join-Path $TestRoot 'log-inbox-latest.log')
+if ($LASTEXITCODE -ne 0) { throw 'Log inbox tests failed' }
 & $java -cp $classPath CoopLobbyTest $TestRoot | Tee-Object -FilePath (Join-Path $TestRoot 'coop-lobby-latest.log')
 if ($LASTEXITCODE -ne 0) { throw 'Co-op lobby tests failed' }
 & $java -cp $classPath SeamlessUdpIntegrationTest $java $classes $TestRoot | Tee-Object -FilePath (Join-Path $TestRoot 'udp-latest.log')
