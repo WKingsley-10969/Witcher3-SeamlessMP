@@ -1157,11 +1157,30 @@ function W3T_TalkProbe(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_R
 // choice (Farewell) and the second PC (the starter, which decides) the first. After 15 s the
 // leader's vote must decide, in the second PC's game, and be applied in the host's; both end.
 // W3T_TALK_STARTER=host: the other way round, as in the owner's playtest: the host presses Talk and
-// the second PC (whose own NPC is behind a stand-in) is brought in.
+// the second PC (whose own NPC is behind a stand-in) is brought in. W3T_TALK_TAG: talk where the
+// save starts to the NPC with that tag (the White Orchard inn's q001_inn_peasant_01).
 function W3T_TalkStarter() : bool
 {
     if(W3T_GetEnv("W3T_TALK_STARTER") == "host") { return W3T_GetEnv("W3T_ROLE") == "mover"; }
     return W3T_GetEnv("W3T_ROLE") != "mover";
+}
+
+// This world's own NPC within 40 m that has the tag (as text: scripts cannot make a name from a string).
+function W3T_NpcTagged(tag : string) : CNewNPC
+{
+    var actors : array<CActor>;
+    var tags : array<name>;
+    var npc : CNewNPC;
+    var i, j : int;
+    actors = thePlayer.GetNPCsAndPlayersInRange(40, 64, '', FLAG_OnlyAliveActors + FLAG_ExcludePlayer);
+    for(i = 0; i < actors.Size(); i += 1)
+    {
+        npc = (CNewNPC)actors[i];
+        if(!npc || npc.HasTag('w3coop_npc_copy')) { continue; }
+        tags = npc.GetTags();
+        for(j = 0; j < tags.Size(); j += 1) { if(NameToString(tags[j]) == tag) { return npc; } }
+    }
+    return NULL;
 }
 
 // The leader votes the last choice (Farewell), the member the first: the leader's vote wins after the
@@ -1202,15 +1221,16 @@ function W3T_TalkShare(bot : W3T_Bot, client : r_MultiplayerClient, leader : r_R
     if(bot.scenarioStep < 0) { return false; }
     if(bot.scenarioStep == 0)
     {
-        W3T_TeleportNear(W3T_TalkBoard(0));
+        if(W3T_GetEnv("W3T_TALK_TAG") == "") { W3T_TeleportNear(W3T_TalkBoard(0)); }
         bot.scenarioTime = now;
         bot.scenarioStep = 1;
         return false;
     }
     if(bot.scenarioStep == 1 && now - bot.scenarioTime >= 10)
     {
-        target = W3T_TalkMerchant();
-        if(!target) { W3T_Log(label + " FAIL no merchant by board 0"); bot.scenarioStep = -1; return false; }
+        if(W3T_GetEnv("W3T_TALK_TAG") != "") { target = W3T_NpcTagged(W3T_GetEnv("W3T_TALK_TAG")); }
+        else { target = W3T_TalkMerchant(); }
+        if(!target) { W3T_Log(label + " FAIL no NPC to talk to"); bot.scenarioStep = -1; return false; }
         bot.scenarioEntity = target;
         if(starter) { W3T_TeleportInFront(target); }
         W3T_Log(label + " merchant " + NpcVoice(target) + " dist=" + FloatToStringPrec(VecDistance(target.GetWorldPosition(), thePlayer.GetWorldPosition()), 1));
